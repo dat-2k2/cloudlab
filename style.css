@@ -1,32 +1,35 @@
-/* CloudLab — styled on the dat-2k2 UI kit (Figma: UI Kit · tokens + components).
+/* CloudLab — components and type from the dat-2k2 UI kit (Figma); palette v2 (indigo + slate, per-service hues).
    Geist / Geist Mono 1.8 self-hosted (Vietnamese coverage). Layout: global nav · sidebar | main (top bar, page, log + console) | lesson pane */
 @font-face{font-family:"Geist";src:url("fonts/Geist-Variable.woff2") format("woff2");font-weight:100 900;font-display:swap}
 @font-face{font-family:"Geist Mono";src:url("fonts/GeistMono-Variable.woff2") format("woff2");font-weight:100 900;font-display:swap}
 
 :root{
-  /* kit: color/* (light) */
-  --bg:#fafaf9; --surface:#ffffff; --sunk:#f2f1ef; --ink:#1c1917; --muted:#57534e; --subtle:#6b6560;
-  --line:#e4e2df; --line-strong:#8f8882;
-  --accent:#c2410c; --accent-soft:#fff1e8; --on-accent:#ffffff;
-  --ok:#15803d; --ok-soft:#eaf6ee; --warn:#b45309; --warn-soft:#fdf5e7; --bad:#b91c1c; --bad-soft:#fdeeee; --info:#1d4ed8; --info-soft:#eef3fe;
-  --code-bg:#161412; --code-line:#2a2623; --code-ink:#e6edf3; --code-muted:#8f8882; --code-accent:#fb923c; --code-ok:#3ddc84; --code-info:#79b8ff; --code-hl:rgba(250,145,61,.14);
-  --scrim:rgba(28,25,23,.42); --shadow:0 12px 16px rgba(28,26,23,.12);
-  /* kit: radius/* · type */
+  /* palette v2 — cool slate neutrals, indigo accent; one hue per service group (like AWS console icon colours).
+     Status hues (ok / warn / bad / info) are reserved and never used as group colours. */
+  --bg:#f6f7f9; --surface:#ffffff; --sunk:#f0f2f5; --ink:#111827; --muted:#4b5563; --subtle:#6b7280;
+  --line:#e3e6eb; --line-strong:#9ca3af;
+  --accent:#4f46e5; --accent-soft:#eef0ff; --on-accent:#ffffff;
+  --ok:#15803d; --ok-soft:#eaf6ee; --warn:#b45309; --warn-soft:#fdf5e7; --bad:#b91c1c; --bad-soft:#fdeeee; --info:#0e7490; --info-soft:#e9f6f9;
+  --c-learn:#111827; --c-cost:#0f766e; --c-notify:#be185d; --c-sec:#6d28d9; --c-store:#0369a1; --c-comp:#4d7c0f; --c-mon:#a21caf; --c-infra:#475569; --on-cat:#ffffff;
+  --code-bg:#0f131b; --code-line:#232a37; --code-ink:#e6e9ef; --code-muted:#8b93a3; --code-accent:#c4b5fd; --code-ok:#4ade80; --code-info:#7dd3fc; --code-hl:rgba(129,140,248,.18);
+  --scrim:rgba(17,24,39,.42); --shadow:0 12px 16px rgba(17,24,39,.10);
   --r-sm:6px; --r-md:12px; --r-lg:20px;
   --font-body:"Geist",system-ui,sans-serif; --font-display:"Geist",system-ui,sans-serif;
   --font-mono:"Geist Mono",ui-monospace,Menlo,monospace;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0c0a09; --surface:#161412; --sunk:#1c1917; --ink:#f5f5f4; --muted:#a8a29e; --subtle:#8f8882; --line:#2a2623; --line-strong:#6b6560;
-  --accent:#fb923c; --accent-soft:#2a1608; --on-accent:#0c0a09;
-  --ok:#4ade80; --ok-soft:#0f2417; --warn:#fbbf24; --warn-soft:#2a1d07; --bad:#f87171; --bad-soft:#2c1010; --info:#93c5fd; --info-soft:#0f1a2e;
-  --code-bg:#0c0a09; --scrim:rgba(0,0,0,.6); --shadow:0 12px 24px rgba(0,0,0,.5); color-scheme:dark}}
+  --bg:#0b0e14; --surface:#121620; --sunk:#181d29; --ink:#e6e9ef; --muted:#a3abb9; --subtle:#8b93a3; --line:#252c3a; --line-strong:#4a5466;
+  --accent:#818cf8; --accent-soft:#1d2142; --on-accent:#0b0e14;
+  --ok:#4ade80; --ok-soft:#10261b; --warn:#fbbf24; --warn-soft:#2a2210; --bad:#f87171; --bad-soft:#2e1519; --info:#67e8f9; --info-soft:#0d2730;
+  --c-learn:#e6e9ef; --c-cost:#2dd4bf; --c-notify:#f472b6; --c-sec:#a78bfa; --c-store:#38bdf8; --c-comp:#a3e635; --c-mon:#e879f9; --c-infra:#94a3b8; --on-cat:#0b0e14;
+  --code-bg:#080a0f; --code-line:#252c3a; --scrim:rgba(3,5,10,.66); --shadow:0 12px 28px rgba(0,0,0,.45); color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0c0a09; --surface:#161412; --sunk:#1c1917; --ink:#f5f5f4; --muted:#a8a29e; --subtle:#8f8882; --line:#2a2623; --line-strong:#6b6560;
-  --accent:#fb923c; --accent-soft:#2a1608; --on-accent:#0c0a09;
-  --ok:#4ade80; --ok-soft:#0f2417; --warn:#fbbf24; --warn-soft:#2a1d07; --bad:#f87171; --bad-soft:#2c1010; --info:#93c5fd; --info-soft:#0f1a2e;
-  --code-bg:#0c0a09; --scrim:rgba(0,0,0,.6); --shadow:0 12px 24px rgba(0,0,0,.5); color-scheme:dark}
+  --bg:#0b0e14; --surface:#121620; --sunk:#181d29; --ink:#e6e9ef; --muted:#a3abb9; --subtle:#8b93a3; --line:#252c3a; --line-strong:#4a5466;
+  --accent:#818cf8; --accent-soft:#1d2142; --on-accent:#0b0e14;
+  --ok:#4ade80; --ok-soft:#10261b; --warn:#fbbf24; --warn-soft:#2a2210; --bad:#f87171; --bad-soft:#2e1519; --info:#67e8f9; --info-soft:#0d2730;
+  --c-learn:#e6e9ef; --c-cost:#2dd4bf; --c-notify:#f472b6; --c-sec:#a78bfa; --c-store:#38bdf8; --c-comp:#a3e635; --c-mon:#e879f9; --c-infra:#94a3b8; --on-cat:#0b0e14;
+  --code-bg:#080a0f; --code-line:#252c3a; --scrim:rgba(3,5,10,.66); --shadow:0 12px 28px rgba(0,0,0,.45); color-scheme:dark}
 
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -311,3 +314,14 @@ th{white-space:nowrap}
 .lh{justify-content:space-between}
 .lh .lab{flex:none}
 .eyebrow{display:block;color:var(--accent);margin-bottom:6px}
+
+/* ===== per-service colour (palette v2) ===== */
+[data-cat=learn]{--cat:var(--c-learn)} [data-cat=cost]{--cat:var(--c-cost)} [data-cat=notify]{--cat:var(--c-notify)} [data-cat=sec]{--cat:var(--c-sec)}
+[data-cat=store]{--cat:var(--c-store)} [data-cat=comp]{--cat:var(--c-comp)} [data-cat=mon]{--cat:var(--c-mon)} [data-cat=infra]{--cat:var(--c-infra)}
+.svc{display:inline-grid;place-items:center;min-width:32px;height:32px;padding:0 6px;border-radius:8px;background:var(--cat,var(--ink));color:var(--on-cat);font:600 11px/1 var(--font-mono);letter-spacing:.02em;flex:none}
+[data-cat=learn] .svc,.svc[data-cat=learn]{background:var(--ink);color:var(--bg)}
+.nav .dot{width:8px;height:8px;border-radius:2px;background:var(--cat);flex:none;opacity:.9}
+.nav.locked .dot{background:var(--line-strong);opacity:.5}
+.nav.on::before{background:var(--cat,var(--accent))}
+.crumb .cc{color:var(--cat)}
+.top{box-shadow:inset 0 -2px 0 0 color-mix(in srgb,var(--cat,transparent) 55%,transparent)}

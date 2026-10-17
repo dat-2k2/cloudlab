@@ -578,6 +578,7 @@ function svgView(){const v=views(),byId={};v.nodes.forEach(n=>byId[n.id]=n);
     if(e.label){const lx=e.lx||(x1+x2)/2,ly=e.ly||((e.as==="r"&&e.bs==="l")?Math.min(A.y,B.y)-10:Math.min(y1,y2)-8);s+=`<text x="${lx}" y="${ly}" text-anchor="middle" class="el" style="fill:${e.s==="off"?"var(--subtle)":c}">${esc(e.label)}</text>`}}
   for(const n of v.nodes){const h=nodeH(n),bc=n.border==="off"?"var(--line-strong)":n.border==="warn"?"var(--warn)":"var(--ink)";
     s+=`<g class="nd${n.page?" click":""}"${n.page?` data-go="${n.page}" tabindex="0" role="button" aria-label="Mở ${esc(n.title)}"`:""}><rect x="${n.x}" y="${n.y}" width="${n.w}" height="${h}" rx="12" class="nodebox" style="stroke:${bc}"${n.border==="off"?' stroke-dasharray="5 4"':""}/>`;
+    if(n.page&&CAT[n.page])s+=`<rect x="${n.x+1}" y="${n.y+12}" width="3" height="${Math.max(16,h-24)}" rx="1.5" style="fill:var(--c-${CAT[n.page]})"/>`;
     s+=`<text x="${n.x+14}" y="${n.y+25}" class="nt">${esc(n.title)}</text>`;
     if(n.chip&&n.chip[0])s+=chip(n.x+n.w-12,n.y+12,n.chip[0],n.chip[1],1);
     if(n.big){s+=`<text x="${n.x+14}" y="${n.y+64}" class="big">${esc(n.big)}</text><rect x="${n.x+14}" y="${n.y+78}" width="${n.w-28}" height="6" rx="3" class="mtr"/><rect x="${n.x+14}" y="${n.y+78}" width="${(n.w-28)*n.meter/100}" height="6" rx="3" style="fill:${n.meter>=50?"var(--warn)":"var(--accent)"}"/><text x="${n.x+14}" y="${n.y+104}" class="rl">${esc(n.note)}</text>`}
@@ -591,6 +592,8 @@ function svgView(){const v=views(),byId={};v.nodes.forEach(n=>byId[n.id]=n);
 /* ================= rendering ================= */
 const PAGES={arch:["Sơ đồ bài học","Kiến trúc"],budgets:["Budgets","Chi phí"],billing:["Billing","Chi phí"],sns:["SNS","Thông báo"],mail:["Hộp thư mô phỏng","Thông báo"],iam:["IAM roles","Bảo mật"],sim:["Policy simulator","Bảo mật"],s3:["S3","Lưu trữ"],lambda:["Lambda","Compute"],logs:["CloudWatch Logs","Giám sát"],stack:["Stack (CDK)","Hạ tầng"]};
 const LOCK={iam:1,sim:1,s3:1,lambda:3,logs:3,stack:5};
+const CAT={arch:"learn",budgets:"cost",billing:"cost",sns:"notify",mail:"notify",iam:"sec",sim:"sec",s3:"store",lambda:"comp",logs:"mon",stack:"infra"};
+const ICON={arch:"LAB",budgets:"$",billing:"$",sns:"SNS",mail:"@",iam:"IAM",sim:"SIM",s3:"S3",lambda:"λ",logs:"CW",stack:"CDK"};
 const unlocked=p=>LESSONS[UI.lesson].pages.includes(p);
 const curB=()=>UI.bucket&&W.buckets.find(x=>x.name===UI.bucket)||W.buckets[0];
 const info=t=>`<span class="info" tabindex="0" role="note" aria-label="${esc(t)}" data-tip="${esc(t)}">i</span>`;
@@ -601,13 +604,14 @@ function renderSide(){const groups=[["Bài học",["arch"]],["Chi phí",["budget
   for(const[g,ps] of groups){h+=`<div class="ng cap">${g}</div>`;
     for(const p of ps){const isU=unlocked(p);
       const badge=p==="mail"&&unread?`<span class="chip bad">${unread}</span>`:p==="sns"&&W.topics.length?`<span class="chip">${W.topics.length}</span>`:p==="lambda"&&W.fns.length?`<span class="chip">${W.fns.length}</span>`:"";
-      h+=isU?`<button class="nav${UI.page===p?" on":""}" data-go="${p}"><span>${PAGES[p][0]}</span>${badge}</button>`:`<button class="nav locked" disabled title="Mở ở Bài ${LOCK[p]}"><span>${PAGES[p][0]}</span><span class="chip">Bài ${LOCK[p]}</span></button>`}}
-  h+=`<div class="ng cap">Sắp có</div>`+LOCKED.map(([n,,s])=>`<button class="nav locked" disabled><span>${n}</span><span class="chip">Bài ${s}</span></button>`).join("");
+      h+=isU?`<button class="nav${UI.page===p?" on":""}" data-go="${p}" data-cat="${CAT[p]}"><i class="dot" aria-hidden="true"></i><span>${PAGES[p][0]}</span>${badge}</button>`:`<button class="nav locked" disabled title="Mở ở Bài ${LOCK[p]}" data-cat="${CAT[p]}"><i class="dot" aria-hidden="true"></i><span>${PAGES[p][0]}</span><span class="chip">Bài ${LOCK[p]}</span></button>`}}
+  h+=`<div class="ng cap">Sắp có</div>`+LOCKED.map(([n,,s])=>`<button class="nav locked" disabled><i class="dot" aria-hidden="true"></i><span>${n}</span><span class="chip">Bài ${s}</span></button>`).join("");
   h+=`<div class="sfoot">Part of <a href="https://dat-2k2.github.io/">dat-2k2.github.io</a><br><a href="https://dat-2k2.github.io/">← Back to home</a></div>`;
   document.getElementById("side").innerHTML=h}
 function renderTop(){const L=LESSONS[UI.lesson],p=PAGES[UI.page];
   const id=W.identity==="sso"?`<span class="idpill">Đang dùng <b>SSO admin</b></span>`:`<span class="idpill on">Role <b>${esc(W.identity.slice(5))}</b> <button class="link" data-act="backToSso">Về SSO</button></span>`;
-  document.getElementById("top").innerHTML=`<div class="crumb">${esc(p[1])} /<b>${esc(p[0])}</b></div>${L.id==="iam"||W.identity!=="sso"?id:""}
+  const top=document.getElementById("top");top.dataset.cat=CAT[UI.page];
+  top.innerHTML=`<div class="crumb"><span class="cc">${esc(p[1])}</span> /<b>${esc(p[0])}</b></div>${L.id==="iam"||W.identity!=="sso"?id:""}
     <div class="tries" role="group" aria-label="Thử, không tính điểm" title="Thử bao nhiêu lần cũng được, không tính điểm"><span class="tl">Thử</span>${L.tries.map((t,i)=>`<button data-try="${i}">${esc(t[0])}</button>`).join("")}</div>
     <button class="ic" data-act="undo" ${UNDO.length?"":"disabled"} title="Undo" aria-label="Undo">↶</button><button class="ic" data-act="askReset" title="Reset bài" aria-label="Reset bài">⟲</button>`}
 function tbl(head,rows,empty){return rows.length?`<div class="tw"><table><thead><tr>${head.map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`:`<div class="tw"><div class="empty">${empty}</div></div>`}
@@ -666,7 +670,8 @@ function renderPage(){const el=document.getElementById("page"),P=UI.page,Lid=LES
       <div class="seg" style="margin-bottom:12px"><button class="${tab==="cdk"?"on":""}" data-act="stackTab" data-arg="cdk">lib/pipeline-stack.ts</button><button class="${tab==="cfn"?"on":""}" data-act="stackTab" data-arg="cfn">CloudFormation</button></div>
       ${codeBlock(tab==="cdk"?cdkTs(s.code):cfnYaml(s.code))}
       <div class="pt">Tài nguyên trong stack</div>`+tbl(["Logical ID","Type","Physical ID","Status"],res.map(r=>`<tr><td class="mono">${r[0]}</td><td class="mono">${r[1]}</td><td class="mono">${esc(r[2])}</td><td><span class="chip ok">${s.status==="UPDATE_COMPLETE"?"update complete":"create complete"}</span></td></tr>`),s.lastDestroy?`Stack đã xóa${s.lastDestroy.retained.length?" · giữ lại: "+s.lastDestroy.retained.join(", "):""}${s.lastDestroy.failed.length?" · lỗi: "+s.lastDestroy.failed.join(", "):""}`:"Chưa deploy.")}
-  el.innerHTML=h}
+  el.dataset.cat=CAT[P];
+  el.innerHTML=h.replace('<div class="ph"><h2>',`<div class="ph"><span class="svc" aria-hidden="true">${ICON[P]}</span><h2>`)}
 function renderLog(){const sel=LOG.find(l=>l.id===UI.logSel)||LOG[0];
   const KT={api:"Lệnh bạn chạy",evt:"AWS tự làm",try:"Thử, không tính điểm",les:"Bài học"},kk=l=>l.kind==="API"||l.kind==="CLI"?"api":l.kind==="Sự kiện"?"evt":l.kind==="Thử"?"try":"les";
   document.getElementById("log").innerHTML=`<div class="logl"><div class="logh"><span class="cap">Event log</span><span class="chip">${LOG.length}</span></div>

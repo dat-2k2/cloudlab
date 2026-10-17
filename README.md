@@ -21,7 +21,7 @@ Event log ghi mọi API call kèm lệnh `aws` CLI tương đương.
 
 ## Giao diện
 
-Theo UI kit của dat-2k2.github.io (Figma: UI Kit · tokens + components): Geist / Geist Mono, accent cam, badge mono, console tối cho lệnh CLI và log, sáng/tối. Font Geist 1.8 tự host trong `fonts/` (có đủ dấu tiếng Việt), giấy phép SIL OFL trong `fonts/OFL.txt`.
+Component và type theo UI kit của dat-2k2.github.io (Figma). Bảng màu v2: nền slate, accent indigo, mỗi nhóm dịch vụ một màu riêng (Chi phí teal, Thông báo hồng, Bảo mật tím, Lưu trữ xanh dương, Compute xanh lá mạ, Giám sát fuchsia, IaC slate); màu trạng thái (ok/cảnh báo/lỗi) không dùng cho nhóm dịch vụ. Đủ tương phản WCAG AA ở cả sáng và tối. Font Geist 1.8 tự host trong `fonts/` (có đủ dấu tiếng Việt), giấy phép SIL OFL trong `fonts/OFL.txt`.
 
 ## Chạy
 
