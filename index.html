@@ -5,12 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CloudLab</title>
 <meta name="description" content="Sandbox học AWS trong trình duyệt: dựng và dùng tài nguyên cơ bản theo từng bài, có lỗi cài sẵn để tự tìm và sửa.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="preload" href="fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<script>try{var t=localStorage.getItem("cloudlab:theme");if(t)document.documentElement.dataset.theme=JSON.parse(t)}catch(_){}</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="app">
+  <header class="gnav">
+    <a class="gbrand" href="https://dat-2k2.github.io/" title="Về trang chủ"><span class="d" aria-hidden="true">D</span><span>Nguyen Quoc Dat</span><span class="s">/ CloudLab</span></a>
+    <nav class="glinks" aria-label="Liên kết">
+      <span class="chip live ok hide-s">Track 1 · Sydney</span>
+      <a class="hide-s" href="https://github.com/dat-2k2/cloudlab" target="_blank" rel="noopener">GitHub ↗</a>
+      <button class="ic" id="theme" aria-label="Đổi giao diện sáng / tối" title="Sáng / tối">☾</button>
+    </nav>
+  </header>
   <nav class="side" id="side" aria-label="Dịch vụ"></nav>
   <main class="main">
     <header class="top" id="top"></header>
