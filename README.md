@@ -21,11 +21,13 @@ Event log ghi mọi API call kèm lệnh `aws` CLI tương đương.
 
 ## Giao diện
 
-Component và type theo UI kit của dat-2k2.github.io (Figma). Bảng màu v2: nền slate, accent indigo, mỗi nhóm dịch vụ một màu riêng (Chi phí teal, Thông báo hồng, Bảo mật tím, Lưu trữ xanh dương, Compute xanh lá mạ, Giám sát fuchsia, IaC slate); màu trạng thái (ok/cảnh báo/lỗi) không dùng cho nhóm dịch vụ. Đủ tương phản WCAG AA ở cả sáng và tối. Font Geist 1.8 tự host trong `fonts/` (có đủ dấu tiếng Việt), giấy phép SIL OFL trong `fonts/OFL.txt`.
+Component và type theo UI kit của dat-2k2.github.io (Figma). Bảng màu v2: nền slate, accent indigo, mỗi nhóm dịch vụ một màu riêng (Chi phí teal, Thông báo hồng, Bảo mật tím, Lưu trữ xanh dương, Compute xanh lá mạ, Giám sát fuchsia, IaC slate); màu trạng thái (ok/cảnh báo/lỗi) không dùng cho nhóm dịch vụ. Đủ tương phản WCAG AA ở cả sáng và tối.
+
+Bố cục dùng layout của kit (`/kit/layout.css`, `/kit/layout.js` trên dat-2k2.github.io): topbar, sidebar thu gọn được (nhớ trạng thái; thành panel trượt ở ≤900px), footer. Bấm một khối trên sơ đồ mở **drawer** chi tiết (function, log, role, bucket, topic, hộp thư…) ngay tại chỗ thay vì chuyển trang; drawer không chặn trang trên desktop, thành bottom sheet có focus trap trên điện thoại. Thao tác tạo/sửa/xóa mở **modal** (focus trap, Esc, hỏi lại nếu form đang sửa dở). Font Geist 1.8 tự host trong `fonts/` (có đủ dấu tiếng Việt), giấy phép SIL OFL trong `fonts/OFL.txt`.
 
 ## Chạy
 
-Không có build step. Mở `index.html`, hoặc deploy thư mục gốc lên GitHub Pages (workflow `.github/workflows/pages.yml`).
+Không có build step. Trang tải kit từ `../kit/`, nên khi chạy local cần serve một thư mục chứa `cloudlab/` và `kit/` (từ repo dat-2k2.github.io) cạnh nhau. Deploy: GitHub Pages (workflow `.github/workflows/pages.yml`), phục vụ tại `/cloudlab/` cạnh `/kit/` của trang chủ.
 
 ## Cấu trúc
 
@@ -33,6 +35,6 @@ Không có build step. Mở `index.html`, hoặc deploy thư mục gốc lên Gi
 - `style.css`: giao diện (token sáng/tối)
 - `app.js`: mock AWS API, state engine, lesson engine, giao diện
 - `fonts/`: Geist + Geist Mono (variable, woff2)
-- `build.py`: gộp thành một file HTML duy nhất để xem trước (font nhúng base64)
+- `build.py`: gộp thành một file HTML duy nhất để xem trước (font base64, kit layout nhúng từ `KIT_DIR`, mặc định `../dat-2k2.github.io/kit`)
 
 Đây là mô phỏng để học: hành vi được đơn giản hóa và không gọi AWS thật.

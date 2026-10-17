@@ -8,6 +8,13 @@ root = pathlib.Path(__file__).parent
 html = (root / "index.html").read_text()
 css = (root / "style.css").read_text()
 js = (root / "app.js").read_text()
+import os
+kit = pathlib.Path(os.environ.get("KIT_DIR", root.parent / "dat-2k2.github.io" / "kit"))  # served at ../kit/ on GitHub Pages
+kit_css = (kit / "layout.css").read_text()
+kit_js = (kit / "layout.js").read_text()
+# inline <script> must not contain a literal closing tag (the kit header comment has one)
+js = js.replace("</script", "<\\/script")
+kit_js = kit_js.replace("</script", "<\\/script")
 
 import base64
 for f in ("Geist-Variable.woff2", "GeistMono-Variable.woff2"):  # self-hosted fonts → data URIs for the single-file preview
@@ -19,6 +26,7 @@ head_links = (
 )
 body = html.split("<body>", 1)[1].split("</body>", 1)[0]
 body = body.replace('<script src="app.js"></script>', "<script>\n" + js + "\n</script>")
-out = "<title>CloudLab</title>\n" + head_links + "<style>\n" + css + "\n</style>\n" + body
+body = body.replace('<script src="../kit/layout.js"></script>', "<script>\n" + kit_js + "\n</script>")
+out = "<title>CloudLab</title>\n" + head_links + "<style>\n" + kit_css + "\n" + css + "\n</style>\n" + body
 pathlib.Path(sys.argv[1]).write_text(out)
 print("wrote", sys.argv[1], len(out), "bytes")

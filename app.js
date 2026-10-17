@@ -474,7 +474,7 @@ const LOCKED=[["DynamoDB","dynamodb",6],["API Gateway","apigw",7],["Step Functio
 
 /* ================= lesson engine ================= */
 function startLesson(i,quiet){
-  UI.lesson=i;UI.attempt=0;UI.ladder=0;UI.lastCause=null;UI.result=null;UI.hints=0;UI.dirty=false;UI.flow=null;UI.mailOpen=null;UI.page="arch";UI.simResult=null;UI.bucket=null;UI.selKeys=[];UI.s3find="";UI.lg=null;UI.stackTab="cdk";
+  UI.lesson=i;UI.attempt=0;UI.ladder=0;UI.lastCause=null;UI.result=null;UI.hints=0;UI.dirty=false;UI.flow=null;UI.mailOpen=null;UI.page="arch";UI.simResult=null;UI.bucket=null;UI.selKeys=[];UI.s3find="";UI.lg=null;UI.drawer=null;UI.mailOpen=null;UI.stackTab="cdk";
   W=LESSONS[i].setup();UNDO=[];store.set("lesson",i);
   if(!quiet)log("Bài học","lesson","setup",`Bài ${LESSONS[i].step}: ${LESSONS[i].title}`,"");
 }
@@ -563,7 +563,7 @@ function svgView(){const v=views(),byId={};v.nodes.forEach(n=>byId[n.id]=n);
   const H=Math.max(...v.nodes.map(n=>n.y+nodeH(n)),...(v.groups||[]).map(g=>g.y+g.h))+40,Wd=880;
   let s=`<svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Sơ đồ kiến trúc của bài học"><title>Sơ đồ kiến trúc</title>`;
   const chip=(x,y,t,cls,right)=>{const cw=t.length*6.4+16,cx=right?x-cw:x;return`<rect x="${cx}" y="${y}" width="${cw}" height="18" rx="9" class="cb ${cls||""}"/><text x="${cx+cw/2}" y="${y+12.5}" text-anchor="middle" class="ct ${cls||""}">${esc(t)}</text>`};
-  for(const g of v.groups||[]){s+=`<g class="grp${g.page?" click":""}"${g.page?` data-go="${g.page}" tabindex="0" role="button" aria-label="Mở ${esc(g.label)}"`:""}><rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" rx="14" class="grpbox" stroke-dasharray="6 5"/><text x="${g.x+16}" y="${g.y+26}" class="gt">${esc(g.label)}</text>${g.chip?chip(g.x+g.w-14,g.y+13,g.chip[0],g.chip[1],1):""}</g>`}
+  for(const g of v.groups||[]){s+=`<g class="grp${g.page?" click":""}"${g.page?` data-node="__group" tabindex="0" role="button" aria-label="Mở ${esc(g.label)}"`:""}><rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" rx="14" class="grpbox" stroke-dasharray="6 5"/><text x="${g.x+16}" y="${g.y+26}" class="gt">${esc(g.label)}</text>${g.chip?chip(g.x+g.w-14,g.y+13,g.chip[0],g.chip[1],1):""}</g>`}
   for(const e of v.edges){const A=byId[e.a],B=byId[e.b];let[x1,y1]=anchor(A,e.as),[x2,y2]=anchor(B,e.bs),d;
     if((e.as==="r"&&e.bs==="l")||(e.as==="l"&&e.bs==="r")){const m=(x1+x2)/2;d=`M${x1} ${y1} H${m} V${y2} H${x2}`}
     else if((e.as==="r"||e.as==="l")&&e.bs==="b"){d=`M${x1} ${y1} H${x2} V${y2}`}
@@ -576,8 +576,10 @@ function svgView(){const v=views(),byId={};v.nodes.forEach(n=>byId[n.id]=n);
     s+=`<path d="${d}" stroke="${c}" stroke-width="${e.thin?1.1:1.6}" fill="none"${dash?` stroke-dasharray="${dash}"`:""}/>`;
     if(e.s!=="off"&&!e.thin)s+=`<circle cx="${x2}" cy="${y2}" r="3.5" fill="${c}"/>`;
     if(e.label){const lx=e.lx||(x1+x2)/2,ly=e.ly||((e.as==="r"&&e.bs==="l")?Math.min(A.y,B.y)-10:Math.min(y1,y2)-8);s+=`<text x="${lx}" y="${ly}" text-anchor="middle" class="el" style="fill:${e.s==="off"?"var(--subtle)":c}">${esc(e.label)}</text>`}}
-  for(const n of v.nodes){const h=nodeH(n),bc=n.border==="off"?"var(--line-strong)":n.border==="warn"?"var(--warn)":"var(--ink)";
-    s+=`<g class="nd${n.page?" click":""}"${n.page?` data-go="${n.page}" tabindex="0" role="button" aria-label="Mở ${esc(n.title)}"`:""}><rect x="${n.x}" y="${n.y}" width="${n.w}" height="${h}" rx="12" class="nodebox" style="stroke:${bc}"${n.border==="off"?' stroke-dasharray="5 4"':""}/>`;
+  const Lid=LESSONS[UI.lesson].id,openKey=UI.drawer&&UI.drawer.node;
+  for(const n of v.nodes){const h=nodeH(n),bc=n.border==="off"?"var(--line-strong)":n.border==="warn"?"var(--warn)":"var(--ink)",act=nodeAct(Lid,n.id);
+    const lab=act?(act.k==="try"?`Thử: ${n.title}`:`Xem chi tiết ${n.title}`):"";
+    s+=`<g class="nd${act?" click":""}${openKey===n.id?" open":""}"${act?` data-node="${n.id}" tabindex="0" role="button" aria-label="${esc(lab)}"${act.k==="drawer"?' aria-controls="drawer" aria-expanded="'+(openKey===n.id)+'"':""}`:""}><rect x="${n.x}" y="${n.y}" width="${n.w}" height="${h}" rx="12" class="nodebox" style="stroke:${bc}"${n.border==="off"?' stroke-dasharray="5 4"':""}/>`;
     if(n.page&&CAT[n.page])s+=`<rect x="${n.x+1}" y="${n.y+12}" width="3" height="${Math.max(16,h-24)}" rx="1.5" style="fill:var(--c-${CAT[n.page]})"/>`;
     s+=`<text x="${n.x+14}" y="${n.y+25}" class="nt">${esc(n.title)}</text>`;
     if(n.chip&&n.chip[0])s+=chip(n.x+n.w-12,n.y+12,n.chip[0],n.chip[1],1);
@@ -601,22 +603,24 @@ const codeBlock=(lines,cls)=>`<pre class="code ${cls||""}">${lines.map((l,i)=>`<
 function renderSide(){const groups=[["Bài học",["arch"]],["Chi phí",["budgets","billing"]],["Thông báo",["sns","mail"]],["Bảo mật",["iam","sim"]],["Lưu trữ",["s3"]],["Compute",["lambda"]],["Giám sát",["logs"]],["Hạ tầng",["stack"]]];
   const unread=W.mail.filter(m=>!m.read).length;
   let h=`<div class="proj"><span class="cap">Account sandbox</span><b>lab-account</b><span class="mono muted" style="font-size:12px">${REGION} · Sydney</span></div>`;
-  for(const[g,ps] of groups){h+=`<div class="ng cap">${g}</div>`;
-    for(const p of ps){const isU=unlocked(p);
-      const badge=p==="mail"&&unread?`<span class="chip bad">${unread}</span>`:p==="sns"&&W.topics.length?`<span class="chip">${W.topics.length}</span>`:p==="lambda"&&W.fns.length?`<span class="chip">${W.fns.length}</span>`:"";
-      h+=isU?`<button class="nav${UI.page===p?" on":""}" data-go="${p}" data-cat="${CAT[p]}"><i class="dot" aria-hidden="true"></i><span>${PAGES[p][0]}</span>${badge}</button>`:`<button class="nav locked" disabled title="Mở ở Bài ${LOCK[p]}" data-cat="${CAT[p]}"><i class="dot" aria-hidden="true"></i><span>${PAGES[p][0]}</span><span class="chip">Bài ${LOCK[p]}</span></button>`}}
-  h+=`<div class="ng cap">Sắp có</div>`+LOCKED.map(([n,,s])=>`<button class="nav locked" disabled><i class="dot" aria-hidden="true"></i><span>${n}</span><span class="chip">Bài ${s}</span></button>`).join("");
-  h+=`<div class="sfoot">Part of <a href="https://dat-2k2.github.io/">dat-2k2.github.io</a><br><a href="https://dat-2k2.github.io/">← Back to home</a></div>`;
+  for(const[g,ps] of groups){h+=`<p class="side-group">${g}</p>`;
+    for(const p of ps){const isU=unlocked(p),name=PAGES[p][0];
+      const badge=p==="mail"&&unread?`<span class="side-badge chip bad">${unread}</span>`:p==="sns"&&W.topics.length?`<span class="side-badge chip">${W.topics.length}</span>`:p==="lambda"&&W.fns.length?`<span class="side-badge chip">${W.fns.length}</span>`:"";
+      h+=isU?`<button class="side-item" data-go="${p}" data-cat="${CAT[p]}" title="${esc(name)}"${UI.page===p?' aria-current="page"':""}><span class="side-ic" aria-hidden="true">${ICON[p]}</span><span class="side-label">${esc(name)}</span>${badge}</button>`
+        :`<span class="side-item" aria-disabled="true" title="${esc(name)} · mở ở Bài ${LOCK[p]}"><span class="side-ic" aria-hidden="true">${ICON[p]}</span><span class="side-label">${esc(name)}</span><span class="side-badge chip">Bài ${LOCK[p]}</span></span>`}}
+  h+=`<p class="side-group">Sắp có</p>`+LOCKED.map(([n,,st])=>`<span class="side-item side-soon" aria-disabled="true" title="${n} · Bài ${st}"><span class="side-ic" aria-hidden="true">${n.slice(0,2).toUpperCase()}</span><span class="side-label">${n}</span><span class="side-badge chip">Bài ${st}</span></span>`).join("");
+  h+=`<button class="side-collapse" data-shell-toggle aria-controls="side" title="Thu gọn / mở"><span aria-hidden="true">«</span><span class="side-label">Thu gọn</span></button>`;
   document.getElementById("side").innerHTML=h}
 function renderTop(){const L=LESSONS[UI.lesson],p=PAGES[UI.page];
   const id=W.identity==="sso"?`<span class="idpill">Đang dùng <b>SSO admin</b></span>`:`<span class="idpill on">Role <b>${esc(W.identity.slice(5))}</b> <button class="link" data-act="backToSso">Về SSO</button></span>`;
+  const cr=document.getElementById("crumb");if(cr){cr.dataset.cat=CAT[UI.page];cr.innerHTML=`<span class="cc">${esc(p[1])}</span> /<b>${esc(p[0])}</b>`}
   const top=document.getElementById("top");top.dataset.cat=CAT[UI.page];
-  top.innerHTML=`<div class="crumb"><span class="cc">${esc(p[1])}</span> /<b>${esc(p[0])}</b></div>${L.id==="iam"||W.identity!=="sso"?id:""}
+  top.innerHTML=`${L.id==="iam"||W.identity!=="sso"?id:""}
     <div class="tries" role="group" aria-label="Thử, không tính điểm" title="Thử bao nhiêu lần cũng được, không tính điểm"><span class="tl">Thử</span>${L.tries.map((t,i)=>`<button data-try="${i}">${esc(t[0])}</button>`).join("")}</div>
-    <button class="ic" data-act="undo" ${UNDO.length?"":"disabled"} title="Undo" aria-label="Undo">↶</button><button class="ic" data-act="askReset" title="Reset bài" aria-label="Reset bài">⟲</button>`}
+    <span class="grow"></span><button class="icon-btn" data-act="undo" ${UNDO.length?"":"disabled"} title="Undo" aria-label="Undo">↶</button><button class="icon-btn" data-act="askReset" title="Reset bài" aria-label="Reset bài">⟲</button>`}
 function tbl(head,rows,empty){return rows.length?`<div class="tw"><table><thead><tr>${head.map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`:`<div class="tw"><div class="empty">${empty}</div></div>`}
 function renderPage(){const el=document.getElementById("page"),P=UI.page,Lid=LESSONS[UI.lesson].id;let h="";
-  if(P==="arch"){h=`<div class="ph"><h2>Sơ đồ bài học ${info("Bấm một khối để mở trang của nó. Sơ đồ cập nhật theo mọi thao tác.")}</h2></div><div class="arch">${svgView()}</div>`}
+  if(P==="arch"){h=`<div class="ph"><h2>Sơ đồ bài học ${info("Bấm một khối để xem chi tiết và thao tác ngay trong drawer, không rời sơ đồ.")}</h2></div><div class="arch">${svgView()}</div>`}
   else if(P==="budgets"){h=`<div class="ph"><h2>Budgets ${info("Theo dõi chi tiêu, cảnh báo khi vượt ngưỡng.")}</h2><button class="primary" data-act="newBudget">Tạo budget</button></div>`+
     tbl(["Tên","Số tiền / tháng","Ngưỡng","Gửi tới","Đã vượt",""],W.budgets.map(b=>`<tr><td><b>${esc(b.name)}</b></td><td class="mono">${money(b.limit)}</td><td class="mono">${b.thresholds.map(x=>x+"%").join(", ")||"—"}</td><td class="mono">${esc(b.topic||"—")}</td><td class="mono">${b.fired.map(x=>x+"%").join(", ")||"—"}</td><td><div class="acts"><button class="sm" data-act="editBudget" data-arg="${esc(b.name)}">Sửa</button><button class="sm danger" data-act="delBudget" data-arg="${esc(b.name)}">Xóa</button></div></td></tr>`),"Chưa có budget.")}
   else if(P==="billing"){const lim=(W.budgets[0]&&W.budgets[0].limit)||20;h=`<div class="ph"><h2>Billing ${info("Chi tiêu giả lập. Bơm chi phí bằng nút Thử ở thanh trên.")}</h2></div>
@@ -657,7 +661,7 @@ function renderPage(){const el=document.getElementById("page"),P=UI.page,Lid=LES
       h=`<div class="ph"><h2>${esc(f.name)} ${info(fnArn(f.name))}</h2><span class="chip">${f.runtime}</span>${f.stack?`<span class="chip acc">stack</span>`:""}<button class="sm" data-act="editFn" ${f.stack?"disabled title='Sửa trong code CDK'":""}>Sửa cấu hình</button><button class="primary" data-act="invoke">Test</button></div>
       <div class="grid3"><div class="card q"><span class="cap">Memory</span><b>${f.memory}<span class="muted" style="font-size:14px"> MB</span></b></div><div class="card q"><span class="cap">Timeout</span><b>${f.timeout}<span class="muted" style="font-size:14px"> s</span></b></div><div class="card q"><span class="cap">Lần chạy · lỗi</span><b>${f.invocations}<span class="muted" style="font-size:14px"> · ${f.errors}</span></b><span class="muted mono" style="font-size:12px">≈ $${cost.toFixed(6)}</span></div></div>
       ${last?`<div class="result ${last.ok?"ok":"bad"}" style="margin-top:12px">${last.ok?"200 · "+Math.ceil(last.dur)+" ms":esc(last.err)}</div>`:""}
-      <div class="pt">Cấu hình</div><div class="card"><div class="kv"><span class="kt">Handler</span><span class="kd">${f.handler}</span><span></span><span class="kt">Execution role</span><span class="kd">${esc(f.role)}</span><span><button class="sm" data-go="iam">Mở IAM</button></span>${Object.keys(f.env).map(k=>`<span class="kt">${k}</span><span class="kd">${esc(f.env[k]||"(trống)")}</span><span></span>`).join("")}<span class="kt">Log group</span><span class="kd">${lgName(f.name)}</span><span><button class="sm" data-go="logs">Xem log</button></span></div></div>`}}
+      <div class="pt">Cấu hình</div><div class="card"><div class="kv"><span class="kt">Handler</span><span class="kd">${f.handler}</span><span></span><span class="kt">Execution role</span><span class="kd">${esc(f.role)}</span><span><button class="sm" data-act="drawer" data-arg="role|${esc(f.role)}" aria-controls="drawer">Xem role</button></span>${Object.keys(f.env).map(k=>`<span class="kt">${k}</span><span class="kd">${esc(f.env[k]||"(trống)")}</span><span></span>`).join("")}<span class="kt">Log group</span><span class="kd">${lgName(f.name)}</span><span><button class="sm" data-act="drawer" data-arg="log|${esc(f.name)}" aria-controls="drawer">Xem log</button></span></div></div>`}}
   else if(P==="logs"){const g=UI.lg&&W.logGroups.find(x=>x.name===UI.lg)||W.logGroups[0];
     h=`<div class="ph"><h2>CloudWatch Logs ${info("Lambda tự ghi log vào /aws/lambda/<tên>, nếu execution role cho phép.")}</h2>${g?`<button class="sm" data-act="refresh">Làm mới</button>`:""}</div>`+
     (g?(W.logGroups.length>1?`<div class="seg" style="margin-bottom:12px">${W.logGroups.map(x=>`<button class="${x===g?"on":""}" data-act="pickLg" data-arg="${esc(x.name)}">${esc(x.name)}</button>`).join("")}</div>`:"")+
@@ -691,28 +695,121 @@ function renderLesson(){const L=LESSONS[UI.lesson],R=UI.result,hs=L.hints(W);
   else h+=`<div class="lacts"><button class="primary" data-act="check">Check</button><button data-act="hint" ${UI.hints>=hs.length?"disabled":""}>Gợi ý ${UI.hints}/${hs.length}</button><button class="ghost" data-act="askSkip">Skip</button></div>`;
   h+=`<details class="more"><summary>Khái niệm (${L.concepts.length})</summary><div class="tags">${L.concepts.map(c=>`<span class="tag">${esc(c)}</span>`).join("")}</div></details>`;
   document.getElementById("lesson").innerHTML=h}
-function renderModal(){const el=document.getElementById("modal"),M=UI.modal;if(!M){el.innerHTML="";return}
+/* ================= overlays: modal + drawer (kit/layout.js) ================= */
+const KIT=window.Kit||{layer:{open(){},close(){},isOpen(){return false}},isNarrow(){return false}};
+/* a selector that finds the same control again after a re-render */
+function selOf(el){if(!el||el===document.body||!el.closest)return null;
+  const box=el.closest("#drawer")?"#drawer ":el.closest("#page")?"#page ":el.closest("#lesson")?"#lesson ":el.closest("#top")?"#top ":el.closest("#side")?"#side ":"";
+  if(el.id)return"#"+el.id;const q=v=>String(v).replace(/\\/g,"\\\\").replace(/"/g,'\\"');
+  for(const k of ["node","act","go","try","lesson","log"]){const v=el.getAttribute&&el.getAttribute("data-"+k);if(v!==null&&v!==undefined){let sel=`${box}[data-${k}="${q(v)}"]`;const arg=el.getAttribute("data-arg");if(arg!==null)sel+=`[data-arg="${q(arg)}"]`;return sel}}
+  return null}
+/* what clicking a diagram node does, per lesson */
+function nodeAct(lid,nid){const D=d=>({k:"drawer",d}),T=i=>({k:"try",i});
+  const tp=W.topics.find(t=>t.name==="billing-alerts")||W.topics[0];
+  const M={
+    guardrails:{spend:D("spend|"),budget:{k:"act",a:"budgetNode"},topic:tp?D("topic|"+tp.name):{k:"act",a:"newTopic"},
+      sub:tp&&tp.subs.some(x=>x.status!=="Confirmed")?D("mail|"):tp&&tp.subs.length?D("topic|"+tp.name):tp?{k:"act",a:"newSub",arg:tp.name}:{k:"act",a:"newTopic"},mail:D("mail|")},
+    iam:{you:D("role|lab-readonly-s3"),role:D("role|lab-readonly-s3"),read:D("policy|lab-s3-read"),guard:D("policy|lab-guardrail"),bucket:D("bucket|lab-data-"+ACCT)},
+    s3:{stranger:T(0),lan:T(1),bucket:D("bucket|lab-share-"+ACCT),obj:D("bucket|lab-share-"+ACCT)},
+    lambda:{ev:T(0),fn:D("fn|extract"),logs:D("log|extract"),role:D("role|extract-role")},
+    events:{up:T(0),bucket:D("bucket|"+IMG),fn:D("fn|extract"),out:D("bucket|"+IMG)},
+    stack:{img:W.buckets.some(b=>b.name===IMG)?D("bucket|"+IMG):{k:"go",p:"stack"},fn:W.fns.length?D("fn|extract"):{k:"go",p:"stack"},scr:W.buckets.some(b=>b.name===SCRATCH)?D("bucket|"+SCRATCH):null,__group:{k:"go",p:"stack"}}};
+  return (M[lid]||{})[nid]||null}
+const kvl=rows=>`<dl class="kv-list">${rows.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>`;
+const stmtRows=(pn,editable)=>(W.policies[pn]?W.policies[pn].statements:[]).map((st,i)=>`<div class="stmt"><span class="chip ${st.effect==="Allow"?"ok":"warn"}">${st.effect}</span><span>${esc(st.actions.join(", "))}<br><span class="muted">${esc(st.resources.join(", "))}</span></span>${editable?`<span class="acts"><button class="sm" data-act="editStmt" data-arg="${esc(pn)}|${i}">Sửa</button><button class="sm danger" data-act="delStmt" data-arg="${esc(pn)}|${i}">Xóa</button></span>`:"<span></span>"}</div>`).join("")||`<div class="empty">Policy trống.</div>`;
+function drawerContent(key){const[kind,id]=key.split("|"),Lid=LESSONS[UI.lesson].id;
+  const go=(p,l)=>unlocked(p)?`<button class="sm" data-go="${p}">${l} ↗</button>`:"";
+  if(kind==="fn"){const f=W.fns.find(x=>x.name===id);
+    if(!f)return{cat:"comp",icon:"λ",eyebrow:"Lambda · function",title:id,body:`<div class="empty">Function không tồn tại (chưa deploy hoặc đã destroy).</div>`,foot:go("stack","Mở Stack")};
+    const g=W.logGroups.find(x=>x.name===lgName(f.name)),last=f.last;
+    return{cat:"comp",icon:"λ",eyebrow:"Lambda · function"+(f.stack?" · stack":""),title:f.name,
+      status:last?`<span class="chip ${last.ok?"ok":"bad"}">${last.ok?"200 · "+Math.ceil(last.dur)+" ms":esc(last.err)}</span>`:`<span class="chip">chưa chạy</span>`,
+      body:kvl([["Runtime",f.runtime],["Memory",f.memory+" MB"],["Timeout",f.timeout+" s"],["Execution role",`<button class="link" data-act="drawer" data-arg="role|${esc(f.role)}">${esc(f.role)}</button>`],...Object.keys(f.env).map(k=>[k,esc(f.env[k]||"(trống)")]),["Lần chạy · lỗi",`${f.invocations} · ${f.errors}`]])+
+        `<p class="lab">Log gần nhất</p>`+(g?`<div class="console"><div class="bar3"><i></i><i></i><i></i><span>${esc(g.name)}</span></div><div class="body">${g.lines.slice(-6).map(l=>`<div class="${l.m.startsWith("REPORT")?"ps":l.m.startsWith("START")||l.m.startsWith("END")?"dim":""}">${esc(l.m)}</div>`).join("")}</div></div><button class="link" data-act="drawer" data-arg="log|${esc(f.name)}">Xem toàn bộ log →</button>`:`<div class="empty">Chưa có log nào trong CloudWatch.</div>`),
+      foot:go("lambda","Trang Lambda")+(f.stack?"":`<button class="sm" data-act="editFn">Sửa cấu hình</button>`)+`<button class="primary" data-act="invoke">Test</button>`}}
+  if(kind==="log"){const f=W.fns.find(x=>x.name===id),g=W.logGroups.find(x=>x.name===lgName(id));
+    return{cat:"mon",icon:"CW",eyebrow:"CloudWatch Logs · log group",title:lgName(id),
+      status:f?`<span class="chip">Timeout ${f.timeout} s</span><span class="chip">Memory ${f.memory} MB</span>`:"",
+      body:g?`<div class="console" style="max-height:none"><div class="bar3"><i></i><i></i><i></i><span>aws logs tail ${esc(g.name)}</span></div><div class="body">${g.lines.slice(-40).map(l=>`<div><span class="dim">${l.t}</span>  <span class="${l.m.startsWith("REPORT")?"ps":l.m.startsWith("START")||l.m.startsWith("END")?"dim":""}"${/ERROR|timed out/.test(l.m)?' style="color:#ff8a80"':""}>${esc(l.m)}</span></div>`).join("")}</div></div>`
+        :`<div class="empty">Log group ${esc(lgName(id))} không tồn tại. Lambda chưa ghi được dòng log nào.</div>`,
+      foot:go("logs","Trang Logs")+(f?`<button class="primary" data-act="invoke">Invoke lại</button>`:"")}}
+  if(kind==="role"){const r=W.roles.find(x=>x.name===id);if(!r)return null;
+    return{cat:"sec",icon:"IAM",eyebrow:"IAM · role",title:r.name,status:`<span class="chip">trust: ${r.trust==="lambda"?"lambda.amazonaws.com":"SSO của bạn"}</span>${W.identity==="role:"+r.name?'<span class="chip ok">đang dùng</span>':""}`,
+      body:r.policies.map(pn=>`<div class="pt" style="display:flex;gap:8px;align-items:center"><span style="flex:1">${esc(pn)}</span>${isManaged(pn)?`<span class="chip info">AWS managed</span><button class="sm danger" data-act="detachPol" data-arg="${esc(r.name)}|${esc(pn)}">Gỡ</button>`:`<span class="chip">inline</span>`}</div>`+stmtRows(pn,!isManaged(pn))).join("")||`<div class="empty">Role chưa có policy nào.</div>`,
+      foot:go("iam","Trang IAM")+(r.trust==="lambda"?`<button class="primary" data-act="attachPol" data-arg="${esc(r.name)}">+ Gắn policy</button>`:W.identity==="role:"+r.name?`<button class="sm" data-act="backToSso">Về SSO</button>`:`<button class="primary" data-act="assume" data-arg="${esc(r.name)}">Assume role</button>`)}}
+  if(kind==="policy"){if(!W.policies[id])return null;const role=W.roles.find(r=>r.policies.includes(id));
+    return{cat:"sec",icon:"IAM",eyebrow:"IAM · policy"+(role?" · "+role.name:""),title:id,body:stmtRows(id,!isManaged(id))+`<p class="note">Deny khớp → chặn. Không thì cần một Allow. Không có Allow → chặn ngầm.</p>`,
+      foot:go("iam","Trang IAM")+(unlocked("sim")?`<button class="sm" data-go="sim">Thử trong simulator</button>`:"")}}
+  if(kind==="mail"){const list=W.mail,sel=list.find(m=>m.id===UI.mailOpen)||list.find(m=>m.kind==="confirm"&&!m.read)||list[0];
+    return{cat:"notify",icon:"@",eyebrow:"Hộp thư mô phỏng",title:EMAIL,status:list.some(m=>!m.read)?`<span class="chip bad">${list.filter(m=>!m.read).length} chưa đọc</span>`:"",
+      body:list.length?list.slice(0,6).map(x=>`<button class="mitem${sel&&x.id===sel.id?" on":""}${x.read?"":" unread"}" data-act="openMail" data-arg="${x.id}"><b>${esc(x.subject)}</b><small>${esc(x.from)} · ${x.t}</small></button>`).join("")+
+        (sel?`<div class="mread">`+(sel.kind==="confirm"?`<p style="margin-top:0">You have chosen to subscribe to the topic:<br><span class="mono">${esc(topicArn(sel.topic))}</span></p>${(()=>{const t=W.topics.find(x=>x.name===sel.topic),sb=t&&t.subs.find(x=>x.id===sel.subId);return sb&&sb.status==="Confirmed"?'<span class="chip ok">Đã xác nhận</span>':`<button class="primary" data-act="confirm" data-arg="${sel.id}">Confirm subscription</button>`})()}`:`<p style="margin-top:0">${esc(sel.body)}</p>`)+`</div>`:"")
+        :`<div class="empty">Chưa có thư nào.</div>`,
+      foot:go("mail","Trang Hộp thư")}}
+  if(kind==="topic"){const t=W.topics.find(x=>x.name===id);if(!t)return null;
+    return{cat:"notify",icon:"SNS",eyebrow:"SNS · topic",title:t.name,status:`<span class="chip">${t.subs.length} subscription</span>`,
+      body:kvl([["ARN",`<span style="font-size:11px">${esc(topicArn(t.name))}</span>`],["Message đã nhận",String(t.published)]])+`<p class="lab">Subscription</p>`+
+        (t.subs.map(sb=>`<div class="stmt"><span class="chip ${sb.status==="Confirmed"?"ok":"warn"}">${sb.status==="Confirmed"?"Confirmed":"Pending"}</span><span>${esc(sb.endpoint)}</span><span class="acts">${sb.status==="Confirmed"?"":`<button class="sm" data-act="drawer" data-arg="mail|">Mở thư</button>`}</span></div>`).join("")||`<div class="empty">Chưa có subscription.</div>`),
+      foot:go("sns","Trang SNS")+`<button class="sm" data-act="pubTest" data-arg="${esc(t.name)}">Gửi tin thử</button><button class="primary" data-act="newSub" data-arg="${esc(t.name)}">+ Subscription</button>`}}
+  if(kind==="bucket"){const b=W.buckets.find(x=>x.name===id);if(!b)return null;UI.bucket=b.name;const junk=Lid==="events"?junkIn(W).length:0;
+    return{cat:"store",icon:"S3",eyebrow:"S3 · bucket"+(b.stack?" · stack":Lid==="stack"?" · ngoài stack":""),title:b.name,status:`<span class="chip ${b.bpa?"ok":"bad"}">BPA ${b.bpa?"bật":"tắt"}</span><span class="chip">${b.objects.length} object</span>${junk?`<span class="chip bad">${junk} file rác</span>`:""}`,
+      body:`<div class="stmt"><span class="chip ${b.bpa?"ok":"bad"}">BPA</span><span>Block Public Access ${b.bpa?"đang bật":"đang tắt"}</span><span class="acts"><button class="sm ${b.bpa?"":"primary"}" data-act="bpa" data-arg="${b.bpa?0:1}">${b.bpa?"Tắt":"Bật"}</button></span></div>`+
+        (b.policy.length?`<p class="lab">Bucket policy</p>`+b.policy.map(st=>`<div class="stmt"><span class="chip ${st.effect==="Allow"?"ok":"warn"}">${st.effect}</span><span>${st.principal==="*"?'Principal "*" · bất kỳ ai':esc(st.principal)}<br><span class="muted">${esc(st.actions.join(", "))}</span></span><span class="acts"><button class="sm danger" data-act="delBStmt" data-arg="${esc(st.sid)}">Xóa</button></span></div>`).join(""):"")+
+        ((b.notifs||[]).length?`<p class="lab">Trigger</p>`+b.notifs.map(nt=>`<div class="stmt"><span class="chip">λ ${esc(nt.fn)}</span><span>prefix ${esc(nt.prefix||"*")} · suffix ${esc(nt.suffix||"*")}</span><span class="acts">${b.stack?"":`<button class="sm" data-act="editNotif" data-arg="${esc(nt.id)}">Sửa</button>`}</span></div>`).join(""):"")+
+        `<p class="lab">Objects</p>`+(b.objects.slice(0,6).map(o=>`<div class="stmt"><span class="muted">${o.size}</span><span>${esc(o.key)}</span><span class="acts"><button class="sm" data-act="s3get" data-arg="${esc(o.key)}">Tải</button>${Lid==="s3"?`<button class="sm" data-act="presign" data-arg="${esc(o.key)}">Presign</button>`:""}</span></div>`).join("")||`<div class="empty">Bucket trống.</div>`)+(b.objects.length>6?`<p class="note">… và ${b.objects.length-6} object khác</p>`:""),
+      foot:(junk?`<button class="sm" data-act="goJunk">Dọn file rác ↗</button>`:go("s3","Trang S3"))+(Lid==="stack"?`<button class="sm" data-act="emptyB" data-arg="${esc(b.name)}">Empty</button><button class="sm danger" data-act="delB" data-arg="${esc(b.name)}">Xóa bucket</button>`:"")}}
+  if(kind==="spend"){const lim=(W.budgets[0]&&W.budgets[0].limit)||20,b=W.budgets[0];
+    return{cat:"cost",icon:"$",eyebrow:"Billing · tháng này",title:"Chi tiêu",status:`<span class="chip">giả lập</span>`,
+      body:`<div class="big">${money(W.spend)} <span class="muted" style="font-size:16px">/ ${money(lim)}</span></div><div class="bar"><i class="${W.spend/lim>=.5?"hi":""}" style="width:${Math.min(100,W.spend/lim*100)}%"></i></div>`+
+        kvl([["Ngưỡng đã vượt",b&&b.fired.length?b.fired.map(x=>x+"%").join(", "):"—"],["Gửi cảnh báo tới",b?esc(b.topic||"chưa chọn"):"chưa có budget"]])+
+        `<p class="lab">Thử (không tính điểm)</p><div class="acts">${LESSONS[UI.lesson].tries.map((t,i)=>`<button class="sm" data-try="${i}">${esc(t[0])}</button>`).join("")}</div>`,
+      foot:go("billing","Trang Billing")}}
+  return null}
+let DRAWER_KEY=null;
+function renderDrawer(){const el=document.getElementById("drawer"),D=UI.drawer;if(!el)return;
+  const c=D&&drawerContent(D.key);
+  if(!c){if(DRAWER_KEY){DRAWER_KEY=null;UI.drawer=null;el.hidden=true;el.innerHTML="";KIT.layer.close(el)}return}
+  el.dataset.cat=c.cat;el.setAttribute("aria-labelledby","dt");
+  el.innerHTML=`<div class="drawer-grab" aria-hidden="true"></div><div class="drawer-head"><div class="drawer-eyebrow"><span class="side-ic" aria-hidden="true">${c.icon}</span><span class="grow">${esc(c.eyebrow)}</span><button class="modal-x" data-act="closeDrawer" aria-label="Đóng">✕</button></div><h2 class="drawer-title" id="dt" tabindex="-1">${esc(c.title)}</h2>${c.status?`<div class="drawer-status">${c.status}</div>`:""}</div><div class="drawer-body">${c.body}</div>${c.foot?`<div class="drawer-foot">${c.foot}</div>`:""}`;
+  if(!DRAWER_KEY){el.hidden=false;KIT.layer.open(el,{modal:KIT.isNarrow(),returnFocus:D.ret,onClose:()=>{UI.drawer=null;render()},initialFocus:"#dt"})}
+  else if(DRAWER_KEY!==D.key){const t=document.getElementById("dt");if(t)t.focus({preventScroll:true})}
+  DRAWER_KEY=D.key}
+function openDrawer(key,opener,node){UI.drawer={key,ret:(UI.drawer&&UI.drawer.ret)||selOf(opener),node:node||null};if(key.startsWith("mail|")){const m=W.mail.find(x=>x.kind==="confirm"&&!x.read)||W.mail[0];if(m&&!UI.mailOpen)UI.mailOpen=m.id}}
+let MODAL_SHOWN=null;
+function renderModal(){const el=document.getElementById("modal"),M=UI.modal;
+  if(!M){if(MODAL_SHOWN){MODAL_SHOWN=null;const d=el.querySelector(".modal");if(d)KIT.layer.close(d);el.innerHTML=""}return}
+  if(M===MODAL_SHOWN)return;
+  const prev=el.querySelector(".modal");if(prev)KIT.layer.close(prev);
+  M.ret=M.ret||UI.lastOpener;
   const v=modalValues();const cli=M.cli?M.cli(v):"",note=M.note?M.note(v):"";
-  el.innerHTML=`<div class="scrim" data-act="closeModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="mt" data-stop="1"><h3 id="mt">${esc(M.title)}</h3>${M.body||""}
+  el.innerHTML=`<div class="scrim" data-act="scrim"><div class="modal" aria-labelledby="mt"><div class="modal-head"><h3 id="mt">${esc(M.title)}</h3><button class="modal-x" data-act="closeModal" aria-label="Đóng">✕</button></div>${M.body||""}
     ${(M.fields||[]).map(f=>f.type==="checks"?`<fieldset class="fld"><legend>${esc(f.label)}</legend><div class="acts">${f.items.map(([k,l])=>`<label class="ck"><input type="checkbox" id="f-${k}" ${M.init[k]?"checked":""}> ${esc(l)}</label>`).join("")}</div></fieldset>`
       :`<label class="fld">${esc(f.label)}${f.type==="select"?`<select id="f-${f.id}">${f.options.map(([o,l])=>`<option value="${esc(o)}"${String(M.init[f.id])===String(o)?" selected":""}>${esc(l)}</option>`).join("")}</select>`:`<input id="f-${f.id}" type="${f.type||"text"}" value="${esc(M.init[f.id]??"")}" autocomplete="off">`}${f.help?`<small>${esc(f.help)}</small>`:""}</label>`).join("")}
     <div id="mnote">${note}</div>${M.cli?`<div class="console"><div class="bar3"><i></i><i></i><i></i><span>Lệnh sẽ chạy</span></div><pre><span class="ps">$ </span><span id="mcli">${esc(cli)}</span></pre></div>`:""}<p class="ferr" id="merr" role="alert">${esc(M.err||"")}</p>
     <div class="mfoot"><button class="ghost" data-act="closeModal">${esc(M.cancel||"Hủy")}</button>${M.submitLabel?`<button class="primary ${M.danger?"dangerbtn":""}" data-act="submitModal">${esc(M.submitLabel)}</button>`:""}</div></div></div>`;
-  const first=el.querySelector("input,select,.primary");if(first)first.focus()}
+  MODAL_SHOWN=M;const dlg=el.querySelector(".modal");
+  KIT.layer.open(dlg,{modal:true,returnFocus:M.ret,onClose:()=>requestCloseModal("escape"),initialFocus:el.querySelector(".modal input,.modal select")||el.querySelector(".mfoot .primary")});
+  if(!window.Kit){const f=el.querySelector("input,select,.primary");if(f)f.focus()}}
+function requestCloseModal(reason){const M=UI.modal;if(!M)return;
+  if(M.dirty&&reason!=="cancel"&&!M.warned){M.warned=true;const e=document.getElementById("merr");if(e)e.textContent="Có thay đổi chưa lưu. Bấm Hủy (hoặc Esc lần nữa) để bỏ.";return}
+  UI.modal=null;render()}
 function modalValues(){const M=UI.modal,v={...(M?M.init:{})};if(!M)return v;
   for(const f of M.fields||[]){if(f.type==="checks"){f.items.forEach(([k])=>{const e=document.getElementById("f-"+k);if(e)v[k]=e.checked?1:0})}else{const e=document.getElementById("f-"+f.id);if(e)v[f.id]=e.value}}return v}
-function render(){renderSide();renderTop();renderPage();renderLog();renderLesson();renderModal()}
-function refreshModalPreview(){const M=UI.modal;if(!M)return;const v=modalValues();if(M.cli){const c=document.getElementById("mcli");if(c)c.textContent=M.cli(v)}if(M.note){const n=document.getElementById("mnote");if(n)n.innerHTML=M.note(v)}const e=document.getElementById("merr");if(e)e.textContent=""}
+function render(){const ae=document.activeElement,keep=ae&&ae!==document.body&&!(ae.closest&&ae.closest("#modal"))?selOf(ae):null;
+  renderSide();renderTop();renderPage();renderLog();renderLesson();renderDrawer();renderModal();
+  const now=document.activeElement;if(keep&&(!now||now===document.body)){const n=document.querySelector(keep);if(n)try{n.focus({preventScroll:true})}catch(_){}}
+  if(window.Kit&&Kit.shellSync)Kit.shellSync()}
+function refreshModalPreview(){const M=UI.modal;if(!M)return;M.dirty=true;M.warned=false;const v=modalValues();if(M.cli){const c=document.getElementById("mcli");if(c)c.textContent=M.cli(v)}if(M.note){const n=document.getElementById("mnote");if(n)n.innerHTML=M.note(v)}const e=document.getElementById("merr");if(e)e.textContent=""}
 
 /* ================= modals ================= */
 function budgetModal(b){UI.editBudget=b&&b.name;
   UI.modal={title:b?`Sửa budget ${b.name}`:"Tạo budget",submitLabel:b?"Lưu":"Tạo budget",
     init:b?{name:b.name,limit:b.limit,t50:+b.thresholds.includes(50),t80:+b.thresholds.includes(80),t100:+b.thresholds.includes(100),topic:b.topic||""}:{name:"monthly-20usd",limit:20,t50:1,t80:0,t100:0,topic:""},
     fields:[{id:"name",label:"Tên budget"},{id:"limit",label:"Số tiền mỗi tháng (USD)",type:"number"},{type:"checks",label:"Cảnh báo khi chi tiêu thực tế vượt",items:[["t50","50%"],["t80","80%"],["t100","100%"]]},
-      {id:"topic",label:"Gửi cảnh báo tới SNS topic",type:"select",options:[["","— chưa chọn —"],...W.topics.map(t=>[t.name,t.name])],help:W.topics.length?"":"Chưa có topic nào. Tạo ở trang SNS trước."}],
+      {id:"topic",label:"Gửi cảnh báo tới SNS topic",type:"select",options:[["","— chưa chọn —"],...W.topics.map(t=>[t.name,t.name]),...(W.topics.some(t=>t.name==="billing-alerts")?[]:[["__new","+ Tạo topic mới: billing-alerts"]])],help:W.topics.length?"":"Chưa có topic? Chọn “+ Tạo topic mới” để tạo luôn."}],
     cli:v=>`aws budgets ${b?"update-budget":"create-budget"} \\\n  --account-id ${ACCT} \\\n  --budget '{"BudgetName":"${v.name}","BudgetLimit":{"Amount":"${v.limit}","Unit":"USD"},"TimeUnit":"MONTHLY","BudgetType":"COST"}'`,
     note:v=>v.topic?"":`<div class="callout warn"><b>Chưa chọn nơi gửi</b>Vượt ngưỡng sẽ không ai được báo.</div>`,
-    submit:v=>API.saveBudget(v,!b)};render()}
+    submit:v=>{if(v.topic==="__new"){const r=API.createTopic("billing-alerts");if(r&&r.ok===false)return r;v.topic="billing-alerts"}return API.saveBudget(v,!b)}};render()}
 function stmtModal(pn,i){const s=W.policies[pn].statements[i];
   UI.modal={title:`Sửa statement ${s.sid} trong ${pn}`,submitLabel:"Lưu policy",init:{sid:s.sid,effect:s.effect,actions:s.actions.join(", "),resources:s.resources.join(", ")},
     fields:[{id:"sid",label:"Sid"},{id:"effect",label:"Effect",type:"select",options:[["Allow","Allow"],["Deny","Deny"]]},{id:"actions",label:"Action (ngăn cách bằng dấu phẩy)",help:"* khớp mọi ký tự: s3:*Object = Get/Put/DeleteObject…"},{id:"resources",label:"Resource (ARN, ngăn cách bằng dấu phẩy)"}],
@@ -743,17 +840,32 @@ function cdkModal(){const c=W.stack.code;
     note:v=>`<p class="note">Lưu xong phải cdk deploy thì stack mới đổi.</p>`,submit:v=>API.cdkEdit(v)};render()}
 function confirmModal(title,body,label,fn,danger){UI.modal={title,body:`<p>${body}</p>`,submitLabel:label,danger,init:{},fields:[],submit:()=>{fn();return ok()}};render()}
 
+const NODE_ACTS={
+  budgetNode(){budgetModal(W.budgets.find(b=>b.limit===20)||W.budgets[0]||null)},
+  newTopic(){UI.modal={title:"Tạo SNS topic",submitLabel:"Tạo topic",init:{name:"billing-alerts"},fields:[{id:"name",label:"Tên topic",help:"Chữ, số, - và _."}],cli:v=>`aws sns create-topic --name ${v.name}`,submit:v=>API.createTopic(v.name)}},
+  newSub(topic){UI.modal={title:`Thêm subscription vào ${topic}`,submitLabel:"Tạo subscription",init:{ep:EMAIL},fields:[{id:"ep",label:"Email nhận",help:"AWS sẽ gửi thư xác nhận tới địa chỉ này."}],cli:v=>`aws sns subscribe \\\n  --topic-arn ${topicArn(topic)} \\\n  --protocol email \\\n  --notification-endpoint ${v.ep}`,submit:v=>API.subscribe(topic,v.ep)}},
+};
 /* ================= events ================= */
 document.addEventListener("click",e=>{
-  const t=e.target.closest("[data-act],[data-go],[data-try],[data-lesson],[data-log]");
+  const t=e.target.closest("[data-act],[data-go],[data-try],[data-lesson],[data-log],[data-node]");
   if(!t){return}
-  if(t.dataset.stop&&!t.dataset.act)return;
-  if(t.dataset.go){if(!unlocked(t.dataset.go))return;UI.page=t.dataset.go;render();return}
+  if(t.closest("[inert]"))return;
+  UI.lastOpener=selOf(t);
+  if(t.dataset.node){const na=nodeAct(LESSONS[UI.lesson].id,t.dataset.node);if(!na)return;
+    if(na.k==="drawer")openDrawer(na.d,t,t.dataset.node);
+    else if(na.k==="try"){LESSONS[UI.lesson].tries[na.i][1]()}
+    else if(na.k==="go"){if(!unlocked(na.p))return;UI.page=na.p;UI.drawer=null}
+    else if(na.k==="act"){const fn=NODE_ACTS[na.a];if(fn)fn(na.arg)}
+    render();return}
+  if(t.dataset.go){if(!unlocked(t.dataset.go))return;UI.page=t.dataset.go;UI.drawer=null;render();return}
   if(t.dataset.try){LESSONS[UI.lesson].tries[+t.dataset.try][1]();render();return}
-  if(t.dataset.lesson!==undefined&&t.dataset.act===undefined){const i=+t.dataset.lesson;if(i===UI.lesson&&!(UI.result&&UI.result.ok))return;startLesson(i);render();return}
+  if(t.dataset.lesson!==undefined&&t.dataset.act===undefined){const i=+t.dataset.lesson;if(i===UI.lesson&&!(UI.result&&UI.result.ok))return;
+    if(UNDO.length&&!(UI.result&&UI.result.ok)&&i!==UI.lesson){confirmModal("Chuyển sang bài khác?","Thao tác trong bài hiện tại sẽ mất. Event log vẫn giữ.","Chuyển bài",()=>startLesson(i));return}
+    startLesson(i);render();return}
   if(t.dataset.log){UI.logSel=+t.dataset.log;renderLog();return}
   const a=t.dataset.act,arg=t.dataset.arg;
-  if(a==="closeModal"){if(e.target.closest("[data-stop]")&&t.classList.contains("scrim"))return;UI.modal=null;render();return}
+  if(a==="closeModal"){requestCloseModal("cancel");return}
+  if(a==="scrim"){if(e.target===t)requestCloseModal("scrim");return}
   const A={
     undo(){if(!UNDO.length)return;W=UNDO.pop();UI.dirty=true;log("Bài học","sandbox","undo","hoàn tác thao tác gần nhất","warn")},
     askReset(){confirmModal("Reset bài này?","Bài về trạng thái ban đầu. Event log giữ nguyên.","Reset bài",()=>{const i=UI.lesson;startLesson(i,true);log("Bài học","lesson","reset",`Bài ${LESSONS[i].step} về trạng thái ban đầu`,"warn")},true)},
@@ -779,18 +891,23 @@ document.addEventListener("click",e=>{
     pickLg(){UI.lg=arg},refresh(){},stackTab(){UI.stackTab=arg},cdkEdit(){cdkModal()},cdkDeploy(){API.cdkDeploy()},
     askDestroy(){confirmModal("cdk destroy?","Xóa mọi tài nguyên stack CloudLabPipeline đã tạo.","Destroy",()=>API.cdkDestroy(),true)},
     copy(){const txt=(document.getElementById("clitext")||{}).textContent||"";try{navigator.clipboard.writeText(txt).then(()=>{t.textContent="Đã copy"},()=>selectCli())}catch(_){selectCli()}return true},
-    submitModal(){const M=UI.modal,v=modalValues(),r=M.submit(v);if(r&&r.ok===false){M.init=v;M.err=r.err;render();return true}UI.modal=null},
+    submitModal(){const M=UI.modal,v=modalValues(),r=M.submit(v);
+      if(r&&r.ok===false){M.init=v;M.err=r.err;const er=document.getElementById("merr");if(er)er.textContent=r.err;
+        const f=(M.lastField&&document.getElementById(M.lastField))||document.querySelector(".modal input,.modal select");if(f){f.setAttribute("aria-invalid","true");f.focus()}renderLog();return true}
+      UI.modal=null},
+    drawer(){openDrawer(arg,t)},closeDrawer(){UI.drawer=null},
+    goJunk(){UI.page="s3";UI.s3find="incoming/";UI.drawer=null},
   };
   if(A[a]){const keep=A[a]();if(keep!==true)render()}
 });
 function selectCli(){const p=document.getElementById("clitext");if(!p)return;const r=document.createRange();r.selectNodeContents(p);const s=getSelection();s.removeAllRanges();s.addRange(r)}
-document.addEventListener("input",e=>{if(e.target.closest(".modal"))refreshModalPreview();
+document.addEventListener("input",e=>{if(e.target.closest(".modal")){refreshModalPreview();if(UI.modal&&e.target.id){UI.modal.lastField=e.target.id;e.target.removeAttribute("aria-invalid")}}
   if(e.target.id==="s3find"){UI.s3find=e.target.value;renderPage();const f=document.getElementById("s3find");if(f){f.focus();f.setSelectionRange(f.value.length,f.value.length)}}});
-document.addEventListener("change",e=>{if(e.target.closest(".modal"))refreshModalPreview()});
+document.addEventListener("change",e=>{if(e.target.closest(".modal")){refreshModalPreview();if(UI.modal&&e.target.id)UI.modal.lastField=e.target.id}});
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"&&UI.modal){UI.modal=null;render();return}
-  const g=e.target.closest&&e.target.closest("[data-go][role=button],[data-log]");
-  if(g&&(e.key==="Enter"||e.key===" ")){e.preventDefault();g.click()}});
+  if(!window.Kit&&e.key==="Escape"){if(UI.modal){UI.modal=null;render()}else if(UI.drawer){UI.drawer=null;render()}return}
+  const g=e.target.closest&&e.target.closest("[data-go][role=button],[data-node],[data-log]");
+  if(g&&(e.key==="Enter"||e.key===" ")){e.preventDefault();g.dispatchEvent(new MouseEvent("click",{bubbles:true}))}});
 
 /* ================= boot ================= */
 startLesson(Math.min(store.get("lesson",0),LESSONS.length-1),false);render();

@@ -8,27 +8,36 @@
 <link rel="preload" href="fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <script>try{var t=localStorage.getItem("cloudlab:theme");if(t)document.documentElement.dataset.theme=JSON.parse(t)}catch(_){}</script>
+<link rel="stylesheet" href="../kit/layout.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="app">
-  <header class="gnav">
-    <a class="gbrand" href="https://dat-2k2.github.io/" title="Về trang chủ"><span class="d" aria-hidden="true">D</span><span>Nguyen Quoc Dat</span><span class="s">/ CloudLab</span></a>
-    <nav class="glinks" aria-label="Liên kết">
+<div class="shell app" data-shell>
+  <header class="shell-top">
+    <button class="icon-btn" data-shell-toggle aria-controls="side" aria-label="Thu gọn / mở thanh dịch vụ">☰</button>
+    <a class="top-brand" href="https://dat-2k2.github.io/" title="Về trang chủ"><span class="mark" aria-hidden="true">D</span><span class="hide-s">Nguyen Quoc Dat</span><span class="app">/ CloudLab</span></a>
+    <p class="top-crumb" id="crumb"></p>
+    <div class="top-actions">
       <span class="chip live ok hide-s">Track 1 · Sydney</span>
       <a class="hide-s" href="https://github.com/dat-2k2/cloudlab" target="_blank" rel="noopener">GitHub ↗</a>
-      <button class="ic" id="theme" aria-label="Đổi giao diện sáng / tối" title="Sáng / tối">☾</button>
-    </nav>
+      <button class="icon-btn" id="theme" aria-label="Đổi giao diện sáng / tối" title="Sáng / tối">☾</button>
+    </div>
   </header>
-  <nav class="side" id="side" aria-label="Dịch vụ"></nav>
+  <nav class="shell-side" id="side" aria-label="Dịch vụ"></nav>
   <main class="main">
     <header class="top" id="top"></header>
     <section class="page" id="page" aria-live="polite"></section>
     <section class="logp" id="log" aria-label="Event log"></section>
   </main>
   <aside class="lesson" id="lesson" aria-label="Bài học" aria-live="polite"></aside>
+  <footer class="shell-foot">
+    <span>Part of <a href="https://dat-2k2.github.io/">dat-2k2.github.io</a> · <a href="https://dat-2k2.github.io/">← Back to home</a></span>
+    <span class="hide-s">ap-southeast-2 · Sydney · Sandbox, không gọi AWS thật</span>
+  </footer>
 </div>
+<aside class="drawer" id="drawer" hidden></aside>
 <div id="modal"></div>
+<script src="../kit/layout.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
