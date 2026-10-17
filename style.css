@@ -191,3 +191,38 @@ button.dangerbtn{background:var(--bad);border-color:var(--bad)}
 @media (max-width:640px){.log li{grid-template-columns:52px minmax(0,1fr)}.log .m{grid-column:2}}
 @media (prefers-reduced-motion:no-preference){.pulse{animation:pulse 1s ease-in-out infinite}}
 @keyframes pulse{50%{opacity:.45}}
+
+/* ===== text-density pass: progressive disclosure ===== */
+.info{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--line);color:var(--muted);font:600 .62rem var(--font-mono);vertical-align:middle;cursor:help;position:relative;margin-left:4px}
+.info:hover,.info:focus{border-color:var(--accent);color:var(--accent);outline:none}
+.info:hover::after,.info:focus::after{content:attr(data-tip);position:absolute;left:50%;top:calc(100% + 6px);transform:translateX(-50%);z-index:20;width:max-content;max-width:260px;background:var(--ink);color:var(--surface);font:400 .76rem/1.4 var(--font-body);padding:6px 9px;border-radius:6px;white-space:normal;text-align:left;word-break:break-word}
+.ph h2 .sub{font-size:.8rem;font-weight:400;margin-left:6px}
+.arch-hint{display:flex;gap:12px;align-items:center;margin:8px 4px 0}
+.lg{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--muted)}
+.lg i{width:14px;height:3px;border-radius:2px;background:var(--line)}
+.lg i.ok{background:var(--accent)} .lg i.bad{background:var(--bad)}
+.tries .tl{font:600 .72rem var(--font-body);color:var(--warn);padding:0 6px 0 8px;align-self:center}
+.top .ic{width:32px;padding:4px 0;font-size:1rem;line-height:1}
+.evalflow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:12px;font-size:.8rem;color:var(--muted)}
+.goal{margin:4px 0 0;font-size:.86rem;color:var(--muted)}
+details.scn{padding:8px 10px}
+details.scn summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;font-size:.82rem}
+details.scn summary::-webkit-details-marker{display:none}
+details.scn summary .q{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+details.scn summary::after{content:"▸";color:var(--muted);font-size:.75rem}
+details.scn[open] summary::after{content:"▾"}
+details.scn[open] summary .q{display:none}
+details.scn[open] summary::before{content:"Tình huống";font-weight:600;font-size:.8rem;flex:1;order:1}
+details.scn[open] summary::after{order:2}
+details.scn p{margin:8px 0 4px;font-size:.86rem}
+.th{display:flex;align-items:center;gap:8px}
+.th .lab{flex:none}
+.cnt{font:500 .74rem var(--font-mono);color:var(--muted)}
+.pbar{flex:1;height:4px;border-radius:2px;background:var(--line);overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.task{padding:7px 10px;align-items:center}
+.dirty{align-self:flex-start}
+details.more summary{cursor:pointer;font:600 .78rem var(--font-body);color:var(--muted);padding:2px 0}
+details.more .tags{margin-top:8px}
+.cli .logh{margin:0}
+.task small{display:block}

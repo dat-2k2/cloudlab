@@ -12,7 +12,7 @@ Live: https://dat-2k2.github.io/cloudlab/
 | 1 · IAM + STS | Assume role, đọc/ghi S3, policy simulator | Explicit Deny `s3:*Object` chặn cả GetObject |
 | 2 · S3 | Block Public Access, bucket policy, presigned URL | Bucket bị public qua `Principal: "*"` |
 
-Mỗi bài: tình huống → thao tác trong console mô phỏng → **Check**. Nút **Thử** không tính điểm. Gợi ý mở dần, có **Skip** (làm hộ, không tính đạt), **Undo** và **Reset**.
+Mỗi bài: tình huống → thao tác trong console mô phỏng → **Check**. Nhóm nút **Thử** (thanh trên) không tính điểm. Gợi ý mở dần, có **Skip** (làm hộ, không tính đạt), **Undo** và **Reset**.
 
 Event log ghi mọi API call kèm lệnh `aws` CLI tương đương.
 

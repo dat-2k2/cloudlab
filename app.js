@@ -182,35 +182,35 @@ const LESSONS=[
 { id:"guardrails",step:0,title:"Cảnh báo tiền trước khi tiêu tiền",tag:"Guardrails",
   who:["M","Minh · mentor"],
   scenario:"Trước khi dùng Bedrock, em đặt budget $20 và cho nó báo về email nhé. Lỡ quên tắt thứ gì thì ít nhất cũng có email báo.",
-  goal:"Khi chi tiêu vượt 50%, 80% và 100% của $20, email cảnh báo về tới hộp thư.",
+  goal:"Chi tiêu vượt 50 / 80 / 100% của $20 → email về hộp thư.",
   concepts:["AWS Budgets","SNS topic","subscription","xác nhận email","ngưỡng cảnh báo"],
   pages:["arch","budgets","billing","sns","mail"],
   setup(){return emptyWorld()},
   tasks:[
-    {t:"Có budget $20 mỗi tháng",c:"budget có BudgetLimit = 20 USD, TimeUnit = MONTHLY",test:w=>w.budgets.some(b=>b.limit===20)},
-    {t:"Email cảnh báo 50% về tới hộp thư",c:"mô phỏng chi tiêu 55%: budget → SNS → email đã xác nhận",test:w=>trace0(w,55).stop===null},
-    {t:"Cảnh báo cả ở 80% và 100%",c:"budget có ngưỡng 80% và 100%, cùng đường gửi như trên",test:w=>{const b=w.budgets.find(x=>x.limit===20);return!!b&&b.thresholds.includes(80)&&b.thresholds.includes(100)&&trace0(w,105).stop===null}},
+    {t:"Budget $20 / tháng",c:"BudgetLimit 20 USD · MONTHLY",test:w=>w.budgets.some(b=>b.limit===20)},
+    {t:"Email 50% về tới hộp thư",c:"55% → budget → SNS → email đã xác nhận",test:w=>trace0(w,55).stop===null},
+    {t:"Cảnh báo cả 80% và 100%",c:"ngưỡng 80 + 100%, cùng đường gửi",test:w=>{const b=w.budgets.find(x=>x.limit===20);return!!b&&b.thresholds.includes(80)&&b.thresholds.includes(100)&&trace0(w,105).stop===null}},
   ],
   diagnose(w,n){const tr=trace0(w,55);
-    if(!w.budgets.some(b=>b.limit===20))return["Chưa có budget $20 nào.","Mở Budgets để tạo.","Budgets → Tạo budget, số tiền 20."][Math.min(n,2)];
-    if(tr.stop){return[ "Hộp thư vẫn trống dù chi tiêu đã vượt 50%. Bấm “Thử” để tự xem.",`Cảnh báo dừng ở ${NODE_NAME[tr.stop]}. Nhìn node đó trên sơ đồ.`,`Cảnh báo dừng ở ${NODE_NAME[tr.stop]}: ${tr.why}`][Math.min(n,2)]}
-    return["Ngưỡng 50% đã chạy, nhưng 80% hoặc 100% thì chưa.","Xem lại các ngưỡng của budget.","Budget phải bật cả ngưỡng 80% và 100%."][Math.min(n,2)]},
+    if(!w.budgets.some(b=>b.limit===20))return["Chưa có budget $20.","Mở Budgets.","Budgets → Tạo budget, số tiền 20."][Math.min(n,2)];
+    if(tr.stop){return[ "Hộp thư vẫn trống. Bấm Thử › 55% để xem.",`Cảnh báo dừng ở ${NODE_NAME[tr.stop]} (xem sơ đồ).`,`Dừng ở ${NODE_NAME[tr.stop]}: ${tr.why}`][Math.min(n,2)]}
+    return["50% chạy rồi, 80% hoặc 100% thì chưa.","Xem lại ngưỡng của budget.","Bật cả ngưỡng 80% và 100%."][Math.min(n,2)]},
   hints(w){const s=(trace0(w,55).stop)||(trace0(w,105).stop)||"budget";return({
-    spend:["Budget là thứ theo dõi chi tiêu. Chưa có budget thì không ai báo cả.","Budgets → Tạo budget: $20/tháng, bật ngưỡng 50/80/100%, gửi tới SNS topic."],
-    budget:["Budget chỉ báo khi chi tiêu vượt một ngưỡng và có nơi để gửi.","Sửa budget: bật đủ ngưỡng 50/80/100% và chọn SNS topic để gửi."],
-    topic:["SNS topic chỉ là trạm phát. Phải có người đăng ký (subscription) thì mới có người nhận.",`SNS → topic → Thêm subscription email ${EMAIL}.`],
-    sub:["SNS không gửi gì tới email chưa xác nhận, để không spam người lạ.","Mở Hộp thư mô phỏng, mở thư “Subscription Confirmation” và bấm Confirm subscription."]})[s]},
+    spend:["Chưa có budget thì không ai theo dõi chi tiêu.","Budgets → Tạo budget: $20, ngưỡng 50/80/100%, gửi tới SNS topic."],
+    budget:["Budget chỉ báo khi có ngưỡng và có nơi gửi.","Sửa budget: bật 50/80/100% và chọn SNS topic."],
+    topic:["Topic chỉ là trạm phát, cần subscription mới có người nhận.",`SNS → topic → Thêm subscription ${EMAIL}.`],
+    sub:["SNS không gửi tới email chưa xác nhận.","Hộp thư → thư “Subscription Confirmation” → Confirm."]})[s]},
   solve(){if(!W.topics.some(t=>t.name==="billing-alerts"))API.createTopic("billing-alerts");
     const t=W.topics.find(x=>x.name==="billing-alerts");if(!t.subs.some(s=>s.endpoint===EMAIL))API.subscribe("billing-alerts",EMAIL);
     const m=W.mail.find(x=>x.kind==="confirm"&&x.topic==="billing-alerts");if(m)API.confirm(m.id);
     const b=W.budgets.find(x=>x.limit===20);UI.editBudget=b&&b.name;API.saveBudget({name:b?b.name:"monthly-20usd",limit:20,t50:1,t80:1,t100:1,topic:"billing-alerts"},!b)},
-  pass:"Budget theo dõi chi tiêu, SNS topic phát cảnh báo, và chỉ những email đã xác nhận mới nhận được. Xác nhận là cách AWS chống gửi thư rác tới người không đăng ký.",
-  tries:[["Thử: chi tiêu 55%",()=>API.spendTo(55)],["85%",()=>API.spendTo(85)],["105%",()=>API.spendTo(105)],["Sang tháng mới",()=>API.newMonth()]],
+  pass:"Budget theo dõi → SNS phát → chỉ email đã xác nhận mới nhận. Xác nhận là cách AWS chống spam.",
+  tries:[["55%",()=>API.spendTo(55)],["85%",()=>API.spendTo(85)],["105%",()=>API.spendTo(105)],["Tháng mới",()=>API.newMonth()]],
 },
 { id:"iam",step:1,title:"AccessDenied không còn ngẫu nhiên",tag:"IAM + STS",
   who:["L","Lan · data"],
   scenario:"Anh Minh tạo sẵn role lab-readonly-s3 để mình đọc dữ liệu mà không ghi nhầm. Mình assume role rồi mà đọc report.csv vẫn báo AccessDenied. Bạn xem giúp?",
-  goal:"Dùng role lab-readonly-s3 thì đọc được dữ liệu, nhưng vẫn không ghi hoặc xóa được gì.",
+  goal:"Role đọc được dữ liệu, nhưng không ghi hay xóa được.",
   concepts:["IAM role","trust policy","STS AssumeRole","explicit deny","least privilege","policy simulator"],
   pages:["arch","budgets","billing","sns","mail","iam","sim","s3"],
   setup(){const w=emptyWorld();SEED.guard(w);const b="lab-data-"+ACCT;
@@ -219,42 +219,42 @@ const LESSONS=[
     w.policies["lab-guardrail"]={statements:[{sid:"NoObjectChanges",effect:"Deny",actions:["s3:*Object"],resources:[bArn(b,"*")]}]};
     w.roles.push({name:"lab-readonly-s3",trust:"sso",policies:["lab-s3-read","lab-guardrail"]});return w},
   tasks:[
-    {t:"Đăng nhập được bằng role lab-readonly-s3",c:"sts:AssumeRole thành công ít nhất một lần",test:w=>!!w.flags.assumed},
-    {t:"Dùng role thì đọc được report.csv",c:"s3:GetObject trên report.csv được Allow với role",test:w=>evalIam(w,"role:lab-readonly-s3","s3:GetObject",bArn("lab-data-"+ACCT,"report.csv")).allow},
-    {t:"Dùng role thì vẫn không ghi, không xóa được",c:"s3:PutObject và s3:DeleteObject đều bị Deny",test:w=>["s3:PutObject","s3:DeleteObject"].every(a=>!evalIam(w,"role:lab-readonly-s3",a,bArn("lab-data-"+ACCT,"x.txt")).allow)},
+    {t:"Assume role lab-readonly-s3",c:"sts:AssumeRole thành công",test:w=>!!w.flags.assumed},
+    {t:"Role đọc được report.csv",c:"s3:GetObject → Allow",test:w=>evalIam(w,"role:lab-readonly-s3","s3:GetObject",bArn("lab-data-"+ACCT,"report.csv")).allow},
+    {t:"Role không ghi, không xóa được",c:"PutObject, DeleteObject → Deny",test:w=>["s3:PutObject","s3:DeleteObject"].every(a=>!evalIam(w,"role:lab-readonly-s3",a,bArn("lab-data-"+ACCT,"x.txt")).allow)},
   ],
   diagnose(w,n){const b="lab-data-"+ACCT,g=evalIam(w,"role:lab-readonly-s3","s3:GetObject",bArn(b,"report.csv"));
-    if(!w.flags.assumed)return["Bạn chưa thử dùng role lab-readonly-s3.","Mở IAM → Roles và Assume role.","IAM → lab-readonly-s3 → Assume role, rồi thử đọc file trong S3."][Math.min(n,2)];
-    if(!g.allow)return["Dùng role thì đọc report.csv vẫn bị AccessDenied.","Quyết định nằm trong các policy gắn vào role. Thử Policy simulator với s3:GetObject.",`s3:GetObject bị chặn bởi ${g.by} (${g.kind==="explicit"?"explicit deny":"không có Allow"}).`][Math.min(n,2)];
-    return["Role đang mở quá rộng: ghi hoặc xóa được.","Kiểm tra lại statement Deny.","Deny phải vẫn chặn s3:PutObject và s3:DeleteObject."][Math.min(n,2)]},
-  hints(){return["Explicit Deny luôn thắng Allow, kể cả khi Allow nằm ở policy khác. Policy simulator sẽ chỉ ra statement nào quyết định.","lab-guardrail chặn s3:*Object, tức là chặn cả GetObject. Sửa Action thành s3:PutObject, s3:DeleteObject để chỉ chặn ghi và xóa."]},
+    if(!w.flags.assumed)return["Bạn chưa dùng role.","IAM → Assume role.","IAM → lab-readonly-s3 → Assume role, rồi đọc file trong S3."][Math.min(n,2)];
+    if(!g.allow)return["Đọc report.csv vẫn AccessDenied.","Thử Policy simulator với s3:GetObject.",`Bị chặn bởi ${g.by} (${g.kind==="explicit"?"explicit deny":"không có Allow"}).`][Math.min(n,2)];
+    return["Role ghi hoặc xóa được: mở quá rộng.","Xem lại statement Deny.","Deny phải vẫn chặn PutObject và DeleteObject."][Math.min(n,2)]},
+  hints(){return["Explicit Deny luôn thắng Allow. Simulator chỉ ra statement nào quyết định.","s3:*Object chặn cả GetObject. Đổi Action thành s3:PutObject, s3:DeleteObject."]},
   solve(){API.editStatement("lab-guardrail",0,{effect:"Deny",actions:"s3:PutObject, s3:DeleteObject",resources:bArn("lab-data-"+ACCT,"*")});
     if(W.identity==="sso")API.assumeRole("lab-readonly-s3");API.s3("s3:GetObject","lab-data-"+ACCT,"report.csv")},
-  pass:"Mỗi request đi qua thứ tự: có Deny nào khớp thì chặn ngay; không có thì cần ít nhất một Allow; không có Allow thì bị chặn ngầm định. Wildcard như s3:*Object rất dễ chặn nhiều hơn bạn định.",
-  tries:[["Thử: đọc report.csv",()=>API.s3("s3:GetObject","lab-data-"+ACCT,"report.csv")],["Thử: ghi notes.txt",()=>API.s3("s3:PutObject","lab-data-"+ACCT,"notes.txt")]],
+  pass:"Deny khớp → chặn ngay. Không thì cần một Allow. Không có Allow → chặn ngầm. Wildcard như s3:*Object dễ chặn quá tay.",
+  tries:[["Đọc report.csv",()=>API.s3("s3:GetObject","lab-data-"+ACCT,"report.csv")],["Ghi notes.txt",()=>API.s3("s3:PutObject","lab-data-"+ACCT,"notes.txt")]],
 },
 { id:"s3",step:2,title:"Chia sẻ file mà không public bucket",tag:"S3",
   who:["L","Lan · kế toán"],
   scenario:"Mình cần file invoice-0925.pdf. Hôm trước có người mở public cả bucket lab-share để gửi nhanh. Làm sao để mình vẫn tải được mà người ngoài thì không?",
-  goal:"Chỉ người có link mới tải được invoice-0925.pdf, link tự hết hạn, và không ai ngoài đọc được gì trong bucket.",
+  goal:"Lan tải invoice qua link có hạn; người ngoài không đọc được gì.",
   concepts:["S3 bucket","bucket policy","Principal \"*\"","Block Public Access","presigned URL"],
   pages:["arch","budgets","billing","sns","mail","iam","sim","s3"],
   setup(){const w=emptyWorld();SEED.guard(w);const b="lab-share-"+ACCT;
     w.buckets.push({name:b,bpa:false,policy:[{sid:"PublicRead",effect:"Allow",principal:"*",actions:["s3:GetObject"],resources:[bArn(b,"*")]}],objects:[{key:"invoice-0925.pdf",size:"96 KB"},{key:"internal-notes.txt",size:"4 KB"}]});return w},
   tasks:[
-    {t:"Người ngoài không đọc được gì trong bucket",c:"GET ẩn danh tới mọi object đều 403",test:w=>w.buckets[0].objects.every(o=>!anonCan(w,w.buckets[0].name,o.key).allow)},
-    {t:"Lan tải được invoice bằng link có hạn",c:"có presigned URL cho invoice-0925.pdf, hạn ≤ 7 ngày",test:w=>!!linkValid(w,"invoice-0925.pdf")},
-    {t:"Block Public Access đang bật",c:"cả 4 tùy chọn Block Public Access = true",test:w=>w.buckets[0].bpa},
+    {t:"Người ngoài không đọc được gì",c:"GET ẩn danh → 403 cho mọi object",test:w=>w.buckets[0].objects.every(o=>!anonCan(w,w.buckets[0].name,o.key).allow)},
+    {t:"Lan có link tải invoice",c:"presigned URL, hạn ≤ 7 ngày",test:w=>!!linkValid(w,"invoice-0925.pdf")},
+    {t:"Block Public Access bật",c:"cả 4 tùy chọn = true",test:w=>w.buckets[0].bpa},
   ],
   diagnose(w,n){const b=w.buckets[0],leak=b.objects.some(o=>anonCan(w,b.name,o.key).allow);
-    if(leak)return["Người lạ vẫn mở được file bằng URL thường. Bấm “Thử: người lạ mở file”.","Quyền đọc công khai đến từ bucket, mục Permissions.","Bucket policy PublicRead cho Principal \"*\", và Block Public Access đang tắt."][Math.min(n,2)];
-    if(!linkValid(w,"invoice-0925.pdf"))return["Đã chặn người ngoài, nhưng Lan chưa có cách nào để tải file.","Lan cần một link có hạn cho đúng file đó.","S3 → bucket → invoice-0925.pdf → Tạo presigned URL."][Math.min(n,2)];
-    return["Block Public Access vẫn đang tắt.","Bật nó để lần sau không ai lỡ tay public lại.","S3 → bucket → Permissions → Block Public Access: bật."][Math.min(n,2)]},
-  hints(){return["Bucket policy với Principal \"*\" nghĩa là bất kỳ ai trên Internet. Muốn chia sẻ có kiểm soát thì dùng presigned URL thay vì public.","Bật Block Public Access, xóa statement PublicRead, rồi tạo presigned URL cho invoice-0925.pdf (ví dụ 60 phút)."]},
+    if(leak)return["Người lạ vẫn mở được file. Bấm Thử › Người lạ.","Quyền công khai nằm ở Permissions của bucket.","Policy PublicRead cho Principal \"*\", và BPA đang tắt."][Math.min(n,2)];
+    if(!linkValid(w,"invoice-0925.pdf"))return["Đã chặn người ngoài, nhưng Lan chưa tải được.","Lan cần link có hạn cho đúng file.","S3 → invoice-0925.pdf → Presign."][Math.min(n,2)];
+    return["Block Public Access vẫn tắt.","Bật để không ai lỡ tay public lại.","S3 → Permissions → Block Public Access: bật."][Math.min(n,2)]},
+  hints(){return["Principal \"*\" = bất kỳ ai trên Internet. Chia sẻ có kiểm soát thì dùng presigned URL.","Bật BPA, xóa PublicRead, rồi presign invoice-0925.pdf (vd 60 phút)."]},
   solve(){const b=W.buckets[0].name;if(!W.buckets[0].bpa)API.setBpa(b,true);if(W.buckets[0].policy.some(s=>s.sid==="PublicRead"))API.deleteBucketStmt(b,"PublicRead");
     if(!linkValid(W,"invoice-0925.pdf"))API.presign(b,"invoice-0925.pdf",60)},
-  pass:"Presigned URL mang theo quyền của người ký và hết hạn sau thời gian đặt, nên chia sẻ đúng một file cho đúng người mà bucket vẫn private. Block Public Access là chốt chặn ở cấp bucket để không ai lỡ tay public lại.",
-  tries:[["Thử: người lạ mở file",()=>API.tryStranger()],["Thử: Lan mở link",()=>API.tryLan()]],
+  pass:"Presigned URL mang quyền người ký và tự hết hạn, nên bucket vẫn private. BPA chặn việc lỡ tay public lại.",
+  tries:[["Người lạ",()=>API.tryStranger()],["Lan mở link",()=>API.tryLan()]],
 },
 ];
 const LOCKED=[["Lambda","lambda",3],["DynamoDB","dynamodb",6],["API Gateway","apigw",7],["Step Functions","sfn",8]];
@@ -274,7 +274,7 @@ function check(){const L=LESSONS[UI.lesson];UI.attempt++;UI.dirty=false;
   UI.result={ok,res,msg:ok?L.pass:L.diagnose(W,UI.ladder)};
   log("Bài học","lesson","check",ok?`Đạt ${res.length}/${res.length}`:`Chưa đạt · lần ${UI.attempt} · ${res.filter(Boolean).length}/${res.length} nhiệm vụ`,ok?"ok":"bad");
   if(ok){DONE.add(L.id);store.set("done",[...DONE])}}
-function skip(){const L=LESSONS[UI.lesson];log("Bài học","lesson","skip","Skip: CloudLab làm hộ từng bước, xem các dòng API bên dưới","warn");L.solve();UI.skipped=true;check();if(UI.result.ok){DONE.delete(L.id);store.set("done",[...DONE]);UI.result.msg="Đã làm hộ. Đọc lại các dòng API trong Event log để thấy từng bước. Bài tính là đã xem, chưa tính là đạt.";UI.result.skipped=true}}
+function skip(){const L=LESSONS[UI.lesson];log("Bài học","lesson","skip","Skip: CloudLab làm hộ từng bước, xem các dòng API bên dưới","warn");L.solve();UI.skipped=true;check();if(UI.result.ok){DONE.delete(L.id);store.set("done",[...DONE]);UI.result.msg="Xem từng bước trong Event log. Tính là đã xem, chưa đạt.";UI.result.skipped=true}}
 
 /* ================= architecture views ================= */
 function views(){const L=LESSONS[UI.lesson];
@@ -282,14 +282,14 @@ function views(){const L=LESSONS[UI.lesson];
     const lim=b?b.limit:20,pct=Math.round(W.spend/lim*100),fl=UI.flow,inbox=W.mail.filter(m=>m.kind==="alert").length;
     const reached=k=>fl&&(fl.stop===null||["spend","budget","topic","sub","mail"].indexOf(k)<=["spend","budget","topic","sub","mail"].indexOf(fl.stop));
     const nodes=[
-      {id:"spend",x:20,y:36,w:250,title:"Chi tiêu tháng này",chip:[pct+"%",pct>=50?"warn":""],page:"billing",big:`${money(W.spend)} / ${money(lim)}`,meter:Math.min(pct,100),note:"Chi phí giả do nút “Thử” tạo ra"},
+      {id:"spend",x:20,y:36,w:250,title:"Chi tiêu tháng này",chip:[pct+"%",pct>=50?"warn":""],page:"billing",big:`${money(W.spend)} / ${money(lim)}`,meter:Math.min(pct,100),note:"giả lập"},
       {id:"budget",x:310,y:36,w:250,title:b?b.name:"Chưa có budget",chip:["Budget",""],page:"budgets",border:b?"":"off",rows:b?[[ "Ngưỡng 50%",b.thresholds.includes(50)?(b.fired.includes(50)?"đã vượt":"chưa tới"):"tắt",b.thresholds.includes(50)?(b.fired.includes(50)?"warn":"none"):"bad"],["Ngưỡng 80%",b.thresholds.includes(80)?(b.fired.includes(80)?"đã vượt":"chưa tới"):"tắt",b.thresholds.includes(80)?(b.fired.includes(80)?"warn":"none"):"bad"],["Ngưỡng 100%",b.thresholds.includes(100)?(b.fired.includes(100)?"đã vượt":"chưa tới"):"tắt",b.thresholds.includes(100)?(b.fired.includes(100)?"warn":"none"):"bad"],["Gửi tới",b.topic||"chưa chọn",b.topic?"ok":"bad"]]:[["Tạo ở trang","Budgets","none"]]},
       {id:"topic",x:600,y:36,w:250,title:t?t.name:"Chưa có topic",chip:["SNS topic",""],page:"sns",border:t?"":"off",rows:t?[["Message đã nhận",String(t.published),t.published?"ok":"none"],["Subscription",String(t.subs.length),t.subs.length?"ok":"bad"],["Region",REGION,"ok"]]:[["Tạo ở trang","SNS","none"]]},
       {id:"sub",x:600,y:250,w:250,title:"Subscription",chip:[sub?(sub.status==="Confirmed"?"Confirmed":"Pending"):"Chưa có",sub?(sub.status==="Confirmed"?"ok":"warn"):""],page:"sns",border:sub?(sub.status==="Confirmed"?"":"warn"):"off",rows:sub?[["Endpoint",sub.endpoint,"ok"],["Protocol","email","ok"],["Trạng thái",sub.status,sub.status==="Confirmed"?"ok":"warn"]]:[["Thêm ở trang","SNS","none"]]},
       {id:"mail",x:200,y:250,w:250,title:"Hộp thư mô phỏng",chip:[inbox+" cảnh báo",inbox?"ok":""],page:"mail",rows:[["Thư cảnh báo",String(inbox),inbox?"ok":"none"],["Thư khác",String(W.mail.length-inbox),"none"]]}];
     const st=(from,to)=>!fl?"off":(reached(to)?"ok":(fl.stop===from?"stop":"off"));
     const edges=[{a:"spend",b:"budget",as:"r",bs:"l",s:st("spend","budget")},{a:"budget",b:"topic",as:"r",bs:"l",s:st("budget","topic"),label:"vượt ngưỡng → publish"},{a:"topic",b:"sub",as:"b",bs:"t",s:st("topic","sub")},{a:"sub",b:"mail",as:"l",bs:"r",s:st("sub","mail"),stopLabel:"không gửi được"}];
-    return{nodes,edges,hint:fl?(fl.stop?`Lần thử gần nhất dừng ở ${NODE_NAME[fl.stop]}.`:"Lần thử gần nhất: cảnh báo đi tới hộp thư."):"Bấm “Thử” trên thanh công cụ để xem cảnh báo đi tới đâu."}}
+    return{nodes,edges,hint:fl?(fl.stop?["bad",`Dừng ở ${NODE_NAME[fl.stop]}`]:["ok","Cảnh báo tới hộp thư"]):["","Bấm Thử để chạy cảnh báo"]}}
   if(L.id==="iam"){const bucket="lab-data-"+ACCT,role="role:lab-readonly-s3",assumed=W.identity==="role:lab-readonly-s3";
     const ev=(a,k)=>evalIam(W,role,a,a==="s3:ListBucket"?bArn(bucket):bArn(bucket,k||"report.csv"));
     const lab=e=>e.allow?"Cho phép":e.kind==="explicit"?"Chặn · explicit deny":"Chặn · không có Allow";
@@ -303,7 +303,7 @@ function views(){const L=LESSONS[UI.lesson];
       {id:"bucket",x:600,y:36,w:260,title:bucket.slice(0,22)+"…",chip:["S3",""],page:"s3",rows:[rowE("ListBucket","s3:ListBucket"),rowE("GetObject","s3:GetObject"),rowE("PutObject","s3:PutObject"),rowE("DeleteObject","s3:DeleteObject")]}];
     const g=ev("s3:GetObject");
     const edges=[{a:"you",b:"role",as:"r",bs:"l",s:W.flags.assumed?"ok":"off",label:"AssumeRole"},{a:"read",b:"role",as:"t",bs:"b",s:"ok",thin:1},{a:"guard",b:"role",as:"t",bs:"b",s:"warn",thin:1},{a:"role",b:"bucket",as:"r",bs:"l",s:W.flags.assumed?(g.allow?"ok":"stop"):"off",stopLabel:"GetObject bị chặn"}];
-    return{nodes,edges,hint:"Mỗi dòng trong khối S3 là kết quả đánh giá quyền của role. Xanh là đúng như mục tiêu, đỏ là chưa."}}
+    return{nodes,edges,legend:[["ok","đúng mục tiêu"],["bad","chưa đúng"]]}}
   /* s3 */
   const b=W.buckets[0],inv="invoice-0925.pdf",an=anonCan(W,b.name,inv),ln=linkValid(W,inv);
   const nodes=[
@@ -312,7 +312,7 @@ function views(){const L=LESSONS[UI.lesson];
     {id:"bucket",x:310,y:116,w:260,title:b.name.slice(0,24)+"…",chip:[b.bpa?"private":"PUBLIC",b.bpa&&!b.policy.some(s=>s.principal==="*")?"ok":"bad"],page:"s3",rows:[["Block Public Access",b.bpa?"bật":"tắt",b.bpa?"ok":"bad"],["Bucket policy",b.policy.length?b.policy.map(s=>s.sid).join(", "):"không có",b.policy.some(s=>s.principal==="*")?"bad":"ok"],["Object",String(b.objects.length),"ok"]]},
     {id:"obj",x:620,y:116,w:240,title:inv,chip:["object",""],page:"s3",rows:[["Người lạ đọc được",an.allow?"có · bị lộ":"không",an.allow?"bad":"ok"],["Lan đọc được",ln?"có":"chưa",ln?"ok":"none"]]}];
   const edges=[{a:"stranger",b:"bucket",as:"r",bs:"l",s:an.allow?"leak":"blocked",stopLabel:"bị chặn"},{a:"bucket",b:"obj",as:"r",bs:"l",s:an.allow?"leak":"ok"},{a:"lan",b:"obj",as:"r",bs:"b",s:ln?"ok":"off",label:ln?"presigned URL":"chưa có link"}];
-  return{nodes,edges,hint:"Đường đỏ là dữ liệu đang bị lộ ra ngoài. Đường xanh là truy cập đúng người."}
+  return{nodes,edges,legend:[["bad","bị lộ"],["ok","đúng người"]]}
 }
 function nodeH(n){return n.big?118:44+(n.rows?n.rows.length*20+10:0)}
 function anchor(n,side){const h=nodeH(n);return side==="r"?[n.x+n.w,n.y+Math.min(40,h/2)]:side==="l"?[n.x,n.y+Math.min(40,h/2)]:side==="b"?[n.x+n.w/2,n.y+h]:[n.x+n.w/2,n.y]}
@@ -342,7 +342,8 @@ function svgView(){const v=views(),byId={};v.nodes.forEach(n=>byId[n.id]=n);
       n.rows.forEach((r,i)=>{const y=n.y+60+i*20,dc={ok:"var(--accent)",bad:"var(--bad)",warn:"var(--warn)"}[r[2]]||"var(--line)";
         s+=`<circle cx="${n.x+16}" cy="${y-4}" r="4" fill="${dc}"/><text x="${n.x+26}" y="${y}" class="rl">${esc(r[0])}</text><text x="${n.x+n.w-12}" y="${y}" text-anchor="end" class="rv ${r[2]}">${esc(r[1].length>26?r[1].slice(0,25)+"…":r[1])}</text>`})}
     s+=`</g>`}
-  return s+"</svg>"+`<p class="arch-hint">${esc(v.hint)}</p>`}
+  const foot=v.hint?`<span class="chip ${v.hint[0]}">${esc(v.hint[1])}</span>`:(v.legend||[]).map(([c,l])=>`<span class="lg"><i class="${c}"></i>${esc(l)}</span>`).join("");
+  return s+"</svg>"+`<div class="arch-hint">${foot}</div>`}
 
 /* ================= rendering ================= */
 const PAGES={arch:["Sơ đồ bài học","Kiến trúc"],budgets:["Budgets","Chi phí"],billing:["Billing","Chi phí"],sns:["SNS","Thông báo"],mail:["Hộp thư mô phỏng","Thông báo"],iam:["IAM roles","Bảo mật"],sim:["Policy simulator","Bảo mật"],s3:["S3","Lưu trữ"]};
@@ -360,59 +361,60 @@ function renderSide(){const groups=[["Bài học",["arch"]],["Chi phí",["budget
 function renderTop(){const L=LESSONS[UI.lesson],p=PAGES[UI.page];
   const id=W.identity==="sso"?`<span class="idpill">Đang dùng: <b>SSO admin</b></span>`:`<span class="idpill on">Đang dùng role: <b>${esc(W.identity.slice(5))}</b> <button class="link" data-act="backToSso">Quay về SSO</button></span>`;
   document.getElementById("top").innerHTML=`<div class="crumb">${esc(p[1])} /<b>${esc(p[0])}</b></div>${L.id==="iam"||W.identity!=="sso"?id:""}
-    <div class="tries" role="group" aria-label="Thử, không tính điểm">${L.tries.map((t,i)=>`<button data-try="${i}">${esc(t[0])}</button>`).join("")}</div>
-    <button data-act="undo" ${UNDO.length?"":"disabled"} title="Hoàn tác thao tác gần nhất">↶ Undo</button><button data-act="askReset">Reset bài…</button>`}
+    <div class="tries" role="group" aria-label="Thử, không tính điểm" title="Thử bao nhiêu lần cũng được, không tính điểm"><span class="tl">Thử</span>${L.tries.map((t,i)=>`<button data-try="${i}">${esc(t[0])}</button>`).join("")}</div>
+    <button class="ic" data-act="undo" ${UNDO.length?"":"disabled"} title="Undo" aria-label="Undo">↶</button><button class="ic" data-act="askReset" title="Reset bài" aria-label="Reset bài">⟲</button>`}
+const info=t=>`<span class="info" tabindex="0" role="note" aria-label="${esc(t)}" data-tip="${esc(t)}">i</span>`;
 function tbl(head,rows,empty){return rows.length?`<div class="tw"><table><thead><tr>${head.map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`:`<div class="tw"><div class="empty">${empty}</div></div>`}
 function renderPage(){const el=document.getElementById("page"),P=UI.page;let h="";
-  if(P==="arch"){h=`<div class="ph"><h2>Sơ đồ bài học</h2><p>Bấm vào một khối để mở trang của nó. Sơ đồ cập nhật theo mọi thao tác của bạn.</p></div><div class="arch">${svgView()}</div>`}
-  else if(P==="budgets"){h=`<div class="ph"><h2>Budgets</h2><button class="primary" data-act="newBudget">Tạo budget</button><p>Budget theo dõi chi tiêu và gửi cảnh báo khi vượt ngưỡng.</p></div>`+
-    tbl(["Tên","Số tiền / tháng","Ngưỡng","Gửi tới","Đã vượt",""],W.budgets.map(b=>`<tr><td><b>${esc(b.name)}</b></td><td class="mono">${money(b.limit)}</td><td class="mono">${b.thresholds.map(x=>x+"%").join(", ")||"—"}</td><td class="mono">${esc(b.topic||"—")}</td><td class="mono">${b.fired.map(x=>x+"%").join(", ")||"—"}</td><td><div class="acts"><button class="sm" data-act="editBudget" data-arg="${esc(b.name)}">Sửa</button><button class="sm danger" data-act="delBudget" data-arg="${esc(b.name)}">Xóa</button></div></td></tr>`),"Chưa có budget nào. Bắt đầu bằng nút Tạo budget.")}
-  else if(P==="billing"){const lim=(W.budgets[0]&&W.budgets[0].limit)||20;h=`<div class="ph"><h2>Billing</h2><p>Chi tiêu ở đây là giả lập. Dùng các nút “Thử” trên thanh công cụ để bơm chi phí, không tính điểm.</p></div>
-    <div class="grid3"><div class="card q"><span class="muted">Chi tiêu tháng này</span><br><b>${money(W.spend)}</b><div class="bar"><i class="${W.spend/lim>=.5?"hi":""}" style="width:${Math.min(100,W.spend/lim*100)}%"></i></div></div>
-    <div class="card q"><span class="muted">Free Tier</span><br><b>—</b><p class="note">Sandbox không tính Free Tier.</p></div></div>`}
-  else if(P==="sns"){h=`<div class="ph"><h2>SNS topics</h2><button class="primary" data-act="newTopic">Tạo topic</button><p>Topic là trạm phát; subscription là người nhận. Email phải được xác nhận mới nhận tin.</p></div>`+
-    (W.topics.length?W.topics.map(t=>`<div class="card sgc"><div class="ph" style="margin:0"><h2 style="font-size:1rem">${esc(t.name)}</h2><button class="sm" data-act="newSub" data-arg="${esc(t.name)}">Thêm subscription</button><button class="sm" data-act="pubTest" data-arg="${esc(t.name)}">Thử: gửi tin</button><button class="sm danger" data-act="delTopic" data-arg="${esc(t.name)}">Xóa topic</button><p class="mono">${esc(topicArn(t.name))}</p></div>`+
-      tbl(["Protocol","Endpoint","Trạng thái",""],t.subs.map(s=>`<tr><td class="mono">email</td><td class="mono">${esc(s.endpoint)}</td><td><span class="chip ${s.status==="Confirmed"?"ok":"warn"}">${s.status}</span></td><td><button class="sm danger" data-act="unsub" data-arg="${esc(t.name)}|${s.id}">Hủy</button></td></tr>`),"Chưa có subscription.")+`</div>`).join(""):`<div class="tw"><div class="empty">Chưa có topic nào.</div></div>`)}
+  if(P==="arch"){h=`<div class="ph"><h2>Sơ đồ bài học ${info("Bấm một khối để mở trang của nó. Sơ đồ cập nhật theo mọi thao tác.")}</h2></div><div class="arch">${svgView()}</div>`}
+  else if(P==="budgets"){h=`<div class="ph"><h2>Budgets ${info("Theo dõi chi tiêu, cảnh báo khi vượt ngưỡng.")}</h2><button class="primary" data-act="newBudget">Tạo budget</button></div>`+
+    tbl(["Tên","Số tiền / tháng","Ngưỡng","Gửi tới","Đã vượt",""],W.budgets.map(b=>`<tr><td><b>${esc(b.name)}</b></td><td class="mono">${money(b.limit)}</td><td class="mono">${b.thresholds.map(x=>x+"%").join(", ")||"—"}</td><td class="mono">${esc(b.topic||"—")}</td><td class="mono">${b.fired.map(x=>x+"%").join(", ")||"—"}</td><td><div class="acts"><button class="sm" data-act="editBudget" data-arg="${esc(b.name)}">Sửa</button><button class="sm danger" data-act="delBudget" data-arg="${esc(b.name)}">Xóa</button></div></td></tr>`),"Chưa có budget.")}
+  else if(P==="billing"){const lim=(W.budgets[0]&&W.budgets[0].limit)||20;h=`<div class="ph"><h2>Billing ${info("Chi tiêu giả lập. Bơm chi phí bằng nút Thử ở thanh trên.")}</h2></div>
+    <div class="grid3"><div class="card q"><span class="muted">Tháng này</span><br><b>${money(W.spend)}</b> <span class="muted">/ ${money(lim)}</span><div class="bar"><i class="${W.spend/lim>=.5?"hi":""}" style="width:${Math.min(100,W.spend/lim*100)}%"></i></div></div></div>`}
+  else if(P==="sns"){h=`<div class="ph"><h2>SNS topics ${info("Topic phát tin, subscription nhận tin. Email phải xác nhận mới nhận.")}</h2><button class="primary" data-act="newTopic">Tạo topic</button></div>`+
+    (W.topics.length?W.topics.map(t=>`<div class="card sgc"><div class="ph" style="margin:0"><h2 style="font-size:1rem">${esc(t.name)} ${info(topicArn(t.name))}</h2><button class="sm" data-act="newSub" data-arg="${esc(t.name)}">+ Subscription</button><button class="sm" data-act="pubTest" data-arg="${esc(t.name)}" title="Thử, không tính điểm">Gửi tin thử</button><button class="sm danger" data-act="delTopic" data-arg="${esc(t.name)}">Xóa</button></div>`+
+      tbl(["Protocol","Endpoint","Trạng thái",""],t.subs.map(s=>`<tr><td class="mono">email</td><td class="mono">${esc(s.endpoint)}</td><td><span class="chip ${s.status==="Confirmed"?"ok":"warn"}">${s.status}</span></td><td><button class="sm danger" data-act="unsub" data-arg="${esc(t.name)}|${s.id}">Hủy</button></td></tr>`),"Chưa có subscription.")+`</div>`).join(""):`<div class="tw"><div class="empty">Chưa có topic.</div></div>`)}
   else if(P==="mail"){const m=W.mail.find(x=>x.id===UI.mailOpen);
-    h=`<div class="ph"><h2>Hộp thư mô phỏng</h2><p>Hộp thư của ${EMAIL}. Thư từ AWS trong sandbox về đây.</p></div><div class="mailbox"><ul class="mlist">${W.mail.length?W.mail.map(x=>`<li><button class="mitem${x.id===UI.mailOpen?" on":""}${x.read?"":" unread"}" data-act="openMail" data-arg="${x.id}"><b>${esc(x.subject)}</b><small>${esc(x.from)} · ${x.t}</small></button></li>`).join(""):`<li class="empty">Chưa có thư nào.</li>`}</ul>
+    h=`<div class="ph"><h2>Hộp thư <span class="muted mono sub">${EMAIL}</span></h2></div><div class="mailbox"><ul class="mlist">${W.mail.length?W.mail.map(x=>`<li><button class="mitem${x.id===UI.mailOpen?" on":""}${x.read?"":" unread"}" data-act="openMail" data-arg="${x.id}"><b>${esc(x.subject)}</b><small>${esc(x.from)} · ${x.t}</small></button></li>`).join(""):`<li class="empty">Chưa có thư nào.</li>`}</ul>
       <div class="mread">${m?`<h3>${esc(m.subject)}</h3><p class="muted mono">Từ: ${esc(m.from)}<br>Tới: ${esc(m.to)}</p>`+(m.kind==="confirm"?`<p>You have chosen to subscribe to the topic:<br><span class="mono">${esc(topicArn(m.topic))}</span></p><p>To confirm this subscription, click the link below (if this was in error no action is necessary):</p><button class="primary" data-act="confirm" data-arg="${m.id}">Confirm subscription</button>`:`<p>${esc(m.body)}</p>`):`<p class="muted">Chọn một thư để đọc.</p>`}</div></div>`}
-  else if(P==="iam"){h=`<div class="ph"><h2>IAM roles</h2><p>Role là danh tính tạm thời. Ai được dùng role do trust policy quyết định; role làm được gì do các policy gắn vào quyết định.</p></div>`+
-    W.roles.map(r=>`<div class="card sgc"><div class="ph" style="margin:0"><h2 style="font-size:1rem">${esc(r.name)}</h2>${W.identity==="role:"+r.name?`<span class="chip ok">đang dùng</span>`:`<button class="primary sm" data-act="assume" data-arg="${esc(r.name)}">Assume role</button>`}<p class="mono">${esc(roleArn(r.name))} · trust: AccountFullAccessRole (SSO) của bạn</p></div>`+
+  else if(P==="iam"){h=`<div class="ph"><h2>IAM roles ${info("Trust policy quyết định ai dùng được role; policy gắn vào quyết định role làm được gì.")}</h2></div>`+
+    W.roles.map(r=>`<div class="card sgc"><div class="ph" style="margin:0"><h2 style="font-size:1rem">${esc(r.name)} ${info(roleArn(r.name))}</h2><span class="chip">trust: SSO của bạn</span>${W.identity==="role:"+r.name?`<span class="chip ok">đang dùng</span>`:`<button class="primary sm" data-act="assume" data-arg="${esc(r.name)}">Assume role</button>`}</div>`+
       r.policies.map(pn=>`<h3 class="pt">${esc(pn)}</h3>`+tbl(["Sid","Effect","Action","Resource",""],(W.policies[pn]?W.policies[pn].statements:[]).map((s,i)=>`<tr><td class="mono">${esc(s.sid)}</td><td><span class="chip ${s.effect==="Allow"?"ok":"warn"}">${s.effect}</span></td><td class="mono">${esc(s.actions.join(", "))}</td><td class="mono">${esc(s.resources.join(", "))}</td><td><div class="acts"><button class="sm" data-act="editStmt" data-arg="${esc(pn)}|${i}">Sửa</button><button class="sm danger" data-act="delStmt" data-arg="${esc(pn)}|${i}">Xóa</button></div></td></tr>`),"Policy trống.")).join("")+`</div>`).join("")}
   else if(P==="sim"){const sm=UI.sim,r=UI.simResult,b=W.buckets[0];
-    h=`<div class="ph"><h2>Policy simulator</h2><p>Hỏi IAM “principal này có được làm việc này không, và vì sao”, mà không cần làm thật. Không tính điểm.</p></div>
+    h=`<div class="ph"><h2>Policy simulator ${info("Hỏi IAM có được phép không và vì sao, mà không làm thật. Không tính điểm.")}</h2></div>
     <div class="card"><div class="frow"><label class="fld">Principal<select id="sim-p">${[["sso","SSO admin"],...W.roles.map(r=>["role:"+r.name,"role "+r.name])].map(([v,l])=>`<option value="${v}"${sm.principal===v?" selected":""}>${esc(l)}</option>`).join("")}</select></label>
       <label class="fld">Action<select id="sim-a">${["s3:ListBucket","s3:GetObject","s3:PutObject","s3:DeleteObject"].map(a=>`<option${sm.action===a?" selected":""}>${a}</option>`).join("")}</select></label>
       <label class="fld">Object<select id="sim-k">${(b?b.objects:[]).map(o=>`<option${sm.key===o.key?" selected":""}>${esc(o.key)}</option>`).join("")}</select></label></div>
       <div class="mfoot" style="justify-content:flex-start;margin-top:10px"><button class="primary" data-act="simulate">Chạy mô phỏng</button></div>
       ${r?`<div class="callout ${r.allow?"ok":""}" style="margin-top:12px"><b>${r.allow?"allowed":r.kind==="explicit"?"explicitDeny":"implicitDeny"}</b>Quyết định bởi: <span class="mono">${esc(r.by)}</span></div>`:""}</div>
-    <p class="note" style="margin-top:12px">Thứ tự đánh giá: có Deny nào khớp thì chặn ngay → không thì cần một Allow → không có Allow thì chặn ngầm định.</p>`}
+    <div class="evalflow" aria-label="Thứ tự đánh giá"><span class="chip bad">Deny khớp → chặn</span><span>→</span><span class="chip ok">Allow khớp → cho</span><span>→</span><span class="chip">còn lại → chặn ngầm</span></div>`}
   else if(P==="s3"){const b=UI.bucket&&W.buckets.find(x=>x.name===UI.bucket)||W.buckets[0];
     if(!b){h=`<div class="ph"><h2>S3</h2></div><div class="tw"><div class="empty">Không có bucket trong bài này.</div></div>`}
-    else{h=`<div class="ph"><h2>${esc(b.name)}</h2><span class="chip ${b.bpa?"ok":"bad"}">${b.bpa?"Block Public Access: bật":"Block Public Access: tắt"}</span><p>Region ${REGION}. Thao tác dưới đây chạy bằng danh tính hiện tại${W.identity==="sso"?" (SSO admin)":" (role "+esc(W.identity.slice(5))+")"}.</p></div>
-      <h3 class="pt">Objects</h3>`+tbl(["Key","Kích thước",""],b.objects.map(o=>`<tr><td class="mono">${esc(o.key)}</td><td class="mono">${o.size}</td><td><div class="acts"><button class="sm" data-act="s3get" data-arg="${esc(o.key)}">Tải xuống</button>${LESSONS[UI.lesson].id==="s3"?`<button class="sm" data-act="presign" data-arg="${esc(o.key)}">Tạo presigned URL</button>`:""}<button class="sm danger" data-act="s3del" data-arg="${esc(o.key)}">Xóa</button></div></td></tr>`),"Bucket trống.")+
-      `<div class="acts" style="margin-top:8px"><button class="sm" data-act="s3list">Liệt kê lại</button><button class="sm" data-act="s3put">Tải lên notes.txt</button></div>
-      <h3 class="pt">Permissions</h3><div class="card"><div class="ph" style="margin:0"><h2 style="font-size:.95rem">Block Public Access</h2><button class="sm ${b.bpa?"":"primary"}" data-act="bpa" data-arg="${b.bpa?0:1}">${b.bpa?"Tắt":"Bật"}</button><p>Chốt chặn cấp bucket: khi bật, policy hay ACL public đều bị bỏ qua.</p></div></div>
+    else{h=`<div class="ph"><h2>${esc(b.name)} ${info("Region "+REGION+". Thao tác chạy bằng danh tính hiện tại.")}</h2><span class="chip">${W.identity==="sso"?"SSO admin":"role "+esc(W.identity.slice(5))}</span><span class="chip ${b.bpa?"ok":"bad"}">BPA ${b.bpa?"bật":"tắt"}</span></div>
+      <h3 class="pt">Objects</h3>`+tbl(["Key","Kích thước",""],b.objects.map(o=>`<tr><td class="mono">${esc(o.key)}</td><td class="mono">${o.size}</td><td><div class="acts"><button class="sm" data-act="s3get" data-arg="${esc(o.key)}">Tải</button>${LESSONS[UI.lesson].id==="s3"?`<button class="sm" data-act="presign" data-arg="${esc(o.key)}">Presign</button>`:""}<button class="sm danger" data-act="s3del" data-arg="${esc(o.key)}">Xóa</button></div></td></tr>`),"Bucket trống.")+
+      `<div class="acts" style="margin-top:8px"><button class="sm" data-act="s3list">Liệt kê</button><button class="sm" data-act="s3put">Tải lên notes.txt</button></div>
+      <h3 class="pt">Permissions</h3><div class="card"><div class="ph" style="margin:0"><h2 style="font-size:.95rem">Block Public Access ${info("Khi bật, mọi policy hay ACL public đều bị bỏ qua.")}</h2><button class="sm ${b.bpa?"":"primary"}" data-act="bpa" data-arg="${b.bpa?0:1}">${b.bpa?"Tắt":"Bật"}</button></div></div>
       <h3 class="pt">Bucket policy</h3>`+tbl(["Sid","Effect","Principal","Action","Resource",""],b.policy.map(s=>`<tr><td class="mono">${esc(s.sid)}</td><td><span class="chip ${s.effect==="Allow"?"ok":"warn"}">${s.effect}</span></td><td class="mono">${s.principal==="*"?'"*" · bất kỳ ai':esc(s.principal)}</td><td class="mono">${esc(s.actions.join(", "))}</td><td class="mono">${esc(s.resources.join(", "))}</td><td><button class="sm danger" data-act="delBStmt" data-arg="${esc(s.sid)}">Xóa</button></td></tr>`),"Không có bucket policy.")+
-      (W.links.length?`<h3 class="pt">Presigned URL đã tạo</h3>`+tbl(["Object","Hạn","URL",""],W.links.map(l=>`<tr><td class="mono">${esc(l.key)}</td><td class="mono">${l.expires} phút</td><td class="mono url">https://${esc(l.bucket)}.s3.${REGION}.amazonaws.com/${esc(l.key)}?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Expires=${l.expires*60}&amp;X-Amz-Signature=…</td><td><button class="sm" data-act="revoke" data-arg="${l.id}">Bỏ</button></td></tr>`),""):"")}}
+      (W.links.length?`<h3 class="pt">Presigned URL</h3>`+tbl(["Object","Hạn","URL",""],W.links.map(l=>`<tr><td class="mono">${esc(l.key)}</td><td class="mono">${l.expires} phút</td><td class="mono url">https://${esc(l.bucket)}.s3.${REGION}.amazonaws.com/${esc(l.key)}?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Expires=${l.expires*60}&amp;X-Amz-Signature=…</td><td><button class="sm" data-act="revoke" data-arg="${l.id}">Bỏ</button></td></tr>`),""):"")}}
   el.innerHTML=h}
 function renderLog(){const sel=LOG.find(l=>l.id===UI.logSel)||LOG[0];
-  document.getElementById("log").innerHTML=`<div class="logl"><div class="logh"><span class="cap">Event log</span><span class="chip">${LOG.length}</span><span class="note">API = lệnh bạn chạy · Sự kiện = AWS tự làm · Thử = không tính điểm</span></div>
-    <ul class="log">${LOG.map(l=>`<li class="${l.id===(sel&&sel.id)?"sel":""}" data-log="${l.id}" tabindex="0"><span class="t">${l.t}</span><span class="ev ${l.tone}"><span class="k k-${l.kind==="API"||l.kind==="CLI"?"api":l.kind==="Sự kiện"?"evt":l.kind==="Thử"?"try":"les"}">${l.kind}</span> ${esc(l.svc)} · ${esc(l.op)}</span><span class="m">${esc(l.msg)}</span></li>`).join("")}</ul></div>
-    <div class="cli"><span class="cap">Lệnh aws CLI tương đương</span>${sel&&sel.cli?`<pre id="clitext">${esc(sel.cli)}</pre><div><button class="sm" data-act="copy">Copy lệnh</button></div>`:`<p class="note">Dòng này không có lệnh CLI tương đương.</p>`}</div>`}
+  const KT={api:"Lệnh bạn chạy",evt:"AWS tự làm",try:"Thử, không tính điểm",les:"Bài học"},kk=l=>l.kind==="API"||l.kind==="CLI"?"api":l.kind==="Sự kiện"?"evt":l.kind==="Thử"?"try":"les";
+  document.getElementById("log").innerHTML=`<div class="logl"><div class="logh"><span class="cap">Event log</span><span class="chip">${LOG.length}</span></div>
+    <ul class="log">${LOG.map(l=>`<li class="${l.id===(sel&&sel.id)?"sel":""}" data-log="${l.id}" tabindex="0"><span class="t">${l.t}</span><span class="ev ${l.tone}"><span class="k k-${kk(l)}" title="${KT[kk(l)]}">${l.kind}</span> ${esc(l.svc)} · ${esc(l.op)}</span><span class="m">${esc(l.msg)}</span></li>`).join("")}</ul></div>
+    <div class="cli"><div class="logh"><span class="cap">aws CLI</span>${sel&&sel.cli?`<button class="sm" data-act="copy">Copy</button>`:""}</div>${sel&&sel.cli?`<pre id="clitext">${esc(sel.cli)}</pre>`:`<p class="note">—</p>`}</div>`}
 function renderLesson(){const L=LESSONS[UI.lesson],R=UI.result,hs=L.hints(W);
   const mark=(i)=>{if(!R)return["","",String(i+1)];return R.res[i]?["pass","✓"]:["fail","✕"]};
-  let h=`<div class="lh"><span class="cap">Track 1 · Bài ${L.step} / 10 · ${esc(L.tag)}</span><div class="ldots">${LESSONS.map((x,i)=>`<button class="ldot${DONE.has(x.id)?" done":""}${i===UI.lesson?" cur":""}" data-lesson="${i}" aria-label="Bài ${x.step}: ${esc(x.title)}${DONE.has(x.id)?" (đã đạt)":""}"><span>${x.step}</span></button>`).join("")}</div></div>
-  <h1>${esc(L.title)}</h1>
-  <div class="scn"><div class="who"><span class="av">${L.who[0]}</span>${esc(L.who[1])}</div>“${esc(L.scenario)}”</div>
-  <div class="sect"><span class="lab">Mục tiêu</span><p>${esc(L.goal)}</p></div>
-  <div class="sect"><span class="lab">Nhiệm vụ</span>${L.tasks.map((t,i)=>{const[c,g]=mark(i);return`<div class="task ${c}"><span class="tm2">${R?g:i+1}</span><div><b>${esc(t.t)}</b><small>${R&&R.res[i]?"Check: "+esc(t.c):"Điều kiện check hiện ra khi đạt"}</small></div></div>`}).join("")}
-  ${R&&UI.dirty?`<p class="note">Bạn đã thay đổi sau lần Check trước. Bấm Check để chấm lại.</p>`:""}</div>`;
-  if(R)h+=`<div class="callout ${R.ok?"ok":R.skipped?"info":""}"><b>${R.ok?`Đạt · ${R.res.length}/${R.res.length} nhiệm vụ`:R.skipped?"Đã làm hộ":`Chưa đạt · lần ${UI.attempt}`}</b>${esc(R.msg)}</div>`;
-  if(UI.hints)h+=hs.slice(0,UI.hints).map((x,i)=>`<div class="callout warn"><b>Gợi ý ${i+1} / ${hs.length}</b>${esc(x)}</div>`).join("");
-  if(R&&R.ok&&!R.skipped){const nx=UI.lesson+1<LESSONS.length;h+=`<div class="lacts">${nx?`<button class="primary" data-lesson="${UI.lesson+1}">Bài tiếp: ${esc(LESSONS[UI.lesson+1].tag)} →</button>`:`<button class="primary" disabled>Đã hết P0 · các bài sau sắp có</button>`}</div><p class="note">${UI.hints?`Bạn đã dùng ${UI.hints} gợi ý. Lần sau thử đọc sơ đồ và Event log trước khi mở gợi ý.`:"Không dùng gợi ý nào."}</p>`}
-  else h+=`<div class="lacts"><button class="primary" data-act="check">Check</button><button data-act="hint" ${UI.hints>=hs.length?"disabled":""}>Gợi ý ${UI.hints}/${hs.length}</button><button data-act="askSkip">Skip</button></div><p class="note">Các nút “Thử” trên thanh công cụ không tính điểm, thử bao nhiêu lần cũng được. Chỉ Check mới được chấm.</p>`;
-  h+=`<div class="sect"><span class="lab">Bài này dạy</span><div class="tags">${L.concepts.map(c=>`<span class="chip">${esc(c)}</span>`).join("")}</div></div>`;
+  const passed=R?R.res.filter(Boolean).length:0,nT=L.tasks.length;
+  let h=`<div class="lh"><span class="cap">Bài ${L.step} / 10 · ${esc(L.tag)}</span><div class="ldots">${LESSONS.map((x,i)=>`<button class="ldot${DONE.has(x.id)?" done":""}${i===UI.lesson?" cur":""}" data-lesson="${i}" aria-label="Bài ${x.step}: ${esc(x.title)}${DONE.has(x.id)?" (đã đạt)":""}"><span>${x.step}</span></button>`).join("")}</div></div>
+  <div><h1>${esc(L.title)}</h1><p class="goal">${esc(L.goal)}</p></div>
+  <details class="scn"><summary><span class="av">${L.who[0]}</span><span class="q">${esc(L.who[1].split(" · ")[0])}: “${esc(L.scenario)}”</span></summary><p>“${esc(L.scenario)}”</p><small class="muted">${esc(L.who[1])}</small></details>
+  <div class="sect"><div class="th"><span class="lab">Nhiệm vụ</span><span class="cnt">${passed}/${nT}</span><span class="pbar"><i style="width:${passed/nT*100}%"></i></span></div>${L.tasks.map((t,i)=>{const[c,g]=mark(i);return`<div class="task ${c}"><span class="tm2">${R?g:i+1}</span><div><b>${esc(t.t)}</b>${R&&R.res[i]?`<small>${esc(t.c)}</small>`:""}</div></div>`}).join("")}
+  ${R&&UI.dirty?`<span class="chip warn dirty">Đã sửa · Check lại</span>`:""}</div>`;
+  if(R)h+=`<div class="callout ${R.ok?"ok":R.skipped?"info":""}"><b>${R.ok?"Đạt":R.skipped?"Đã làm hộ":`Chưa đạt · lần ${UI.attempt}`}</b>${esc(R.msg)}</div>`;
+  if(UI.hints)h+=hs.slice(0,UI.hints).map((x,i)=>`<div class="callout warn"><b>Gợi ý ${i+1}/${hs.length}</b>${esc(x)}</div>`).join("");
+  if(R&&R.ok&&!R.skipped){const nx=UI.lesson+1<LESSONS.length;h+=`<div class="lacts">${nx?`<button class="primary" data-lesson="${UI.lesson+1}">Bài tiếp: ${esc(LESSONS[UI.lesson+1].tag)} →</button>`:`<button class="primary" disabled>Hết P0 · bài sau sắp có</button>`}</div>${UI.hints?`<p class="note">Dùng ${UI.hints} gợi ý</p>`:""}`}
+  else h+=`<div class="lacts"><button class="primary" data-act="check">Check</button><button data-act="hint" ${UI.hints>=hs.length?"disabled":""}>Gợi ý ${UI.hints}/${hs.length}</button><button data-act="askSkip">Skip</button></div>`;
+  h+=`<details class="more"><summary>Khái niệm (${L.concepts.length})</summary><div class="tags">${L.concepts.map(c=>`<span class="chip">${esc(c)}</span>`).join("")}</div></details>`;
   document.getElementById("lesson").innerHTML=h}
 function renderModal(){const el=document.getElementById("modal"),M=UI.modal;if(!M){el.innerHTML="";return}
   const v=modalValues();const cli=M.cli?M.cli(v):"",note=M.note?M.note(v):"";
@@ -434,18 +436,18 @@ function budgetModal(b){UI.editBudget=b&&b.name;
     fields:[{id:"name",label:"Tên budget"},{id:"limit",label:"Số tiền mỗi tháng (USD)",type:"number"},{type:"checks",label:"Cảnh báo khi chi tiêu thực tế vượt",items:[["t50","50%"],["t80","80%"],["t100","100%"]]},
       {id:"topic",label:"Gửi cảnh báo tới SNS topic",type:"select",options:[["","— chưa chọn —"],...W.topics.map(t=>[t.name,t.name])],help:W.topics.length?"":"Chưa có topic nào. Tạo ở trang SNS trước."}],
     cli:v=>`aws budgets ${b?"update-budget":"create-budget"} \\\n  --account-id ${ACCT} \\\n  --budget '{"BudgetName":"${v.name}","BudgetLimit":{"Amount":"${v.limit}","Unit":"USD"},"TimeUnit":"MONTHLY","BudgetType":"COST"}'`,
-    note:v=>v.topic?"":`<div class="callout warn"><b>Chưa chọn nơi gửi</b>Budget vẫn theo dõi chi tiêu, nhưng vượt ngưỡng thì không ai được báo.</div>`,
+    note:v=>v.topic?"":`<div class="callout warn"><b>Chưa chọn nơi gửi</b>Vượt ngưỡng sẽ không ai được báo.</div>`,
     submit:v=>API.saveBudget(v,!b)};render()}
 function stmtModal(pn,i){const s=W.policies[pn].statements[i];
   UI.modal={title:`Sửa statement ${s.sid} trong ${pn}`,submitLabel:"Lưu policy",init:{sid:s.sid,effect:s.effect,actions:s.actions.join(", "),resources:s.resources.join(", ")},
-    fields:[{id:"sid",label:"Sid"},{id:"effect",label:"Effect",type:"select",options:[["Allow","Allow"],["Deny","Deny"]]},{id:"actions",label:"Action (ngăn cách bằng dấu phẩy)",help:"Dấu * khớp mọi ký tự, ví dụ s3:*Object khớp GetObject, PutObject, DeleteObject…"},{id:"resources",label:"Resource (ARN, ngăn cách bằng dấu phẩy)"}],
+    fields:[{id:"sid",label:"Sid"},{id:"effect",label:"Effect",type:"select",options:[["Allow","Allow"],["Deny","Deny"]]},{id:"actions",label:"Action (ngăn cách bằng dấu phẩy)",help:"* khớp mọi ký tự: s3:*Object = Get/Put/DeleteObject…"},{id:"resources",label:"Resource (ARN, ngăn cách bằng dấu phẩy)"}],
     note:v=>{const acts=v.actions.split(",").map(x=>x.trim()).filter(Boolean),hit=["s3:GetObject","s3:PutObject","s3:DeleteObject","s3:ListBucket"].filter(a=>matchAny(acts,a));return hit.length?`<p class="note">Statement này khớp: <span class="mono">${hit.join(", ")}</span></p>`:""},
     cli:()=>`aws iam put-role-policy \\\n  --role-name lab-readonly-s3 \\\n  --policy-name ${pn} \\\n  --policy-document file://${pn}.json`,
     submit:v=>API.editStatement(pn,i,v)};render()}
 function presignModal(key){const b=W.buckets[0];
   UI.modal={title:`Tạo presigned URL cho ${key}`,submitLabel:"Tạo link",init:{min:60},fields:[{id:"min",label:"Hết hạn sau (phút)",type:"number",help:"Tối đa 10080 phút (7 ngày) với IAM credential."}],
     cli:v=>`aws s3 presign s3://${b.name}/${key} --expires-in ${Number(v.min||0)*60}`,
-    note:()=>`<p class="note">Link mang theo quyền của người ký (${W.identity==="sso"?"SSO admin":esc(W.identity.slice(5))}). Ai có link đều mở được cho tới khi hết hạn, nên đặt hạn ngắn nhất đủ dùng.</p>`,
+    note:()=>`<p class="note">Ký bằng ${W.identity==="sso"?"SSO admin":esc(W.identity.slice(5))}. Ai có link đều mở được tới khi hết hạn.</p>`,
     submit:v=>API.presign(b.name,key,v.min)};render()}
 function confirmModal(title,body,label,fn,danger){UI.modal={title,body:`<p>${body}</p>`,submitLabel:label,danger,init:{},fields:[],submit:()=>{fn();return ok()}};render()}
 
@@ -462,8 +464,8 @@ document.addEventListener("click",e=>{
   if(a==="closeModal"){if(e.target.closest("[data-stop]")&&t.classList.contains("scrim"))return;UI.modal=null;render();return}
   const A={
     undo(){if(!UNDO.length)return;W=UNDO.pop();UI.dirty=true;log("Bài học","sandbox","undo","hoàn tác thao tác gần nhất","warn")},
-    askReset(){confirmModal("Reset bài này?","Mọi thứ bạn đã tạo trong bài sẽ về trạng thái ban đầu. Event log vẫn giữ lại.","Reset bài",()=>{const i=UI.lesson;startLesson(i,true);log("Bài học","lesson","reset",`Bài ${LESSONS[i].step} về trạng thái ban đầu`,"warn")},true)},
-    askSkip(){confirmModal("Skip bài này?","CloudLab sẽ làm hộ các bước còn lại và ghi từng lệnh vào Event log. Bài được tính là đã xem, không tính là đạt.","Làm hộ",()=>skip())},
+    askReset(){confirmModal("Reset bài này?","Bài về trạng thái ban đầu. Event log giữ nguyên.","Reset bài",()=>{const i=UI.lesson;startLesson(i,true);log("Bài học","lesson","reset",`Bài ${LESSONS[i].step} về trạng thái ban đầu`,"warn")},true)},
+    askSkip(){confirmModal("Skip bài này?","CloudLab làm hộ và ghi từng lệnh vào Event log. Tính là đã xem, không tính đạt.","Làm hộ",()=>skip())},
     check(){check()},hint(){UI.hints=Math.min(UI.hints+1,LESSONS[UI.lesson].hints(W).length);log("Bài học","lesson","hint",`mở gợi ý ${UI.hints}`,"")},
     newBudget(){budgetModal(null)},editBudget(){budgetModal(W.budgets.find(b=>b.name===arg))},delBudget(){confirmModal("Xóa budget?",`Budget ${esc(arg)} sẽ ngừng theo dõi chi tiêu.`,"Xóa",()=>API.deleteBudget(arg),true)},
     newTopic(){UI.modal={title:"Tạo SNS topic",submitLabel:"Tạo topic",init:{name:"billing-alerts"},fields:[{id:"name",label:"Tên topic",help:"Chữ, số, - và _."}],cli:v=>`aws sns create-topic --name ${v.name}`,submit:v=>API.createTopic(v.name)}},
