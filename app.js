@@ -474,7 +474,7 @@ const LOCKED=[["DynamoDB","dynamodb",6],["API Gateway","apigw",7],["Step Functio
 
 /* ================= lesson engine ================= */
 function startLesson(i,quiet){
-  UI.lesson=i;UI.attempt=0;UI.ladder=0;UI.lastCause=null;UI.result=null;UI.hints=0;UI.dirty=false;UI.flow=null;UI.mailOpen=null;UI.page="arch";UI.simResult=null;UI.bucket=null;UI.selKeys=[];UI.s3find="";UI.lg=null;UI.drawer=null;UI.mailOpen=null;UI.stackTab="cdk";
+  UI.lesson=i;UI.attempt=0;UI.ladder=0;UI.lastCause=null;UI.result=null;UI.hints=0;UI.dirty=false;UI.flow=null;UI.mailOpen=null;UI.page="arch";UI.simResult=null;UI.bucket=null;UI.selKeys=[];UI.s3find="";UI.lg=null;UI.drawer=null;UI.mailOpen=null;UI.stackTab="cdk";UI.gmenu=null;UI.gdrag=null;if(UI.g){UI.g.zoom=null;UI.g.trace=false}
   W=LESSONS[i].setup();UNDO=[];store.set("lesson",i);
   if(!quiet)log("Bài học","lesson","setup",`Bài ${LESSONS[i].step}: ${LESSONS[i].title}`,"");
 }
@@ -501,7 +501,7 @@ function views(){const L=LESSONS[UI.lesson];
       {id:"sub",x:600,y:250,w:250,title:"Subscription",chip:[sub?(sub.status==="Confirmed"?"Confirmed":"Pending"):"Chưa có",sub?(sub.status==="Confirmed"?"ok":"warn"):""],page:"sns",border:sub?(sub.status==="Confirmed"?"":"warn"):"off",rows:sub?[["Endpoint",sub.endpoint,"ok"],["Protocol","email","ok"],["Trạng thái",sub.status,sub.status==="Confirmed"?"ok":"warn"]]:[["Thêm ở trang","SNS","none"]]},
       {id:"mail",x:200,y:250,w:250,title:"Hộp thư mô phỏng",chip:[inbox+" cảnh báo",inbox?"ok":""],page:"mail",rows:[["Thư cảnh báo",String(inbox),inbox?"ok":"none"],["Thư khác",String(W.mail.length-inbox),"none"]]}];
     const st=(from,to)=>!fl?"off":(reached(to)?"ok":(fl.stop===from?"stop":"off"));
-    const edges=[{a:"spend",b:"budget",as:"r",bs:"l",s:st("spend","budget")},{a:"budget",b:"topic",as:"r",bs:"l",s:st("budget","topic"),label:"vượt ngưỡng → publish"},{a:"topic",b:"sub",as:"b",bs:"t",s:st("topic","sub")},{a:"sub",b:"mail",as:"l",bs:"r",s:st("sub","mail"),stopLabel:"không gửi được"}];
+    const edges=[{a:"spend",b:"budget",as:"r",bs:"l",s:st("spend","budget")},{a:"budget",b:"topic",as:"r",bs:"l",s:st("budget","topic"),label:"publish"},{a:"topic",b:"sub",as:"b",bs:"t",s:st("topic","sub")},{a:"sub",b:"mail",as:"l",bs:"r",s:st("sub","mail"),stopLabel:"không gửi được"}];
     return{nodes,edges,hint:fl?(fl.stop?["bad",`Dừng ở ${NODE_NAME[fl.stop]}`]:["ok","Cảnh báo tới hộp thư"]):["","Bấm Thử để chạy cảnh báo"]}}
   if(L.id==="iam"){const bucket="lab-data-"+ACCT,role="role:lab-readonly-s3",assumed=W.identity==="role:lab-readonly-s3";
     const ev=(a,k)=>evalIam(W,role,a,a==="s3:ListBucket"?bArn(bucket):bArn(bucket,k||"report.csv"));
@@ -542,7 +542,7 @@ function views(){const L=LESSONS[UI.lesson];
       {id:"bucket",x:300,y:36,w:270,title:IMG.slice(0,22)+"…",chip:["S3",""],page:"s3",rows:[["Trigger",nt?`${nt.prefix||"*"} · ${nt.suffix||"*"}`:"không có",nt&&nt.prefix?"ok":"warn"],["incoming/*.json",String(junk),junk?"bad":"ok"],["processed/",String(proc),proc?"ok":"none"]]},
       {id:"fn",x:620,y:36,w:240,title:"extract",chip:[st?`${st.n}${st.capped?"+":""} lần`:"—",st?(st.n===1?"ok":"bad"):""],page:"lambda",rows:[["OUTPUT_PREFIX",f.env.OUTPUT_PREFIX||"(trống)",f.env.OUTPUT_PREFIX==="processed/"?"ok":"warn"],["Tổng lần chạy",String(f.invocations),"none"]]},
       {id:"out",x:620,y:236,w:240,title:"Kết quả",chip:[st&&st.outs.length?(outIn?"incoming/":"processed/"):"—",st&&st.outs.length?(outIn?"bad":"ok"):""],page:"s3",rows:[["File ghi ra",st?String(st.outs.length):"—",st?(st.outs.length===1?"ok":st.outs.length?"bad":"none"):"none"]]}];
-    const edges=[{a:"up",b:"bucket",as:"r",bs:"l",s:st?"ok":"off"},{a:"bucket",b:"fn",as:"r",bs:"l",s:st&&st.n?"ok":"off",label:"ObjectCreated"},{a:"fn",b:"out",as:"b",bs:"t",s:st&&st.outs.length?(outIn?"leak":"ok"):"off"},{a:"out",b:"bucket",as:"l",bs:"b",s:loop?"leak":"off",label:loop?"kích hoạt lại":"",lx:528,ly:262}];
+    const edges=[{a:"up",b:"bucket",as:"r",bs:"l",s:st?"ok":"off"},{a:"bucket",b:"fn",as:"r",bs:"l",s:st&&st.n?"ok":"off",label:"ObjectCreated"},{a:"fn",b:"out",as:"b",bs:"t",s:st&&st.outs.length?(outIn?"leak":"ok"):"off",label:st&&outIn?"ghi vào incoming/":""},{a:"out",b:"bucket",as:"l",bs:"b",s:loop?"leak":"off",label:loop?"kích hoạt lại":"",loop:1}];
     return{nodes,edges,hint:st?(st.n===1?["ok","1 upload → 1 lần chạy"]:["bad",`1 upload → ${st.n}${st.capped?"+":""} lần chạy`]):["","Bấm Thử › Upload ảnh"]}}
   /* stack */
   const s=W.stack,up=isUp(s),img=W.buckets.find(x=>x.name===IMG),scr=W.buckets.find(x=>x.name===SCRATCH),f=W.fns.find(x=>x.name==="extract");
@@ -556,41 +556,108 @@ function views(){const L=LESSONS[UI.lesson];
   const left=billable(W);
   return{nodes,edges,groups,hint:[left?"bad":"ok",left?`Còn ${W.buckets.length} bucket · ${W.fns.length} function`:"Không còn gì tính tiền"]}
 }
-function nodeH(n){return n.big?118:44+(n.rows?n.rows.length*20+10:0)}
-function anchor(n,side){const h=nodeH(n);return side==="r"?[n.x+n.w,n.y+Math.min(40,h/2)]:side==="l"?[n.x,n.y+Math.min(40,h/2)]:side==="b"?[n.x+n.w/2,n.y+h]:[n.x+n.w/2,n.y]}
-const COL={ok:"var(--ok)",stop:"var(--bad)",off:"var(--line-strong)",warn:"var(--warn)",leak:"var(--bad)",blocked:"var(--ok)"};
-function svgView(){const v=views(),byId={};v.nodes.forEach(n=>byId[n.id]=n);
-  const H=Math.max(...v.nodes.map(n=>n.y+nodeH(n)),...(v.groups||[]).map(g=>g.y+g.h))+40,Wd=880;
-  let s=`<svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Sơ đồ kiến trúc của bài học"><title>Sơ đồ kiến trúc</title>`;
-  const chip=(x,y,t,cls,right)=>{const cw=t.length*6.4+16,cx=right?x-cw:x;return`<rect x="${cx}" y="${y}" width="${cw}" height="18" rx="9" class="cb ${cls||""}"/><text x="${cx+cw/2}" y="${y+12.5}" text-anchor="middle" class="ct ${cls||""}">${esc(t)}</text>`};
-  for(const g of v.groups||[]){s+=`<g class="grp${g.page?" click":""}"${g.page?` data-node="__group" tabindex="0" role="button" aria-label="Mở ${esc(g.label)}"`:""}><rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" rx="14" class="grpbox" stroke-dasharray="6 5"/><text x="${g.x+16}" y="${g.y+26}" class="gt">${esc(g.label)}</text>${g.chip?chip(g.x+g.w-14,g.y+13,g.chip[0],g.chip[1],1):""}</g>`}
-  for(const e of v.edges){const A=byId[e.a],B=byId[e.b];let[x1,y1]=anchor(A,e.as),[x2,y2]=anchor(B,e.bs),d;
-    if((e.as==="r"&&e.bs==="l")||(e.as==="l"&&e.bs==="r")){const m=(x1+x2)/2;d=`M${x1} ${y1} H${m} V${y2} H${x2}`}
-    else if((e.as==="r"||e.as==="l")&&e.bs==="b"){d=`M${x1} ${y1} H${x2} V${y2}`}
-    else{const m=(y1+y2)/2;d=`M${x1} ${y1} V${m} H${x2} V${y2}`}
-    const c=COL[e.s]||COL.off,dash=e.s==="stop"||e.s==="off"?"5 4":e.thin?"3 3":"";
-    if(e.s==="stop"||e.s==="blocked"){const mx=(x1+x2)/2,my=(y1+y2)/2,ex=e.s==="blocked"?x2-14:mx,ey=e.s==="blocked"?y2:my;
-      s+=`<path d="M${x1} ${y1} ${e.s==="blocked"?`H${ex}`:`L${ex} ${ey}`}" stroke="${c}" stroke-width="1.6" fill="none" stroke-dasharray="${e.s==="stop"?"5 4":""}"/>`;
-      s+=`<circle cx="${ex}" cy="${ey}" r="10" fill="${e.s==="blocked"?"var(--ok)":"var(--bad)"}"/><text x="${ex}" y="${ey+4}" text-anchor="middle" class="mk">✕</text>`;
-      if(e.stopLabel)s+=`<text x="${ex}" y="${ey+27}" text-anchor="middle" class="el" style="fill:${e.s==="blocked"?"var(--ok)":"var(--bad)"}">${esc(e.stopLabel)}</text>`;continue}
-    s+=`<path d="${d}" stroke="${c}" stroke-width="${e.thin?1.1:1.6}" fill="none"${dash?` stroke-dasharray="${dash}"`:""}/>`;
-    if(e.s!=="off"&&!e.thin)s+=`<circle cx="${x2}" cy="${y2}" r="3.5" fill="${c}"/>`;
-    if(e.label){const lx=e.lx||(x1+x2)/2,ly=e.ly||((e.as==="r"&&e.bs==="l")?Math.min(A.y,B.y)-10:Math.min(y1,y2)-8);s+=`<text x="${lx}" y="${ly}" text-anchor="middle" class="el" style="fill:${e.s==="off"?"var(--subtle)":c}">${esc(e.label)}</text>`}}
-  const Lid=LESSONS[UI.lesson].id,openKey=UI.drawer&&UI.drawer.node;
-  for(const n of v.nodes){const h=nodeH(n),bc=n.border==="off"?"var(--line-strong)":n.border==="warn"?"var(--warn)":"var(--ink)",act=nodeAct(Lid,n.id);
-    const lab=act?(act.k==="try"?`Thử: ${n.title}`:`Xem chi tiết ${n.title}`):"";
-    s+=`<g class="nd${act?" click":""}${openKey===n.id?" open":""}"${act?` data-node="${n.id}" tabindex="0" role="button" aria-label="${esc(lab)}"${act.k==="drawer"?' aria-controls="drawer" aria-expanded="'+(openKey===n.id)+'"':""}`:""}><rect x="${n.x}" y="${n.y}" width="${n.w}" height="${h}" rx="12" class="nodebox" style="stroke:${bc}"${n.border==="off"?' stroke-dasharray="5 4"':""}/>`;
-    if(n.page&&CAT[n.page])s+=`<rect x="${n.x+1}" y="${n.y+12}" width="3" height="${Math.max(16,h-24)}" rx="1.5" style="fill:var(--c-${CAT[n.page]})"/>`;
-    s+=`<text x="${n.x+14}" y="${n.y+25}" class="nt">${esc(n.title)}</text>`;
-    if(n.chip&&n.chip[0])s+=chip(n.x+n.w-12,n.y+12,n.chip[0],n.chip[1],1);
-    if(n.big){s+=`<text x="${n.x+14}" y="${n.y+64}" class="big">${esc(n.big)}</text><rect x="${n.x+14}" y="${n.y+78}" width="${n.w-28}" height="6" rx="3" class="mtr"/><rect x="${n.x+14}" y="${n.y+78}" width="${(n.w-28)*n.meter/100}" height="6" rx="3" style="fill:${n.meter>=50?"var(--warn)":"var(--accent)"}"/><text x="${n.x+14}" y="${n.y+104}" class="rl">${esc(n.note)}</text>`}
-    if(n.rows){s+=`<line x1="${n.x+14}" x2="${n.x+n.w-14}" y1="${n.y+40}" y2="${n.y+40}" class="dv"/>`;
-      n.rows.forEach((r,i)=>{const y=n.y+60+i*20,dc={ok:"var(--ok)",bad:"var(--bad)",warn:"var(--warn)"}[r[2]]||"var(--line-strong)";
-        s+=`<circle cx="${n.x+18}" cy="${y-4}" r="3.5" fill="${dc}"/><text x="${n.x+28}" y="${y}" class="rl">${esc(r[0])}</text><text x="${n.x+n.w-14}" y="${y}" text-anchor="end" class="rv ${r[2]}">${esc(r[1].length>24?r[1].slice(0,23)+"…":r[1])}</text>`})}
-    s+=`</g>`}
-  const foot=v.hint?`<span class="chip ${v.hint[0]}">${esc(v.hint[1])}</span>`:(v.legend||[]).map(([c,l])=>`<span class="lg"><i class="${c}"></i>${esc(l)}</span>`).join("");
-  return s+"</svg>"+`<div class="arch-hint">${foot}</div>`}
-
+/* ================= resource graph: node editor over views() =================
+   Nodes = resources (status pill, metrics, ports), edges = relations (curved, typed by state),
+   groups = containment. Pan (drag empty canvas), zoom (buttons / ctrl+wheel), drag nodes,
+   drag from an out-port (or click it) to connect, list view for phones and screen readers. */
+const GSX=1.25,GSY=1.15,GHEAD=62;
+const GTYPE={billing:"Billing",budgets:"Budgets · budget",sns:"SNS",mail:"Hộp thư mô phỏng",iam:"IAM",s3:"S3",lambda:"Lambda · function",logs:"CloudWatch Logs",stack:"CloudFormation"};
+let GPOS=store.get("gpos",{}),GLAST=null,GCUR={z:1,pan:[0,0]},GD=null,GSUP=0;
+const gs=()=>UI.g||(UI.g={view:null,zoom:null,pan:[0,0],trace:false});
+function gH(n){return GHEAD+(n.big?86:n.rows&&n.rows.length?19+n.rows.length*20:0)}
+function gModel(){const v=views(),Lid=LESSONS[UI.lesson].id,P=GPOS[Lid]||{};
+  const nodes=v.nodes.map(n=>{const cls=n.chip&&n.chip[1],st=["ok","warn","bad"].includes(cls)?cls:null,ghost=n.border==="off",p=P[n.id];
+    const status=ghost?(Lid==="guardrails"?["goal","Cần tạo"]:["off","Không có"]):st?[st,n.chip[0]]:n.big&&n.chip?["",n.chip[0]]:n.border==="warn"?["warn","Cảnh báo"]:null;
+    const type=n.type||(n.big?"Billing · tháng này":n.chip&&n.chip[0]&&!st&&!ghost?n.chip[0]:(GTYPE[n.page]||"ngoài AWS"));
+    return{...n,x:p?p[0]:Math.round(n.x*GSX),y:p?p[1]:Math.round(n.y*GSY),h:gH(n),cat:n.page?CAT[n.page]:"actor",icon:n.page?ICON[n.page]:"●",status,type,ghost}});
+  const by={};nodes.forEach(n=>by[n.id]=n);
+  const groups=(v.groups||[]).map(g=>({...g,x:Math.round(g.x*GSX),y:Math.round(g.y*GSY),w:Math.round(g.w*GSX),h:Math.round(g.h*GSY)}));
+  const W_=Math.max(...nodes.map(n=>n.x+n.w),...groups.map(g=>g.x+g.w))+32,H_=Math.max(...nodes.map(n=>n.y+n.h),...groups.map(g=>g.y+g.h))+32;
+  return{nodes,by,edges:v.edges.filter(e=>by[e.a]&&by[e.b]),groups,hint:v.hint,legend:v.legend,Lid,W:W_,H:H_}}
+/* relations the learner can create by connecting two nodes; each opens the usual modal (with CLI preview) */
+function gRels(m){const R={};
+  if(m.Lid==="guardrails"){const b=W.budgets.find(x=>x.limit===20)||W.budgets[0],t=W.topics.find(x=>x.name==="billing-alerts")||W.topics[0];
+    if(b)R.budget={why:"Budget chỉ gửi cảnh báo tới SNS topic",to:{topic:{label:t?"publish → "+t.name:"tạo topic billing-alerts rồi nối",run:()=>budgetModal(b,t?t.name:"__new")}}};
+    if(t){const sub=()=>NODE_ACTS.newSub(t.name);R.topic={why:"Topic chỉ gửi tới subscription",to:{sub:{label:"subscribe email",run:sub},mail:{label:"subscribe "+EMAIL,run:sub}}}}}
+  if(m.Lid==="iam"&&W.identity==="sso")R.you={why:"Bạn chỉ assume được IAM role",to:{role:{label:"AssumeRole",run:()=>confirmModal("Assume role lab-readonly-s3?","Các thao tác sau chạy bằng quyền của role này, tới khi bấm Về SSO.","Assume role",()=>API.assumeRole("lab-readonly-s3"))}}};
+  return R}
+function gAnchor(n,s){return s==="r"?[n.x+n.w,n.y+GHEAD/2]:s==="l"?[n.x,n.y+GHEAD/2]:s==="b"?[n.x+n.w/2,n.y+n.h]:[n.x+n.w/2,n.y]}
+const GDIR={r:[1,0],l:[-1,0],b:[0,1],t:[0,-1]};
+function gCurve(p1,s1,p2,s2){const k=Math.max(36,Math.hypot(p2[0]-p1[0],p2[1]-p1[1])*.4),a=GDIR[s1],b=s2?GDIR[s2]:[-a[0],-a[1]];
+  const c1=[p1[0]+a[0]*k,p1[1]+a[1]*k],c2=[p2[0]+b[0]*k,p2[1]+b[1]*k],r=v=>Math.round(v*10)/10;
+  const at=t=>{const u=1-t;return[0,1].map(i=>u*u*u*p1[i]+3*u*u*t*c1[i]+3*u*t*t*c2[i]+t*t*t*p2[i])};
+  return{d:`M${r(p1[0])} ${r(p1[1])} C${r(c1[0])} ${r(c1[1])} ${r(c2[0])} ${r(c2[1])} ${r(p2[0])} ${r(p2[1])}`,at}}
+const GES={ok:"ok",off:"idle",stop:"stop",warn:"warn",leak:"leak",blocked:"blocked"};
+function gTraceSet(m){const on=new Set();m.edges.forEach(e=>{if(e.s!=="off"){on.add(e.a);on.add(e.b)}});return on}
+function gWorld(m,R){const G=gs(),open=UI.drawer&&UI.drawer.node,drag=UI.gdrag,trace=G.trace?gTraceSet(m):null,Lid=m.Lid;
+  const valid=drag&&R[drag.from]?R[drag.from].to:null;
+  let h="";
+  for(const g of m.groups){const act=g.page;h+=`<div class="ggrp" style="left:${g.x}px;top:${g.y}px;width:${g.w}px;height:${g.h}px">${act?`<button class="ggrp-h" data-node="__group">`:`<span class="ggrp-h">`}<span>${esc(g.label)}</span>${g.chip?`<span class="gpill s-${g.chip[1]||"none"}"><i></i>${esc(g.chip[0])}</span>`:""}${act?"</button>":"</span>"}</div>`}
+  let svg=`<svg class="gedges" width="${m.W}" height="${m.H}" aria-hidden="true"><defs>${["ok","idle","stop","warn","leak","blocked","drag"].map(k=>`<marker id="ga-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" class="ga s-${k}"/></marker>`).join("")}</defs>`,chips="";
+  const run=!!(UI.flow&&(Lid==="guardrails"||Lid==="events"));
+  for(const e of m.edges){const A=m.by[e.a],B=m.by[e.b],st=GES[e.s]||"idle",p1=gAnchor(A,e.as),p2=gAnchor(B,e.bs),c=gCurve(p1,e.as,p2,e.bs);
+    const dim=trace&&st==="idle"?" dim":"";
+    svg+=`<path d="${c.d}" class="ge s-${st}${e.thin?" thin":""}${run&&st==="ok"?" run":""}${dim}" marker-end="url(#ga-${st})"/>`;
+    const lab=st==="stop"&&e.stopLabel?"✕ "+e.stopLabel:st==="leak"?(e.loop?"↻ ":"! ")+(e.label||(Lid==="s3"?"lộ dữ liệu":"")):e.label||"";
+    if(st==="blocked"){const q=c.at(.82);chips+=`<span class="gchip s-blocked${dim}" style="left:${q[0]}px;top:${q[1]}px">✕ ${esc(e.stopLabel||"bị chặn")}</span>`}
+    else if(lab){const q=c.at(.5);chips+=`<span class="gchip s-${st}${dim}" style="left:${q[0]}px;top:${q[1]}px">${esc(lab)}</span>`}}
+  if(drag&&drag.at){const A=m.by[drag.from],p1=gAnchor(A,"r"),over=drag.over&&valid&&valid[drag.over]?m.by[drag.over]:null,p2=over?gAnchor(over,"l"):drag.at,c=gCurve(p1,"r",p2,over?"l":null);
+    svg+=`<path d="${c.d}" class="ge s-drag" marker-end="url(#ga-drag)"/>`;
+    if(over){const q=c.at(.5);chips+=`<span class="gchip s-drag" style="left:${q[0]}px;top:${q[1]}px">thả để nối · ${esc(valid[drag.over].label)}</span>`}}
+  h+=svg+"</svg>"+chips;
+  for(const n of m.nodes){const act=nodeAct(Lid,n.id),sel=open===n.id,dim=trace&&!trace.has(n.id)?" dim":"";
+    const vt=valid?(n.id===drag.from?"":valid[n.id]?" valid":" invalid"):"";
+    const sides=new Set();m.edges.forEach(e=>{if(e.a===n.id&&/[lr]/.test(e.as))sides.add(e.as);if(e.b===n.id&&/[lr]/.test(e.bs))sides.add(e.bs)});if(valid&&valid[n.id])sides.add("l");if(R[n.id])sides.delete("r");
+    const desc=`${n.title}, ${n.type}${n.status?", "+n.status[1]:""}`;
+    const lab=act?(act.k==="try"?`Thử: ${desc}`:`${desc}. Mở chi tiết`):desc;
+    const inner=`<span class="gh"><span class="side-ic" style="--cat:var(--c-${n.cat})" aria-hidden="true">${esc(n.icon)}</span><span class="gtt"><b>${esc(n.title)}</b><small>${esc(n.type)}</small></span></span>`+
+      (n.big?`<span class="gbig"><b>${esc(n.big)}</b><span class="gmeter"><i class="${n.meter>=50?"hi":""}" style="width:${n.meter}%"></i></span><small>${esc(n.note||"")}</small></span>`
+        :n.rows&&n.rows.length?`<span class="gm">${n.rows.map(r=>`<span class="gr"><span>${esc(r[0])}</span><span class="v ${r[2]}">${esc(r[1].length>24?r[1].slice(0,23)+"…":r[1])}</span></span>`).join("")}</span>`:"");
+    h+=`<div class="gnode c-${n.cat}${n.ghost?" ghost":""}${sel?" sel":""}${n.status?" st-"+(n.status[0]||"none"):""}${dim}${vt}" data-gid="${n.id}" style="left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px">`+
+      (act?`<button class="gn" data-node="${n.id}" aria-label="${esc(lab)}"${act.k==="drawer"?` aria-controls="drawer" aria-expanded="${sel}"`:""}>${inner}</button>`:`<div class="gn" role="group" aria-label="${esc(desc)}">${inner}</div>`)+
+      (n.status?`<span class="gpill s-${n.status[0]||"none"}" aria-hidden="true"><i></i>${esc(n.status[1])}</span>`:"")+
+      (n.ghost&&!(valid&&valid[n.id])?"":[...sides].map(sd=>`<span class="gp ${sd==="l"?"in":"out"}" aria-hidden="true"></span>`).join(""))+
+      (R[n.id]?`<button class="gp out on" data-act="gMenu" data-arg="${n.id}" data-gconnect="${n.id}" aria-label="Kết nối ${esc(n.title)} tới…" title="Kéo để nối, hoặc bấm để chọn"></button>`:"")+`</div>`}
+  return h}
+function gMenuHtml(m,R,list){const M=UI.gmenu;if(!M||!R[M.from])return"";const src=m.by[M.from],to=R[M.from].to;
+  const opts=m.nodes.filter(n=>n.id!==M.from).sort((a,b)=>(to[b.id]?1:0)-(to[a.id]?1:0));M.ids=opts.map(n=>n.id);
+  const ai=Math.min(M.active||0,opts.length-1);
+  let style="";if(!list){const z=GCUR.z,cw=(document.querySelector(".gx")||{}).clientWidth||880,l=(src.x+src.w)*z+GCUR.pan[0]+10;style=` style="left:${Math.max(8,Math.min(l,cw-316))}px;top:${Math.max(8,src.y*z+GCUR.pan[1])}px"`}
+  return`<div class="gmenu${list?" inline":""}"${style}><p class="cap">Kết nối từ</p><b class="gmt">${esc(src.title)} →</b>
+    <ul class="gopts" id="glist" role="listbox" tabindex="0" aria-label="Chọn tài nguyên để nối" aria-activedescendant="gopt-${ai}">${opts.map((n,i)=>{const r=to[n.id];return`<li id="gopt-${i}" role="option" class="gopt${r?"":" bad"}${i===ai?" on":""}" aria-selected="${i===ai}" aria-disabled="${!r}" data-act="gPick" data-arg="${n.id}"><span class="side-ic" style="--cat:var(--c-${n.cat})" aria-hidden="true">${esc(n.icon)}</span><span class="gtt"><b>${esc(n.title)}</b><small>${esc(r?r.label:R[M.from].why)}</small></span><span class="k" aria-hidden="true">${r?(i===ai?"↵":""):"✕"}</span></li>`}).join("")}</ul>
+    <p class="cap gmf">↑↓ chọn · Enter nối · Esc huỷ</p></div>`}
+function gRelText(m,n){const out=m.edges.filter(e=>e.a===n.id).map(e=>`${e.thin?"⇢":"→"} ${m.by[e.b].title}${e.label?` (${e.label})`:""}${e.s==="stop"?" ✕":e.s==="leak"?(e.loop?" ↻":" !"):""}`),
+  inn=m.edges.filter(e=>e.b===n.id).map(e=>`${e.thin?"⇠":"←"} ${m.by[e.a].title}${e.s==="stop"?" ✕":""}`);return[...inn,...out].join(" · ")||"chưa có quan hệ"}
+function graphView(){const m=gModel(),G=gs(),R=gRels(m);GLAST=m;
+  const view=G.view||(window.Kit&&Kit.isNarrow&&Kit.isNarrow()?"list":"graph"),page=document.getElementById("page");
+  const gxo=document.querySelector(".gx"),cs=page&&window.getComputedStyle?getComputedStyle(page):null,cw=(gxo&&gxo.clientWidth)||Math.max(0,((page&&page.clientWidth)||0)-26-(cs?parseFloat(cs.paddingLeft)+parseFloat(cs.paddingRight):0))||880,fitZ=Math.max(.55,Math.min(1,cw/m.W)),z=G.zoom||fitZ;
+  const pan=G.zoom?G.pan:[Math.max(0,(cw-m.W*z)/2),4];GCUR={z,pan};
+  const canTrace=m.edges.some(e=>e.s!=="off");
+  const tools=`<div class="gx-tools" role="toolbar" aria-label="Công cụ sơ đồ">${view==="graph"?`<button class="sm" data-act="gFit" title="Vừa khung">⤢<span class="hide-s"> Vừa khung</span></button><button class="sm" data-act="gReset" title="Đưa các khối về bố cục gốc của bài">⊞<span class="hide-s"> Sắp xếp</span></button><span class="gsep"></span><button class="sm" data-act="gZoom" data-arg="-1" aria-label="Thu nhỏ">−</button><span class="gz mono" aria-live="polite">${Math.round(z*100)}%</span><button class="sm" data-act="gZoom" data-arg="1" aria-label="Phóng to">+</button><span class="gsep"></span><button class="sm${G.trace?" on":""}" data-act="gTrace" aria-pressed="${!!G.trace}" ${canTrace?"":"disabled"} title="${canTrace?"Chỉ làm nổi các cạnh vừa có dữ liệu đi qua":"Bấm Thử để có luồng dữ liệu"}">◎ Trace</button>`:""}<span class="grow"></span><div class="seg" role="group" aria-label="Kiểu xem"><button class="${view==="graph"?"on":""}" data-act="gView" data-arg="graph" aria-pressed="${view==="graph"}">Sơ đồ</button><button class="${view==="list"?"on":""}" data-act="gView" data-arg="list" aria-pressed="${view==="list"}">Danh sách</button></div></div>`;
+  const foot=m.hint?`<span class="chip ${m.hint[0]}">${esc(m.hint[1])}</span>`:(m.legend||[]).map(([c,l])=>`<span class="lg"><i class="${c}"></i>${esc(l)}</span>`).join("");
+  if(view==="list")return tools+gMenuHtml(m,R,true)+`<ul class="glist" aria-label="Tài nguyên và quan hệ">${m.nodes.map(n=>{const act=nodeAct(m.Lid,n.id);
+    const body=`<span class="side-ic" style="--cat:var(--c-${n.cat})" aria-hidden="true">${esc(n.icon)}</span><span class="gtt"><span class="gl-top"><b>${esc(n.title)}</b>${n.status?`<span class="gpill s-${n.status[0]||"none"}"><i></i>${esc(n.status[1])}</span>`:""}</span><small>${esc(gRelText(m,n))}</small></span>`;
+    return`<li class="glrow${n.ghost?" ghost":""}">${act?`<button class="gl" data-node="${n.id}">${body}<span class="chev" aria-hidden="true">›</span></button>`:`<div class="gl">${body}</div>`}${R[n.id]?`<button class="sm" data-act="gMenu" data-arg="${n.id}" data-gconnect="${n.id}">Kết nối…</button>`:""}</li>`}).join("")}</ul><div class="arch-hint">${foot}</div>`;
+  const Hc=Math.max(260,Math.min(640,Math.round(m.H*fitZ)+12));
+  return tools+`<div class="gx${UI.gdrag?" connecting":""}" style="height:${Hc}px"><div class="gx-world" id="gworld" style="width:${m.W}px;height:${m.H}px;transform:translate(${pan[0]}px,${pan[1]}px) scale(${z})">${gWorld(m,R)}</div>${gMenuHtml(m,R,false)}</div><div class="arch-hint">${foot}<span class="grow"></span><span class="ghelp hide-s">Kéo nền để di chuyển · Ctrl + cuộn để zoom · kéo khối để sắp xếp</span></div>`}
+function gRefresh(){const w=document.getElementById("gworld");if(!w)return;const m=gModel();GLAST=m;w.innerHTML=gWorld(m,gRels(m))}
+function gApply(){const w=document.getElementById("gworld");if(w)w.style.transform=`translate(${GCUR.pan[0]}px,${GCUR.pan[1]}px) scale(${GCUR.z})`;const zl=document.querySelector(".gx-tools .gz");if(zl)zl.textContent=Math.round(GCUR.z*100)+"%"}
+function gFreeze(){const G=gs();G.zoom=GCUR.z;G.pan=[...GCUR.pan]}
+function gZoomAt(nz,cx,cy){const G=gs();nz=Math.max(.4,Math.min(2,nz));const z=GCUR.z,p=GCUR.pan;if(cx===undefined){const gx=document.querySelector(".gx");cx=gx?gx.clientWidth/2:300;cy=gx?gx.clientHeight/2:200}
+  const wx=(cx-p[0])/z,wy=(cy-p[1])/z;G.zoom=nz;G.pan=[cx-wx*nz,cy-wy*nz];GCUR={z:nz,pan:G.pan};gApply()}
+let G_SEEN=null;
+function gKeepVisible(){const id=UI.drawer&&UI.drawer.node,key=id&&UI.drawer.key;if(!key||key===G_SEEN||UI.page!=="arch"){if(!key)G_SEEN=null;return}G_SEEN=key;
+  const el=document.querySelector(`.gnode[data-gid="${id}"]`),dw=document.getElementById("drawer"),gx=document.querySelector(".gx");if(!el||!dw||dw.hidden||!gx||!el.getBoundingClientRect)return;
+  if(window.Kit&&Kit.isNarrow&&Kit.isNarrow())return;
+  const r=el.getBoundingClientRect(),d=dw.getBoundingClientRect(),g=gx.getBoundingClientRect(),over=r.right-Math.min(d.left,g.right)+24;
+  if(d.width&&over>0){gFreeze();GCUR.pan=[GCUR.pan[0]-over,GCUR.pan[1]];gs().pan=[...GCUR.pan];gApply()}}
+function gSetPos(id,xy){const Lid=LESSONS[UI.lesson].id;(GPOS[Lid]=GPOS[Lid]||{})[id]=xy}
+function gNeighbor(id,key){const m=GLAST;if(!m)return null;const n=m.by[id],c=[n.x+n.w/2,n.y+n.h/2],dir={ArrowRight:[1,0],ArrowLeft:[-1,0],ArrowDown:[0,1],ArrowUp:[0,-1]}[key];
+  const linked=new Set(m.edges.filter(e=>e.a===id||e.b===id).map(e=>e.a===id?e.b:e.a));
+  const score=o=>{const d=[o.x+o.w/2-c[0],o.y+o.h/2-c[1]],along=d[0]*dir[0]+d[1]*dir[1];if(along<=8)return Infinity;return Math.hypot(...d)+Math.abs(d[0]*dir[1]-d[1]*dir[0])*1.5-(linked.has(o.id)?120:0)};
+  let best=null,bs=Infinity;for(const o of m.nodes){if(o.id===id)continue;const s=score(o);if(s<bs){bs=s;best=o}}return best&&best.id}
+function gPick(id){const M=UI.gmenu;if(!M)return;const R=gRels(GLAST||gModel()),r=R[M.from]&&R[M.from].to[id];if(!r)return false;
+  UI.gmenu=null;UI.lastOpener=`[data-gconnect="${M.from}"]`;log("Sơ đồ","graph","connect",`${M.from} → ${id}: ${r.label}`,"");r.run();return true}
 /* ================= rendering ================= */
 const PAGES={arch:["Sơ đồ bài học","Kiến trúc"],budgets:["Budgets","Chi phí"],billing:["Billing","Chi phí"],sns:["SNS","Thông báo"],mail:["Hộp thư mô phỏng","Thông báo"],iam:["IAM roles","Bảo mật"],sim:["Policy simulator","Bảo mật"],s3:["S3","Lưu trữ"],lambda:["Lambda","Compute"],logs:["CloudWatch Logs","Giám sát"],stack:["Stack (CDK)","Hạ tầng"]};
 const LOCK={iam:1,sim:1,s3:1,lambda:3,logs:3,stack:5};
@@ -620,7 +687,7 @@ function renderTop(){const L=LESSONS[UI.lesson],p=PAGES[UI.page];
     <span class="grow"></span><button class="icon-btn" data-act="undo" ${UNDO.length?"":"disabled"} title="Undo" aria-label="Undo">↶</button><button class="icon-btn" data-act="askReset" title="Reset bài" aria-label="Reset bài">⟲</button>`}
 function tbl(head,rows,empty){return rows.length?`<div class="tw"><table><thead><tr>${head.map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`:`<div class="tw"><div class="empty">${empty}</div></div>`}
 function renderPage(){const el=document.getElementById("page"),P=UI.page,Lid=LESSONS[UI.lesson].id;let h="";
-  if(P==="arch"){h=`<div class="ph"><h2>Sơ đồ bài học ${info("Bấm một khối để xem chi tiết và thao tác ngay trong drawer, không rời sơ đồ.")}</h2></div><div class="arch">${svgView()}</div>`}
+  if(P==="arch"){h=`<div class="ph"><h2>Sơ đồ bài học ${info("Bấm một khối để xem chi tiết trong drawer. Kéo từ chấm bên phải một khối (hoặc bấm vào nó) để nối hai tài nguyên. Phím: mũi tên đi theo cạnh, Shift + mũi tên dời khối, C để nối, T để Trace.")}</h2></div><div class="arch">${graphView()}</div>`}
   else if(P==="budgets"){h=`<div class="ph"><h2>Budgets ${info("Theo dõi chi tiêu, cảnh báo khi vượt ngưỡng.")}</h2><button class="primary" data-act="newBudget">Tạo budget</button></div>`+
     tbl(["Tên","Số tiền / tháng","Ngưỡng","Gửi tới","Đã vượt",""],W.budgets.map(b=>`<tr><td><b>${esc(b.name)}</b></td><td class="mono">${money(b.limit)}</td><td class="mono">${b.thresholds.map(x=>x+"%").join(", ")||"—"}</td><td class="mono">${esc(b.topic||"—")}</td><td class="mono">${b.fired.map(x=>x+"%").join(", ")||"—"}</td><td><div class="acts"><button class="sm" data-act="editBudget" data-arg="${esc(b.name)}">Sửa</button><button class="sm danger" data-act="delBudget" data-arg="${esc(b.name)}">Xóa</button></div></td></tr>`),"Chưa có budget.")}
   else if(P==="billing"){const lim=(W.budgets[0]&&W.budgets[0].limit)||20;h=`<div class="ph"><h2>Billing ${info("Chi tiêu giả lập. Bơm chi phí bằng nút Thử ở thanh trên.")}</h2></div>
@@ -798,13 +865,15 @@ function modalValues(){const M=UI.modal,v={...(M?M.init:{})};if(!M)return v;
 function render(){const ae=document.activeElement,keep=ae&&ae!==document.body&&!(ae.closest&&ae.closest("#modal"))?selOf(ae):null;
   renderSide();renderTop();renderPage();renderLog();renderLesson();renderDrawer();renderModal();
   const now=document.activeElement;if(keep&&(!now||now===document.body)){const n=document.querySelector(keep);if(n)try{n.focus({preventScroll:true})}catch(_){}}
+  gKeepVisible();
+  if(UI.gfocus){const f=document.querySelector(UI.gfocus);UI.gfocus=null;if(f)try{f.focus({preventScroll:true})}catch(_){}}
   if(window.Kit&&Kit.shellSync)Kit.shellSync()}
 function refreshModalPreview(){const M=UI.modal;if(!M)return;M.dirty=true;M.warned=false;const v=modalValues();if(M.cli){const c=document.getElementById("mcli");if(c)c.textContent=M.cli(v)}if(M.note){const n=document.getElementById("mnote");if(n)n.innerHTML=M.note(v)}const e=document.getElementById("merr");if(e)e.textContent=""}
 
 /* ================= modals ================= */
-function budgetModal(b){UI.editBudget=b&&b.name;
+function budgetModal(b,preTopic){UI.editBudget=b&&b.name;
   UI.modal={title:b?`Sửa budget ${b.name}`:"Tạo budget",submitLabel:b?"Lưu":"Tạo budget",
-    init:b?{name:b.name,limit:b.limit,t50:+b.thresholds.includes(50),t80:+b.thresholds.includes(80),t100:+b.thresholds.includes(100),topic:b.topic||""}:{name:"monthly-20usd",limit:20,t50:1,t80:0,t100:0,topic:""},
+    init:b?{name:b.name,limit:b.limit,t50:+b.thresholds.includes(50),t80:+b.thresholds.includes(80),t100:+b.thresholds.includes(100),topic:preTopic!==undefined?preTopic:b.topic||""}:{name:"monthly-20usd",limit:20,t50:1,t80:0,t100:0,topic:""},
     fields:[{id:"name",label:"Tên budget"},{id:"limit",label:"Số tiền mỗi tháng (USD)",type:"number"},{type:"checks",label:"Cảnh báo khi chi tiêu thực tế vượt",items:[["t50","50%"],["t80","80%"],["t100","100%"]]},
       {id:"topic",label:"Gửi cảnh báo tới SNS topic",type:"select",options:[["","— chưa chọn —"],...W.topics.map(t=>[t.name,t.name]),...(W.topics.some(t=>t.name==="billing-alerts")?[]:[["__new","+ Tạo topic mới: billing-alerts"]])],help:W.topics.length?"":"Chưa có topic? Chọn “+ Tạo topic mới” để tạo luôn."}],
     cli:v=>`aws budgets ${b?"update-budget":"create-budget"} \\\n  --account-id ${ACCT} \\\n  --budget '{"BudgetName":"${v.name}","BudgetLimit":{"Amount":"${v.limit}","Unit":"USD"},"TimeUnit":"MONTHLY","BudgetType":"COST"}'`,
@@ -851,7 +920,8 @@ document.addEventListener("click",e=>{
   if(!t){return}
   if(t.closest("[inert]"))return;
   UI.lastOpener=selOf(t);
-  if(t.dataset.node){const na=nodeAct(LESSONS[UI.lesson].id,t.dataset.node);if(!na)return;
+  if((t.dataset.node||t.dataset.gconnect)&&Date.now()-GSUP<350)return;
+  if(t.dataset.node){UI.gmenu=null;const na=nodeAct(LESSONS[UI.lesson].id,t.dataset.node);if(!na)return;
     if(na.k==="drawer")openDrawer(na.d,t,t.dataset.node);
     else if(na.k==="try"){LESSONS[UI.lesson].tries[na.i][1]()}
     else if(na.k==="go"){if(!unlocked(na.p))return;UI.page=na.p;UI.drawer=null}
@@ -897,6 +967,10 @@ document.addEventListener("click",e=>{
       UI.modal=null},
     drawer(){openDrawer(arg,t)},closeDrawer(){UI.drawer=null},
     goJunk(){UI.page="s3";UI.s3find="incoming/";UI.drawer=null},
+    gFit(){const G=gs();G.zoom=null;G.pan=[0,0]},gReset(){const Lid=LESSONS[UI.lesson].id;delete GPOS[Lid];store.set("gpos",GPOS);gs().zoom=null},
+    gZoom(){gZoomAt(GCUR.z*(arg==="1"?1.2:1/1.2));return true},gTrace(){const G=gs();G.trace=!G.trace},gView(){gs().view=arg;UI.gmenu=null},
+    gMenu(){UI.gmenu=UI.gmenu&&UI.gmenu.from===arg?null:{from:arg,active:0};UI.gfocus=UI.gmenu?"#glist":`[data-gconnect="${arg}"]`},
+    gPick(){if(gPick(arg)===false)return true},
   };
   if(A[a]){const keep=A[a]();if(keep!==true)render()}
 });
@@ -908,6 +982,41 @@ document.addEventListener("keydown",e=>{
   if(!window.Kit&&e.key==="Escape"){if(UI.modal){UI.modal=null;render()}else if(UI.drawer){UI.drawer=null;render()}return}
   const g=e.target.closest&&e.target.closest("[data-go][role=button],[data-node],[data-log]");
   if(g&&(e.key==="Enter"||e.key===" ")){e.preventDefault();g.dispatchEvent(new MouseEvent("click",{bubbles:true}))}});
+
+/* ---- graph editor: pointer, wheel and keyboard ---- */
+document.addEventListener("pointerdown",e=>{if(e.button!==0||!e.target.closest)return;const gx=e.target.closest(".gx");if(!gx||e.target.closest(".gmenu"))return;
+  const port=e.target.closest("[data-gconnect]"),node=e.target.closest(".gnode");
+  GD={kind:port?"connect":node?"node":"pan",id:port?port.dataset.gconnect:node?node.dataset.gid:null,x0:e.clientX,y0:e.clientY,moved:false,pan0:[...GCUR.pan],gx};
+  if(GD.kind==="node"){const n=GLAST&&GLAST.by[GD.id];if(!n){GD=null;return}GD.pos0=[n.x,n.y]}
+  if(GD.kind==="pan")e.preventDefault()});
+document.addEventListener("pointermove",e=>{if(!GD)return;const dx=e.clientX-GD.x0,dy=e.clientY-GD.y0;if(!GD.moved&&Math.hypot(dx,dy)<5)return;
+  if(!GD.moved){GD.moved=true;gFreeze();UI.gmenu=null;if(GD.kind==="connect")UI.gdrag={from:GD.id}}
+  const z=GCUR.z;
+  if(GD.kind==="pan"){GCUR.pan=[GD.pan0[0]+dx,GD.pan0[1]+dy];gs().pan=[...GCUR.pan];gApply()}
+  else if(GD.kind==="node"){gSetPos(GD.id,[Math.round(GD.pos0[0]+dx/z),Math.round(GD.pos0[1]+dy/z)]);gRefresh()}
+  else{const r=GD.gx.getBoundingClientRect(),el=document.elementFromPoint&&document.elementFromPoint(e.clientX,e.clientY),on=el&&el.closest&&el.closest(".gnode");
+    UI.gdrag.at=[(e.clientX-r.left-GCUR.pan[0])/z,(e.clientY-r.top-GCUR.pan[1])/z];UI.gdrag.over=on?on.dataset.gid:null;gRefresh();GD.gx.classList.add("connecting")}});
+function gEnd(cancel){if(!GD)return;const d=GD;GD=null;if(!d.moved)return;GSUP=Date.now();
+  if(d.kind==="node")store.set("gpos",GPOS);
+  if(d.kind==="connect"){const over=!cancel&&UI.gdrag&&UI.gdrag.over;UI.gdrag=null;if(over){UI.gmenu={from:d.id};if(gPick(over)===false)UI.gmenu=null}render()}}
+document.addEventListener("pointerup",()=>gEnd(false));document.addEventListener("pointercancel",()=>gEnd(true));
+document.addEventListener("wheel",e=>{const gx=e.target.closest&&e.target.closest(".gx");if(!gx||!(e.ctrlKey||e.metaKey))return;e.preventDefault();
+  const r=gx.getBoundingClientRect();gZoomAt(GCUR.z*Math.exp(-e.deltaY*.0025),e.clientX-r.left,e.clientY-r.top)},{passive:false});
+window.addEventListener("keydown",e=>{
+  const menu=UI.gmenu&&e.target.closest&&e.target.closest(".gmenu");
+  if(menu){const M=UI.gmenu,n=(M.ids||[]).length;
+    if(e.key==="Escape"){e.preventDefault();e.stopPropagation();const f=M.from;UI.gmenu=null;UI.gfocus=`[data-gconnect="${f}"]`;render();return}
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();M.active=((M.active||0)+(e.key==="ArrowDown"?1:-1)+n)%n;UI.gfocus="#glist";renderPage();const f=document.getElementById("glist");if(f)f.focus();return}
+    if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();if(gPick(M.ids[M.active||0])!==false)render();return}
+    return}
+  const nd=e.target.closest&&e.target.closest(".gnode .gn[data-node]");if(!nd)return;const id=nd.dataset.node;
+  if(e.key.startsWith("Arrow")){e.preventDefault();
+    if(e.shiftKey){const n=GLAST.by[id],d={ArrowRight:[16,0],ArrowLeft:[-16,0],ArrowDown:[0,16],ArrowUp:[0,-16]}[e.key];gSetPos(id,[n.x+d[0],n.y+d[1]]);store.set("gpos",GPOS);gRefresh()}
+    else{const nb=gNeighbor(id,e.key);if(nb){const el=document.querySelector(`.gn[data-node="${nb}"]`);if(el)el.focus()}}
+    const el=document.querySelector(`.gn[data-node="${id}"]`);if(e.shiftKey&&el)el.focus();return}
+  if((e.key==="c"||e.key==="C")&&!e.ctrlKey&&!e.metaKey&&GLAST&&gRels(GLAST)[id]){e.preventDefault();UI.gmenu={from:id,active:0};UI.gfocus="#glist";render();return}
+  if((e.key==="t"||e.key==="T")&&!e.ctrlKey&&!e.metaKey){e.preventDefault();const G=gs();G.trace=!G.trace;UI.gfocus=`.gn[data-node="${id}"]`;render()}},true);
+let G_RZ=0;window.addEventListener("resize",()=>{clearTimeout(G_RZ);G_RZ=setTimeout(()=>{if(UI.page==="arch"&&!UI.g?.zoom)renderPage()},150)});
 
 /* ================= boot ================= */
 startLesson(Math.min(store.get("lesson",0),LESSONS.length-1),false);render();
