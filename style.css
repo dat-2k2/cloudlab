@@ -586,3 +586,12 @@ body.lw-dragging,body.lw-dragging *{cursor:col-resize!important;user-select:none
 .drawer{width:min(var(--lesson-w,420px),100vw)}
 @media (max-width:900px){.lesson-resize,.lbar{display:none}}
 .callout.eli5{background:color-mix(in srgb,var(--accent) 6%,var(--surface));border-color:color-mix(in srgb,var(--accent) 25%,var(--line))}
+/* product tour */
+.tour-spot{position:fixed;z-index:900;border-radius:10px;pointer-events:none;box-shadow:0 0 0 2px var(--accent),0 0 0 9999px rgba(15,23,42,.45);transition:left .2s,top .2s,width .2s,height .2s}
+.tour-spot.center{box-shadow:0 0 0 9999px rgba(15,23,42,.45)}
+.tour-card{position:fixed;z-index:901;background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:var(--r-md);box-shadow:0 12px 32px rgba(0,0,0,.22);padding:14px 16px 12px;outline:none}
+.tour-card h2{margin:4px 0 6px;font:600 16px/22px var(--font-sans)}.tour-card p{margin:0 0 12px;font-size:14px;line-height:21px;color:var(--muted)}
+.tour-h{display:flex;align-items:center;justify-content:space-between}.tour-n{font:500 11px/16px var(--font-mono);color:var(--subtle)}
+.tour-x{border:0;background:none;font-size:18px;line-height:1;color:var(--muted);padding:2px 6px;cursor:pointer}
+.tour-a{display:flex;justify-content:flex-end;gap:8px}
+@media (prefers-reduced-motion:reduce){.tour-spot{transition:none}}
