@@ -8,7 +8,10 @@ const SPEEDS=[["1 giây / giây",1],["1 phút / giây",60],["1 giờ / giây",36
 /* list prices USD, ap-southeast-2 where a source was found (API Gateway HTTP, S3, DynamoDB: third-party 2026 pages),
    us-east-1 otherwise (Lambda, SNS, SQS, CloudWatch). No free tier. Reference values for learning, not a quote. */
 const PRICE={lambdaReq:0.20/1e6,lambdaGBs:0.0000166667,apiReq:1.29/1e6,s3Put:0.0055/1000,s3Get:0.00044/1000,s3GBmo:0.025,
-  ddbWrite:0.7125/1e6,ddbRead:0.1425/1e6,snsPub:0.50/1e6,snsEmail:2.00/1e5,sqsReq:0.40/1e6,logsGB:0.57,alarmMo:0.10,note:"Giá tham khảo ap-southeast-2 (một số theo us-east-1), không tính free tier."};
+  ddbWrite:0.7125/1e6,ddbRead:0.1425/1e6,snsPub:0.50/1e6,snsEmail:2.00/1e5,sqsReq:0.40/1e6,logsGB:0.57,alarmMo:0.10,
+  ec2:{"t3.micro":0.0132,"t3.small":0.0264,"t3.medium":0.0528,"m5.large":0.12,"c5.large":0.111},albH:0.0252,albLCU:0.008,
+  rds:{"db.t3.micro":0.028,"db.t3.small":0.056,"db.t3.medium":0.112,"db.m5.large":0.247},rdsGB:0.138,cache:{"cache.t3.micro":0.025,"cache.t3.small":0.05},ipv4H:0.005,
+  cfReq:0.0125/1e4,cfGB:0.114,r53Zone:0.50,dtoGB:0.114,note:"Giá tham khảo ap-southeast-2 (một số theo us-east-1), không tính free tier."};
 function freshRuntime(){return{t:0,month:1,running:false,q:[],n:{},obj:{},items:{},logs:{},subs:{},inbox:{},alarms:{},budgets:{},acc:{},flow:{},why:{},total:0,stack:{status:"NOT_DEPLOYED"},seq:0,ops:0,loop:{}}}
 const nrt=id=>RT.n[id]||(RT.n[id]={cost:0,m:{},tk:{},series:[],last:null});
 function bump(id,k,w){const r=nrt(id);r.m[k]=(r.m[k]||0)+w;r.tk[k]=(r.tk[k]||0)+w}
@@ -107,12 +110,51 @@ function publish(ev){const id=ev.to,t=nodeOf(id),w=ev.w,d=ev.data||{};
       charge(id,w*PRICE.snsEmail,"email");if(inb)flow(id,inb,"delivers",w);mail(s.Endpoint,{kind:d.kind||"msg",subject:d.subject||"SNS message",body:d.body||"",n:w})}
     else if(s.Protocol==="lambda"){const f=refId(s.Endpoint);if(f)push({at:ev.at+0.1,to:f,from:id,kind:"delivers",w,type:"inv",data:{src:"sns"}})}
     else if(s.Protocol==="sqs"){const q=refId(s.Endpoint);if(q)push({at:ev.at+0.1,to:q,from:id,kind:"delivers",w,type:"sqs"})}})}
+let TICK_DT=1;
+/* an HTTP request arriving at a node: API Gateway, Route 53 alias, CloudFront, load balancer or EC2 directly */
+function request(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,kind=ev.kind||"calls",inet=!!(ev.data&&ev.data.internet);
+  const fail=msg=>{if(ev.from)flow(ev.from,id,kind,w,msg);bump(id,"err",w);nrt(id).lastErr=msg;return{ok:false,err:msg}};
+  if(!n||!exists(id))return fail("chưa deploy");
+  switch(n.type){
+    case"AWS::ApiGatewayV2::Api":{bump(id,"req",w);charge(id,w*PRICE.apiReq,"request");if(ev.from)flow(ev.from,id,kind,w);const fn=refId(n.props.Target);
+      if(!fn)return fail("404: API chưa có integration");const r=lambdaRun({...ev,to:fn,from:id,kind:"invokes",data:{src:"api"}},T1);if(!r.ok){bump(id,"err",w);return{ok:false,err:"502 · "+r.err}}return{ok:true}}
+    case"AWS::Route53::RecordSet":{bump(id,"req",w);if(ev.from)flow(ev.from,id,kind,w);const t=refId(getP(n.props,"AliasTarget.DNSName"));if(!t)return fail("Record chưa trỏ tới đâu (NXDOMAIN)");
+      return request({...ev,to:t,from:id,kind:"alias"},T1)}
+    case"AWS::CloudFront::Distribution":{if(getP(n.props,"DistributionConfig.Enabled")===false)return fail("Distribution đang tắt");bump(id,"req",w);charge(id,w*PRICE.cfReq,"request");charge(id,w*20/1048576*PRICE.cfGB,"truyền ra");if(ev.from)flow(ev.from,id,kind,w);
+      const h=Math.max(0,Math.min(1,+(getP(n.raw,"Metadata.CloudLab.HitRatio")??0.9))),miss=w*(1-h);bump(id,"hit",w*h);const o=arr(getP(n.props,"DistributionConfig.Origins"))[0],oid=o&&refId(o.DomainName);
+      if(!oid)return fail("Chưa có origin");if(miss<=0)return{ok:true};const on=nodeOf(oid);
+      if(on&&on.type==="AWS::S3::Bucket"){const r=s3Op({to:oid,from:id,kind:"origin",w:miss,at:ev.at,data:{action:"s3:GetObject",key:"index.html",who:{admin:true}}});return r.ok?{ok:true}:{ok:false,err:r.err}}
+      return request({...ev,to:oid,from:id,kind:"origin",w:miss,data:{internet:true}},T1)}
+    case"AWS::ElasticLoadBalancingV2::LoadBalancer":{if(inet){const rr=reachFromInternet(id);if(!rr.ok)return fail(rr.why);const sg=sgAllows(id,80,{internet:true});if(!sg.ok)return fail(sg.why)}
+      bump(id,"req",w);if(ev.from)flow(ev.from,id,kind,w);charge(id,w*20/1048576*PRICE.dtoGB,"truyền ra");
+      const ts=targetsOf(id);if(!ts.length)return fail("503: load balancer chưa có target");
+      const ok=[];for(const t of ts){let why=null;if(!exists(t.id))why="target không tồn tại";else{const s=sgAllows(t.id,t.port,{node:id});if(!s.ok)why="Health check fail: "+s.why}
+        if(why){flow(t.tg,t.id,"forwards",0.0001,why);RT.why[t.tg+">"+t.id+">forwards"]=why}else ok.push(t)}
+      nrt(id).healthy=[ok.length,ts.length];if(!ok.length)return fail("503: không target nào vượt health check");
+      let errs=0;const share=w/ok.length;for(const t of ok){flow(id,t.tg,"listens",share);flow(t.tg,t.id,"forwards",share);const r=appRun(t.id,share,T1);errs+=r.errW||0}
+      if(errs>0){bump(id,"err",errs);return{ok:errs<w,err:"5xx từ target",errW:errs}}return{ok:true}}
+    case"AWS::EC2::Instance":{const port=(ev.data&&ev.data.port)||appPort(n);if(inet){const rr=reachFromInternet(id);if(!rr.ok)return fail(rr.why);const s=sgAllows(id,port,{internet:true,ip:ev.data&&ev.data.ip});if(!s.ok)return fail(s.why)}if(ev.from)flow(ev.from,id,kind,w);
+      if(port!==appPort(n)){bump(id,"conn",w);return{ok:true}}const r=appRun(id,w,T1);return r.ok?{ok:true}:{ok:false,err:r.err,errW:r.errW}}}
+  return fail(`${n.def.label} không nhận HTTP request`)}
+/* the app on an EC2 instance: capacity by instance type, then whatever it uses */
+function appRun(id,w,T1){const n=nodeOf(id),cap=(EC2_TYPES[n.props.InstanceType]||{cap:40}).cap,r=nrt(id);bump(id,"req",w);
+  const rate=(r.tk.req||0)/TICK_DT,over=rate>cap?(rate-cap)/rate:0;r.cpu=Math.min(100,Math.round(rate/cap*100));let errW=w*over,why=over?`quá tải: ${num(rate)} req/s > ${cap} req/s của ${n.props.InstanceType}`:null;
+  const okW=w-errW,uses=arr(getP(n.raw,"Metadata.CloudLab.Uses")).map(u=>refId(u)||u).filter(x=>nodeOf(x));
+  const cache=uses.find(u=>nodeOf(u).type==="AWS::ElastiCache::CacheCluster");let hit=0;
+  if(cache&&okW>0){const c=nodeOf(cache),s=exists(cache)?sgAllows(cache,6379,{node:id}):{ok:false,why:"chưa deploy"};if(s.ok){hit=Math.max(0,Math.min(1,+(getP(c.raw,"Metadata.CloudLab.HitRatio")??0.8)));bump(cache,"req",okW);bump(cache,"hit",okW*hit);flow(id,cache,"uses",okW)}else flow(id,cache,"uses",okW,s.why)}
+  for(const u of uses){const un=nodeOf(u);if(okW<=0)break;
+    if(un.type==="AWS::RDS::DBInstance"){const q=okW*(cache?1-hit:1);if(!exists(u)){errW=w;why="Database chưa deploy";flow(id,u,"uses",okW,why);continue}const s=sgAllows(u,dbPort(un),{node:id});
+      if(!s.ok){errW=w;why="Không kết nối được database: "+s.why;flow(id,u,"uses",okW,s.why);continue}flow(id,u,"uses",q);bump(u,"q",q);const qps=(nrt(u).tk.q||0)/TICK_DT,qc=(RDS_TYPES[un.props.DBInstanceClass]||{qps:300}).qps;nrt(u).cpu=Math.min(100,Math.round(qps/qc*100));
+      if(qps>qc){const e=okW*(qps-qc)/qps;errW+=e;why=`database quá tải: ${num(qps)} truy vấn/s > ${qc}`}}
+    else if(USE_ENV[un.type]){const prof=nodeOf(refId(n.props.IamInstanceProfile)),role=prof&&refId(arr(prof.props.Roles)[0]);
+      const act={"AWS::S3::Bucket":"s3:PutObject","AWS::DynamoDB::Table":"dynamodb:PutItem","AWS::SNS::Topic":"sns:Publish","AWS::SQS::Queue":"sqs:SendMessage"}[un.type],res=un.type==="AWS::S3::Bucket"?arnOf(u)+"/uploads/item.json":arnOf(u);
+      const e=role?evalRole(role,act,res):{allow:false,by:"instance chưa có IAM role (instance profile)"};if(!e.allow){errW=w;why=`AccessDenied: ${act} (${e.by})`;flow(id,u,"uses",okW,why);continue}
+      if(role)flow(id,role,"assumes",okW);if(un.type==="AWS::S3::Bucket")push({at:RT.t,to:u,from:id,kind:"uses",w:okW,type:"s3",data:{action:"s3:PutObject",key:"uploads/item-"+(++RT.seq)+".json",kb:2,who:{role}}});
+      else push({at:RT.t,to:u,from:id,kind:"uses",w:okW,type:un.type==="AWS::DynamoDB::Table"?"ddb":un.type==="AWS::SNS::Topic"?"pub":"sqs"})}}
+  errW=Math.min(w,errW);if(errW>0){bump(id,"err",errW);r.lastErr=why}else bump(id,"ok",w);return{ok:errW<w,err:why,errW}}
 function handle(ev,T1){RT.ops++;
   switch(ev.type){
-    case"req":{const api=nodeOf(ev.to),w=ev.w;if(!exists(ev.to)){flow(ev.from,ev.to,"calls",w,"API chưa deploy");bump(ev.from,"err",w);return}
-      bump(ev.to,"req",w);charge(ev.to,w*PRICE.apiReq,"request");flow(ev.from,ev.to,"calls",w);const fn=refId(api.props.Target);
-      if(!fn){bump(ev.to,"err",w);bump(ev.from,"err",w);RT.why[ev.from+">"+ev.to+">calls"]="404: API chưa có integration";nrt(ev.to).lastErr="404 Not Found: chưa có integration";return}
-      const r=lambdaRun({...ev,to:fn,from:ev.to,kind:"invokes",data:{src:"api"}},T1);if(r.ok)bump(ev.from,"ok",w);else{bump(ev.from,"err",w);bump(ev.to,"err",w);nrt(ev.from).lastErr="502 · "+r.err}return}
+    case"req":{const r=request({...ev,data:{...(ev.data||{}),internet:true}},T1),src=ev.from;if(src&&nodeOf(src)&&nodeOf(src).ext){const e=r.ok?(r.errW||0):ev.w;bump(src,"ok",ev.w-e);if(e>0){bump(src,"err",e);nrt(src).lastErr=r.err||"lỗi"}}return}
     case"inv":lambdaRun(ev,T1);return;
     case"s3":{const r=s3Op(ev);const src=ev.data&&ev.data.client;if(src){bump(src,r.ok?"ok":"err",ev.w);if(!r.ok)nrt(src).lastErr=r.err;if(r.ok&&r.e&&r.e.leak)bump(src,"leak",ev.w)}return}
     case"pub":publish(ev);return;
@@ -128,12 +170,17 @@ function sources(t0,dt){for(const n of allNodes()){let rate=0;
     if(n>0&&exists(f)){const b=+r.Properties.BatchSize||10,inv=Math.ceil(n/b);RT.items[q]=0;charge(q,n*2*PRICE.sqsReq,"receive+delete");push({at:t0+dt/2,to:f,from:q,kind:"polls",w:inv,type:"inv",data:{src:"sqs"}})}}}
 function fire(n,c,at){const p=n.props,tg=refId(p.Target);bump(n.id,"sent",c);
   if(n.type==="CloudLab::Client"){if(!tg)return;const tn=nodeOf(tg);if(!tn)return;
-    if(tn.type==="AWS::ApiGatewayV2::Api")push({at,to:tg,from:n.id,kind:"calls",w:c,type:"req"});
+    if(tn.type!=="AWS::S3::Bucket")push({at,to:tg,from:n.id,kind:"calls",w:c,type:"req",data:{port:+p.Port||0,ip:p.SourceIp||null}});
     else if(tn.type==="AWS::S3::Bucket"){const role=refId(p.As),who=role?{role}:{anon:true};if(role)flow(n.id,role,"assumes",c);push({at,to:tg,from:n.id,kind:"calls",w:c,type:"s3",data:{action:p.Action||"s3:GetObject",key:p.Key||"report.csv",who,client:n.id,kb:1}})}}
   else if(n.type==="CloudLab::Uploader"){if(!tg)return;const key=(p.Prefix||"")+"photo-"+(++RT.seq)+(p.Suffix||"");push({at,to:tg,from:n.id,kind:"uploads",w:c,type:"s3",data:{action:"s3:PutObject",key,kb:+p.SizeKB||240,client:n.id}})}
   else if(n.type==="AWS::Events::Rule")for(const t of arr(p.Targets)){const f=refId(t&&t.Arn);if(f)push({at,to:f,from:n.id,kind:"invokes",w:c,type:"inv",data:{src:"rule"}})}}
-function periodic(t0,dt){const t1=t0+dt;
-  for(const n of allNodes()){if(!exists(n.id))continue;
+function periodic(t0,dt){const t1=t0+dt,h=dt/3600,zones=new Set();
+  for(const n of allNodes()){if(!exists(n.id))continue;const p=n.props;
+    if(n.type==="AWS::EC2::Instance"){charge(n.id,(PRICE.ec2[p.InstanceType]||0.0132)*h,"giờ chạy");const s=subnetsOf(n)[0];if(!s||isPublicSubnet(s))charge(n.id,PRICE.ipv4H*h,"IPv4 public")}
+    if(n.type==="AWS::ElasticLoadBalancingV2::LoadBalancer"){charge(n.id,PRICE.albH*h,"giờ chạy");if(p.Scheme!=="internal")charge(n.id,PRICE.ipv4H*Math.max(2,subnetsOf(n).length)*h,"IPv4 public");const rate=(nrt(n.id).tk.req||0)/dt;charge(n.id,Math.max(rate/25,0)*PRICE.albLCU*h,"LCU")}
+    if(n.type==="AWS::RDS::DBInstance"){charge(n.id,(PRICE.rds[p.DBInstanceClass]||0.028)*(p.MultiAZ===true?2:1)*h,"giờ chạy");charge(n.id,(+p.AllocatedStorage||20)*PRICE.rdsGB*dt/MONTH*(p.MultiAZ===true?2:1),"lưu trữ")}
+    if(n.type==="AWS::ElastiCache::CacheCluster")charge(n.id,(PRICE.cache[p.CacheNodeType]||0.026)*(+p.NumCacheNodes||1)*h,"giờ chạy");
+    if(n.type==="AWS::Route53::RecordSet"&&!zones.has(p.HostedZoneName)){zones.add(p.HostedZoneName);charge(n.id,PRICE.r53Zone*dt/MONTH,"hosted zone")}
     if(n.type==="AWS::S3::Bucket"){const gb=Object.values(RT.obj[n.id]||{}).reduce((s,o)=>s+o.kb*o.n,0)/1048576;charge(n.id,gb*PRICE.s3GBmo*dt/MONTH,"lưu trữ");nrt(n.id).gb=gb}
     if(n.type==="AWS::CloudWatch::Alarm"){charge(n.id,PRICE.alarmMo*dt/MONTH,"alarm");const a=RT.alarms[n.id]||(RT.alarms[n.id]={state:"OK",next:t0+(+n.props.Period||60),base:null});
       const fn=refId(getP(n.props,"Dimensions.0.Value")),met={Errors:"err",Invocations:"inv",Throttles:"thr",Duration:"dur"}[n.props.MetricName]||"err";
@@ -148,7 +195,7 @@ function periodic(t0,dt){const t1=t0+dt;
         const subs=arr(ns.Subscribers);if(!subs.length)log("Sự kiện","budgets","alert",`${getP(n.props,"Budget.BudgetName")} vượt ${th}% nhưng không có nơi gửi`,"bad");else log("Sự kiện","budgets","alert",`vượt ${th}% (${money(RT.total)} / ${money(lim)})`,"warn");
         for(const s of subs){const tp=refId(s.Address);if(tp)push({at:t1,to:tp,from:n.id,kind:"notifies",w:1,type:"pub",data:{kind:"alert",subject:subj,body}});else if(s.SubscriptionType==="EMAIL")mail(s.Address,{kind:"alert",subject:subj,body})}}}}}
 /* advance the clock by dt simulated seconds */
-function step(dt,noSources){const t0=RT.t,t1=t0+dt;for(const k in RT.n)RT.n[k].tk={};for(const k in RT.flow){RT.flow[k].tk=0;RT.flow[k].tke=0}RT.ops=0;
+function step(dt,noSources){TICK_DT=dt;const t0=RT.t,t1=t0+dt;for(const k in RT.n)RT.n[k].tk={};for(const k in RT.flow){RT.flow[k].tk=0;RT.flow[k].tke=0}RT.ops=0;
   if(!noSources)sources(t0,dt);
   RT.q.sort((a,b)=>a.at-b.at);let guard=0;
   while(RT.q.length&&RT.q[0].at<=t1&&guard<4000){const ev=RT.q.shift();handle(ev,t1);guard++;if(RT.q.length&&RT.q[RT.q.length-1].at<RT.q[0].at)RT.q.sort((a,b)=>a.at-b.at)}

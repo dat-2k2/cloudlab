@@ -1,49 +1,100 @@
 # CloudLab
 
-Node editor AWS chạy hoàn toàn trong trình duyệt: dựng hạ tầng bằng kéo thả hoặc bằng CloudFormation YAML, rồi chạy mô phỏng để thử kết nối, quyền IAM và chi phí theo thời gian thực. Mỗi bài học là một template dựng sẵn có lỗi cài sẵn.
+IDE hạ tầng AWS chạy hoàn toàn trong trình duyệt: dựng bằng kéo thả hoặc CloudFormation YAML, chạy mô phỏng để thử kết nối, security group, quyền IAM và chi phí, rồi xuất ra CloudFormation, Terraform hoặc CDK. Bài học đi theo workshop FCAJ (First Cloud AI Journey), mỗi bài là một template có lỗi cài sẵn.
 
 Live: https://dat-2k2.github.io/cloudlab/
 
-## Ba phần
+## IDE
 
-**1. Editor tự do.** Canvas giống draw.io nhưng mỗi khối là một thành phần AWS thật: API Gateway, Lambda, S3, DynamoDB, SNS, SQS, EventBridge schedule, IAM role, bucket policy, CloudWatch log group và alarm, AWS Budget. Kéo từ thanh bên vào canvas, kéo từ chấm bên phải một khối sang khối khác để nối (hoặc bấm chấm đó / phím C). Nối khối nào với khối nào sẽ sửa đúng thuộc tính tương ứng, ví dụ Lambda → bucket thêm biến `OUTPUT_BUCKET: !Ref …` và hỏi có cấp `s3:PutObject` vào role không.
+**Thành phần.** Tab Thành phần ở thanh bên (hoặc nút ＋ Thêm / phím `/` để tìm nhanh) có đủ khối cho một hạ tầng cơ bản:
 
-**2. Viết bằng code.** Tab YAML (hoặc Chia đôi) là template CloudFormation của chính canvas, sửa bên nào bên kia cập nhật theo. Quan hệ không lưu riêng: một cạnh tồn tại vì có `!Ref` / `!GetAtt` / `!Sub "${X}"`, đúng như template thật. Tài nguyên bên ngoài AWS (client, uploader, hộp thư, monitor) nằm trong `Metadata.CloudLab.External`; độ nặng của code Lambda ở `Metadata.CloudLab.WorkMs` của function.
+- Mạng & phân phối: VPC, subnet, internet gateway, security group, Application Load Balancer, target group, CloudFront, Route 53
+- Compute: EC2, Lambda, API Gateway
+- Lưu trữ & database: S3, DynamoDB, RDS, ElastiCache
+- Tích hợp: SNS, SQS, EventBridge
+- Bảo mật, giám sát, chi phí: IAM role, bucket policy, CloudWatch log group và alarm, AWS Budget
+- Bên ngoài AWS: client gửi request, uploader, hộp thư, monitor
 
-**3. Mô phỏng.** Bấm ▶: nguồn tạo tải (Client request/giây, Uploader file/giờ, EventBridge schedule) bắn sự kiện, sự kiện đi theo các cạnh. Mỗi bước kiểm tra cấu hình (timeout, filter, subscription đã xác nhận…) và quyền IAM (explicit deny, thiếu Allow, Block Public Access). Cạnh đổi màu theo những gì vừa xảy ra: chạy, ✕ bị chặn kèm lý do, ↻ vòng lặp. Hộp thư nhận email từ SNS, Monitor vẽ số liệu của tài nguyên nối vào. Đồng hồ chi phí cộng dồn theo tháng theo giá tham khảo ap-southeast-2 (một số theo us-east-1, không tính free tier); tốc độ từ 1 giây/giây tới 1 ngày/giây.
+"Bắt đầu từ mẫu" có sẵn web 3 tầng (Route 53 → ALB → 2 EC2 → RDS), web tĩnh (CloudFront → S3) và serverless.
 
-Stack: Deploy / Xóa stack theo đúng CloudFormation — `DeletionPolicy: Retain` giữ bucket lại, bucket còn object thì `DELETE_FAILED`, tài nguyên tạo tay nằm ngoài stack.
+**Nối là cấu hình.** Kéo từ chấm bên phải một khối sang khối khác. Nối khối nào sẽ sửa đúng thuộc tính tương ứng:
 
-## Bài học (template)
+- ALB → EC2 tạo target group + listener và hỏi có mở security group không
+- EC2 → RDS hỏi có thêm rule 3306/5432 từ SG của app không
+- EC2 → IAM role tạo instance profile
+- Lambda/EC2 → S3, DynamoDB, SNS, SQS hỏi có cấp quyền vào role không
 
-| Bài | Template | Lỗi cài sẵn |
-|---|---|---|
-| 0 · Budgets + SNS | API → Lambda có traffic thật, budget $20, topic, hộp thư | Chỉ có ngưỡng 50%; email chưa xác nhận |
-| 1 · IAM + STS | Lan assume role chỉ-đọc để đọc bucket | Deny `s3:*Object` chặn cả GetObject |
-| 2 · S3 | Bucket chia sẻ, người lạ và Lan | Bucket policy `Principal: "*"`, BPA tắt |
-| 3 · Lambda + CloudWatch | API → Lambda, monitor, alarm → email | Role thiếu `logs:*`; timeout 3 s |
-| 4 · S3 → Lambda | Uploader → bucket → Lambda | Lambda ghi lại vào `incoming/` → vòng lặp, chi phí tăng không dừng |
-| 5 · CloudFormation | Pipeline sắp gỡ + bucket tạo tay | `DeletionPolicy: Retain`, bucket còn object, bucket ngoài stack |
+VPC và subnet vẽ thành khung; kéo EC2/RDS vào khung subnet để đặt vào subnet đó.
 
-Mỗi khối trong bài có phần **Trong bài này** giải thích nó làm gì trong bối cảnh đó. Nhiệm vụ được chấm trên template và bằng một lần mô phỏng thử; gợi ý mở dần (triệu chứng → chỗ hỏng → nguyên nhân), có Làm hộ và Reset.
+**Code.** Tab YAML (hoặc Chia đôi) là template CloudFormation của chính canvas, sửa bên nào bên kia cập nhật theo. Cạnh tồn tại vì có `!Ref` / `!GetAtt` / `!Sub`, đúng như template thật. Phần chỉ dành cho mô phỏng nằm trong `Metadata.CloudLab`: traffic bên ngoài (`External`), độ nặng code Lambda (`WorkMs`), cổng app và tài nguyên app gọi tới của EC2 (`AppPort`, `Uses`).
+
+**Xuất.** Tab code có 4 dạng, tải về được:
+
+- CloudFormation (CloudLab), sửa được
+- CloudFormation cho AWS, đã bỏ `Metadata.CloudLab`
+- Terraform: provider `awscc` theo đúng tên CloudFormation; Route 53 dùng `aws_route53_record`
+- AWS CDK v2 (TypeScript): construct L1 `Cfn*`, giữ nguyên logical ID
+
+CloudLab không vẽ route table. Public subnet ở đây là `MapPublicIpOnLaunch` cộng với VPC có IGW gắn vào. Bản xuất có ghi chú cần thêm route table trước khi deploy thật.
+
+**Vấn đề.** Panel Vấn đề kiểm tra template như linter. Một số kiểm tra:
+
+- Tham chiếu tới tài nguyên không tồn tại
+- ALB có ít hơn 2 AZ
+- Subnet nằm ngoài CIDR của VPC hoặc trùng dải
+- Cổng database hay SSH mở cho 0.0.0.0/0
+- RDS public, bucket public
+- Lambda sẽ timeout, hoặc vòng lặp S3 → Lambda
+
+**Mô phỏng.** Bấm ▶: client bắn request, sự kiện đi theo các cạnh, mỗi bước kiểm tra:
+
+- Security group theo cổng, IP nguồn và SG nguồn
+- Subnet public hay private
+- Health check của target group
+- Sức chịu tải của từng loại EC2/RDS (quá tải trả 5xx)
+- Quyền IAM: explicit deny, thiếu Allow, Block Public Access
+
+Cạnh đổi màu theo những gì vừa xảy ra và ghi lý do khi bị chặn. Đồng hồ chi phí cộng dồn theo giá tham khảo ap-southeast-2 (một số theo us-east-1, không tính free tier). Các khoản tính gồm giờ chạy EC2/RDS/ALB, LCU, IPv4 public, request, GB-giây, dung lượng và data ra Internet.
+
+## Bài học theo FCAJ
+
+| # | Workshop | Template | Lỗi cài sẵn |
+|---|---|---|---|
+| 0 | [000007](https://000007.awsstudygroup.com/) Budgets | API → Lambda có traffic, budget $20, SNS, hộp thư | Chỉ ngưỡng 50% (lab dùng 80/100%); email chưa xác nhận |
+| 1 | [000002](https://000002.awsstudygroup.com/) IAM | Lan assume role chỉ-đọc | Deny `s3:*Object` chặn cả GetObject |
+| 2 | [000003](https://000003.awsstudygroup.com/) VPC | VPC 10.10.0.0/16, 2 public + 2 private subnet, web + SSH | IGW chưa gắn; SSH mở 0.0.0.0/0; private SG nhận SSH từ Internet |
+| 3 | [000048](https://000048.awsstudygroup.com/) EC2 + IAM role | App EC2 ghi vào S3 | Không có instance profile; role `s3:*` trên `*` |
+| 4 | [000057](https://000057.awsstudygroup.com/) · [000094](https://000094.awsstudygroup.com/) S3 + CloudFront | Website tĩnh trên S3 | Bucket public, khách đọc thẳng S3, chưa có CloudFront |
+| 5 | [000005](https://000005.awsstudygroup.com/) RDS | EC2 → MySQL `fcaj` | DB public, rds-sg mở 3306 cho Internet, một AZ |
+| 6 | [000006](https://000006.awsstudygroup.com/) ALB | ALB → 1 t3.micro, 60 req/s | ALB một subnet, quá tải, không HA |
+| 7 | [000008](https://000008.awsstudygroup.com/) CloudWatch | API → Lambda, monitor, alarm → email | Role thiếu `logs:*`; timeout 3 s |
+| 8 | [000078](https://000078.awsstudygroup.com/) S3 → Lambda | Uploader → bucket → Lambda | Lambda ghi lại vào `incoming/`, vòng lặp tốn tiền |
+| 9 | [000079](https://000079.awsstudygroup.com/) API → Lambda → DynamoDB | Book Store API | Role thiếu `dynamodb:PutItem` |
+| 10 | [000037](https://000037.awsstudygroup.com/) · [000038](https://000038.awsstudygroup.com/) CloudFormation / CDK | Pipeline sắp gỡ + bucket tạo tay | `DeletionPolicy: Retain`, bucket còn object, bucket ngoài stack |
+
+CIDR, tên và cấu hình theo lab gốc. Chỗ nào CloudLab đơn giản hóa thì bài ghi rõ: NAT gateway và traffic đi ra chưa mô phỏng; Auto Scaling group thay bằng instance cố định; RDS dùng db.t3.micro thay vì db.m5.large.
+
+Mỗi khối trong bài có phần **Trong bài này** giải thích nó làm gì trong bối cảnh đó. Nhiệm vụ được chấm trên template và bằng một lần mô phỏng thử. Gợi ý mở dần (triệu chứng → chỗ hỏng → nguyên nhân); có Làm hộ và Reset.
 
 ## Chạy
 
-Không có build step. Trang tải kit layout từ `../kit/`, nên khi chạy local cần serve một thư mục chứa `cloudlab/` và `kit/` (từ repo dat-2k2.github.io) cạnh nhau. Deploy bằng GitHub Pages (`.github/workflows/pages.yml`), phục vụ tại `/cloudlab/`.
+Không có build step. Trang tải kit layout từ `../kit/`, nên khi chạy local cần serve một thư mục chứa `cloudlab/` và `kit/` (từ repo dat-2k2.github.io) cạnh nhau. Deploy bằng GitHub Pages, phục vụ tại `/cloudlab/`.
 
 ## Cấu trúc
 
-- `index.html`: khung trang (kit shell)
 - `src/core.js`: hằng số, tiện ích, event log, undo
-- `src/catalog.js`: danh mục thành phần (type, thuộc tính mặc định, field của inspector, quan hệ)
-- `src/model.js`: template model, cạnh suy ra từ tham chiếu, quy tắc nối, đọc/ghi YAML
+- `src/catalog.js`: thành phần serverless, IAM, giám sát, bên ngoài AWS
+- `src/model.js`: template model, cạnh suy ra từ tham chiếu, quy tắc nối, YAML
+- `src/infra.js`: VPC, subnet, IGW, security group, EC2, ALB, CloudFront, Route 53, RDS, ElastiCache
 - `src/iam.js`: đánh giá IAM (identity policy, managed policy, bucket policy, BPA)
-- `src/sim.js`: deploy / xóa stack, mô phỏng sự kiện, metric, chi phí, budget, alarm
-- `src/lessons.js`: các template bài học
-- `src/editor.js`: canvas (node, cạnh, pan/zoom, kéo nối, danh sách)
-- `src/ui.js`: thanh bên, inspector, YAML, thanh mô phỏng, bài học, sự kiện
+- `src/sim.js`: deploy / xóa stack, mô phỏng sự kiện và request, metric, chi phí, budget, alarm
+- `src/lessons.js`: template mẫu và bài học FCAJ
+- `src/editor.js`: canvas (node, khung VPC/subnet, cạnh, pan/zoom, kéo nối)
+- `src/iac.js`: xuất CloudFormation, Terraform, CDK
+- `src/lint.js`: panel Vấn đề
+- `src/ui.js`: thanh bên, inspector, code, thanh mô phỏng, bài học
 - `vendor/js-yaml.min.js`: js-yaml 4.1.0 (MIT)
 - `fonts/`: Geist + Geist Mono (SIL OFL)
 - `build.py`: gộp thành một file HTML để xem trước
 
-Đây là mô phỏng để học: hành vi và giá được đơn giản hóa, không gọi AWS thật.
+Đây là mô phỏng để học: hành vi và giá được đơn giản hóa, không gọi AWS thật. FCAJ và các workshop thuộc AWS Study Group; CloudLab không liên kết chính thức.

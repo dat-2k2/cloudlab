@@ -11,7 +11,7 @@ const MANAGED={
 };
 const RUNTIMES=["python3.12","nodejs20.x","java21","provided.al2023"];
 /* palette groups, in order */
-const GROUPS=[["ext","Bên ngoài AWS"],["notify","Tích hợp"],["comp","Compute"],["store","Lưu trữ"],["sec","Bảo mật"],["mon","Giám sát"],["cost","Chi phí"]];
+const GROUPS=[["ext","Bên ngoài AWS"],["infra","Mạng & phân phối"],["comp","Compute"],["store","Lưu trữ"],["db","Database"],["notify","Tích hợp"],["sec","Bảo mật"],["mon","Giám sát"],["cost","Chi phí"]];
 const T={};
 function def(type,spec){T[type]=Object.assign({type,fields:[],rel:{}},spec)}
 const R=id=>({Ref:id}),GA=(id,a)=>({"Fn::GetAtt":[id,a||"Arn"]});
@@ -20,10 +20,12 @@ const R=id=>({Ref:id}),GA=(id,a)=>({"Fn::GetAtt":[id,a||"Arn"]});
 def("CloudLab::Client",{label:"Client / người dùng",short:"⇢",cat:"ext",ext:true,src:true,
   doc:"Người hoặc chương trình gọi vào hệ thống từ Internet: gửi request tới API, hoặc đọc object trong S3. Đặt tần suất để tạo tải khi mô phỏng.",
   defaults:()=>({Target:null,RatePerSecond:1}),
-  fields:[{k:"Target",label:"Gọi tới",type:"ref",to:["AWS::ApiGatewayV2::Api","AWS::S3::Bucket"]},
+  fields:[{k:"Target",label:"Gọi tới",type:"ref",to:["AWS::ApiGatewayV2::Api","AWS::S3::Bucket","AWS::ElasticLoadBalancingV2::LoadBalancer","AWS::CloudFront::Distribution","AWS::Route53::RecordSet","AWS::EC2::Instance"]},
     {k:"RatePerSecond",label:"Request mỗi giây",type:"number",step:"any",min:0},
     {k:"Action",label:"Thao tác (khi gọi S3)",type:"select",options:["s3:GetObject","s3:PutObject","s3:DeleteObject"],when:p=>p.Target&&tgtType(p.Target)==="AWS::S3::Bucket"},
     {k:"Key",label:"Object key (khi gọi S3)",type:"text",when:p=>p.Target&&tgtType(p.Target)==="AWS::S3::Bucket"},
+    {k:"Port",label:"Cổng (khi gọi thẳng EC2)",type:"number",min:1,max:65535,when:p=>p.Target&&tgtType(p.Target)==="AWS::EC2::Instance",help:"80 = web, 22 = SSH."},
+    {k:"SourceIp",label:"IP nguồn",type:"text",when:p=>p.Target&&tgtType(p.Target)==="AWS::EC2::Instance",help:"Để so với rule CIDR của security group, ví dụ 203.0.113.10."},
     {k:"As",label:"Danh tính (assume role)",type:"ref",to:["AWS::IAM::Role"],att:"Arn",help:"Để trống = ẩn danh (anonymous)."},
     {k:"Expect",label:"Kỳ vọng",type:"select",options:[["","Nên thành công"],["Deny","Nên bị chặn"]],help:"Đánh dấu request lẽ ra phải bị chặn, để sơ đồ tô xanh khi bị chặn đúng."}],
   rel:{Target:{kind:"calls",label:"gọi"},As:{kind:"assumes",label:"assume"}}});
@@ -88,7 +90,7 @@ def("AWS::SQS::Queue",{label:"SQS queue",short:"SQS",cat:"notify",
   doc:"Hàng đợi message: bên gửi và bên xử lý không cần chạy cùng lúc. Lambda đọc queue theo lô (event source mapping).",
   defaults:id=>({QueueName:kebab(id),VisibilityTimeout:30}),name:p=>p.QueueName,
   fields:[{k:"QueueName",label:"Tên queue",type:"text"},{k:"VisibilityTimeout",label:"Visibility timeout (giây)",type:"number",min:0}]});
-def("AWS::Lambda::EventSourceMapping",{label:"Event source mapping",short:"ESM",cat:"comp",edge:true,
+def("AWS::Lambda::EventSourceMapping",{label:"Event source mapping",short:"ESM",cat:"comp",edge:true,edgeOf:p=>[{from:refId(p.EventSourceArn),to:refId(p.FunctionName),kind:"polls",label:"poll"}],
   doc:"Lambda tự đọc message từ queue theo lô rồi gọi function. Là một tài nguyên trong template nhưng hiện như một cạnh.",
   defaults:()=>({EventSourceArn:null,FunctionName:null,BatchSize:10}),
   fields:[{k:"BatchSize",label:"Batch size",type:"number",min:1,max:10000}]});

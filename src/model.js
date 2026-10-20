@@ -37,12 +37,14 @@ const relRe={};const relMatch=(pat,path)=>(relRe[pat]||(relRe[pat]=new RegExp("^
 function edges(){const out=[],seen=new Set(),add=e=>{const k=e.from+">"+e.to+">"+e.kind;if(seen.has(k)||!nodeOf(e.from)||!nodeOf(e.to)||e.from===e.to)return;seen.add(k);e.id=k;out.push(e)};
   const nodes=[...Object.keys(M.ext),...Object.keys(M.res),...Object.keys(M.manual)];
   for(const id of nodes){const n=nodeOf(id);if(!n)continue;
-    if(n.type==="AWS::Lambda::EventSourceMapping"){const s=refId(n.props.EventSourceArn),f=refId(n.props.FunctionName);if(s&&f)add({from:s,to:f,kind:"polls",label:"poll",owner:id,path:"*"});continue}
-    walkRefs(n.props,"",(path,to)=>{if(!rawOf(to))return;const spec=Object.entries(n.def.rel||{}).find(([p])=>relMatch(p,path)),r=spec?spec[1]:{kind:"ref",label:path.split(".").pop()};
+    if(n.def.edge){if(n.def.edgeOf)for(const e of n.def.edgeOf(n.props,id)||[])if(e.from&&e.to)add({...e,owner:id,path:"*"});continue}
+    walkRefs(n.props,"",(path,to)=>{if(!rawOf(to))return;const tn0=nodeOf(to);if(tn0.def.edge){if(!tn0.def.proxy)return;to=tn0.def.proxy(tn0.props);if(!to||!rawOf(to))return}const spec=Object.entries(n.def.rel||{}).find(([p])=>relMatch(p,path)),r=spec?spec[1]:{kind:"ref",label:path.split(".").pop()};
       const tn=nodeOf(to);let label=r.label;
       if(r.kind==="uses")label=(USE_LABEL[tn.type]||"dùng")+" · "+path.split(".").pop();
       if(r.kind==="grants"){const ks=path.split("."),si=ks.indexOf("Statement"),st=si>0?getP(n.props,ks.slice(0,si+2).join(".")):null;label=st?(st.Effect==="Deny"?"deny ":"")+arr(st.Action).join(", "):"cho phép";if(label.length>34)label=label.slice(0,33)+"…"}
-      const e=r.reverse?{from:to,to:id}:{from:id,to};add({...e,kind:r.kind,label:label||"",owner:id,path,deny:r.kind==="grants"&&/^deny /.test(label||"")})});
+      if(typeof label==="function")label=label(n.props,path,to);
+      const e=r.reverse?{from:to,to:id}:{from:id,to};add({...e,kind:r.kind,label:label||"",owner:id,path,hidden:r.kind==="contains",deny:r.kind==="grants"&&/^deny /.test(label||"")})});
+    arr(getP(n.raw,"Metadata.CloudLab.Uses")).forEach(u=>{const t=refId(u)||(typeof u==="string"?u:null);if(t&&rawOf(t))add({from:id,to:t,kind:"uses",label:"app gọi",owner:id,path:"@Uses"})});
     if(n.type==="AWS::SNS::Topic")arr(n.props.Subscription).forEach((s,i)=>{if(s&&s.Protocol==="email")for(const x of Object.keys(M.ext))if(M.ext[x].Type==="CloudLab::Inbox"&&(M.ext[x].Properties||{}).Address===s.Endpoint)add({from:id,to:x,kind:"delivers",label:"email",owner:id,path:"Subscription."+i})})}
   return out}
 /* ---------------- edits ---------------- */
@@ -60,8 +62,8 @@ function stripRefs(v,id){if(v==null||typeof v!=="object")return v;if(refId(v)===
   const o={};for(const k of Object.keys(v)){const y=stripRefs(v[k],id);if(y!==undefined)o[k]=y;else if(["Target","Role","Bucket","As"].includes(k))o[k]=null}return o}
 function removeNode(id){const sc=scopeOf(id);if(!sc)return;delete M[sc][id];delete M.pos[id];
   for(const s of ["res","ext","manual"])for(const k of Object.keys(M[s])){const r=M[s][k];
-    if(r.Type==="AWS::Lambda::EventSourceMapping"&&[refId(r.Properties.EventSourceArn),refId(r.Properties.FunctionName)].includes(id)){delete M[s][k];continue}
-    r.Properties=stripRefs(r.Properties||{},id)}}
+    r.Properties=stripRefs(r.Properties||{},id);const mu=getP(r,"Metadata.CloudLab.Uses");if(mu)r.Metadata.CloudLab.Uses=arr(mu).filter(u=>(refId(u)||u)!==id);
+    const d=T[r.Type];if(d&&d.edge&&d.edgeOf&&!(d.edgeOf(r.Properties,k)||[]).some(e=>e.from&&e.to))delete M[s][k]}}
 function renameRefs(v,a,b){if(v==null||typeof v!=="object")return v;
   if(Array.isArray(v))return v.map(x=>renameRefs(x,a,b));
   if("Ref" in v&&v.Ref===a)return{Ref:b};
@@ -70,10 +72,11 @@ function renameRefs(v,a,b){if(v==null||typeof v!=="object")return v;
   const o={};for(const k of Object.keys(v))o[k]=renameRefs(v[k],a,b);return o}
 function renameNode(a,b){if(a===b)return{ok:true};if(!/^[A-Za-z][A-Za-z0-9]{0,254}$/.test(b))return{ok:false,err:"Logical ID chỉ gồm chữ và số, bắt đầu bằng chữ."};if(rawOf(b))return{ok:false,err:`${b} đã tồn tại.`};
   const sc=scopeOf(a);const reb=o=>{const n={};for(const k of Object.keys(o))n[k===a?b:k]=o[k];return n};M[sc]=reb(M[sc]);M.pos=reb(M.pos);
-  for(const s of ["res","ext","manual"])for(const k of Object.keys(M[s]))M[s][k].Properties=renameRefs(M[s][k].Properties||{},a,b);return{ok:true}}
+  for(const s of ["res","ext","manual"])for(const k of Object.keys(M[s])){M[s][k].Properties=renameRefs(M[s][k].Properties||{},a,b);if(M[s][k].Metadata)M[s][k].Metadata=renameRefs(M[s][k].Metadata,a,b)}return{ok:true}}
 /* remove the reference an edge comes from */
 function removeEdge(e){const o=nodeOf(e.owner);if(!o)return;
-  if(o.type==="AWS::Lambda::EventSourceMapping"){delete M[o.scope][o.id];return}
+  if(o.def.edge){delete M[o.scope][o.id];return}
+  if(e.path==="@Uses"){o.raw.Metadata.CloudLab.Uses=arr(o.raw.Metadata.CloudLab.Uses).filter(u=>(refId(u)||u)!==e.to);return}
   if(e.kind==="delivers"&&e.path.startsWith("Subscription.")){o.props.Subscription.splice(+e.path.split(".")[1],1);return}
   const ks=e.path.split(".");
   // array element that holds the reference (Targets.0.Arn → remove Targets.0)
@@ -87,6 +90,7 @@ function addStmt(roleId,actions,resource,sid){const r=nodeOf(roleId);if(!r)retur
 const roleOfFn=f=>refId((nodeOf(f)||{props:{}}).props.Role);
 function connectRule(a,b){const A=nodeOf(a),B=nodeOf(b);if(!A||!B||a===b)return null;const ta=A.type,tb=B.type,Bn=physName(B);
   const say=(label,apply,grant)=>({label,apply,grant});
+  if(typeof CONNECT_X==="function"){const x=CONNECT_X(a,b,A,B,say);if(x)return x}
   if(tb==="CloudLab::Monitor")return say("gửi số liệu tới monitor",()=>{B.props.Watch=arr(B.props.Watch);if(!B.props.Watch.some(x=>refId(x)===a))B.props.Watch.push(R(a))});
   switch(ta){
     case"CloudLab::Client":if(tb==="AWS::ApiGatewayV2::Api")return say("gửi request tới API",()=>{A.props.Target=R(b);delete A.props.Action;delete A.props.Key});
@@ -119,7 +123,7 @@ function whyNot(a,b){const A=nodeOf(a),B=nodeOf(b);if(!A||!B)return"";
   const can={"CloudLab::Client":"API, bucket hoặc role","CloudLab::Uploader":"S3 bucket","AWS::ApiGatewayV2::Api":"Lambda function","AWS::S3::Bucket":"Lambda (event notification)",
     "AWS::Lambda::Function":"role, bucket, table, topic, queue, log group","AWS::SNS::Topic":"hộp thư, Lambda hoặc SQS","AWS::SQS::Queue":"Lambda","AWS::Events::Rule":"Lambda",
     "AWS::CloudWatch::Alarm":"SNS topic hoặc Lambda","AWS::Budgets::Budget":"SNS topic","AWS::S3::BucketPolicy":"S3 bucket","AWS::IAM::Role":"bucket, table, topic, queue, log group"}[A.type];
-  return can?`${A.def.label} chỉ nối tới ${can}`:`${A.def.label} không có quan hệ đi ra`}
+  const c2=can||(typeof WHY_X!=="undefined"&&WHY_X[A.type]);return c2?`${A.def.label} chỉ nối tới ${c2}`:`${A.def.label} không có quan hệ đi ra`}
 
 /* ---------------- YAML (CloudFormation short-form intrinsics) ---------------- */
 const CFN=(()=>{if(typeof jsyaml==="undefined")return null;
