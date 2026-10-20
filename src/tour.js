@@ -22,11 +22,15 @@ function tourVisible(el){if(!el)return false;const r=el.getBoundingClientRect();
 function tourStart(){tourEnd(false);const steps=TOUR_STEPS.filter(s=>!s.sel||tourVisible(document.querySelector(s.sel)));
   const spot=document.createElement("div");spot.className="tour-spot";spot.setAttribute("aria-hidden","true");
   const card=document.createElement("div");card.className="tour-card";card.setAttribute("role","dialog");card.setAttribute("aria-modal","false");card.setAttribute("aria-labelledby","tourTitle");card.tabIndex=-1;
-  document.body.append(spot,card);TOUR={i:0,steps,spot,card,ret:document.activeElement};tourShow()}
+  document.body.append(spot,card);TOUR={i:0,steps,spot,card,ret:document.activeElement};tourShow();TOUR.raf=requestAnimationFrame(tourTrack)}
 function tourShow(){const T_=TOUR;if(!T_)return;const s=T_.steps[T_.i],el=s.sel&&document.querySelector(s.sel),last=T_.i===T_.steps.length-1;
   T_.card.innerHTML=`<div class="tour-h"><span class="tour-n">${T_.i+1}/${T_.steps.length}</span><button class="tour-x" data-tour="skip" aria-label="Đóng hướng dẫn">×</button></div>
     <h2 id="tourTitle">${esc(s.t)}</h2><p>${esc(s.b)}</p>
     <div class="tour-a">${T_.i?`<button class="sm ghost" data-tour="prev">Quay lại</button>`:`<button class="sm ghost" data-tour="skip">Bỏ qua</button>`}<button class="sm primary" data-tour="next">${last?"Bắt đầu học":"Tiếp"}</button></div>`;
+  tourPlace();
+  T_.card.focus({preventScroll:true})}
+/* position the spotlight and the card around the current target; re-run whenever the target moves or resizes */
+function tourPlace(){const T_=TOUR;if(!T_)return;const s=T_.steps[T_.i],el=s.sel&&document.querySelector(s.sel);
   if(el&&tourVisible(el)){const r=el.getBoundingClientRect(),pad=6;Object.assign(T_.spot.style,{display:"block",left:r.left-pad+"px",top:r.top-pad+"px",width:r.width+pad*2+"px",height:r.height+pad*2+"px"});T_.spot.classList.remove("center")}
   else{Object.assign(T_.spot.style,{display:"block",left:"50%",top:"50%",width:"0px",height:"0px"});T_.spot.classList.add("center")}
   /* place the card next to the target, clamped to the viewport */
@@ -37,14 +41,17 @@ function tourShow(){const T_=TOUR;if(!T_)return;const s=T_.steps[T_.i],el=s.sel&
     if(x<16||x+cw>innerWidth-16){x=Math.min(Math.max(16,r.left+r.width/2-cw/2),innerWidth-cw-16);y=r.bottom+gap+ch>innerHeight-16?r.top-ch-gap:r.bottom+gap}}
   else{x=innerWidth/2-cw/2;y=innerHeight/2-ch/2}
   c.style.left=Math.round(Math.min(Math.max(16,x),innerWidth-cw-16))+"px";c.style.top=Math.round(Math.min(Math.max(16,y),innerHeight-ch-16))+"px";
-  c.focus({preventScroll:true})}
-function tourEnd(mark){if(!TOUR)return;const r=TOUR.ret;TOUR.spot.remove();TOUR.card.remove();TOUR=null;if(mark)tourMark();if(r&&r.focus)try{r.focus({preventScroll:true})}catch(_){}}
+  T_.last=el&&tourVisible(el)?JSON.stringify(el.getBoundingClientRect()):"none"}
+/* follow the target while the tour is open (e.g. the user drags the panel edge during the resize step) */
+function tourTrack(){if(!TOUR)return;const s=TOUR.steps[TOUR.i],el=s.sel&&document.querySelector(s.sel),k=el&&tourVisible(el)?JSON.stringify(el.getBoundingClientRect()):"none";
+  if(k!==TOUR.last)tourPlace();TOUR.raf=requestAnimationFrame(tourTrack)}
+function tourEnd(mark){if(TOUR&&TOUR.raf)cancelAnimationFrame(TOUR.raf);if(!TOUR)return;const r=TOUR.ret;TOUR.spot.remove();TOUR.card.remove();TOUR=null;if(mark)tourMark();if(r&&r.focus)try{r.focus({preventScroll:true})}catch(_){}}
 document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-tour]");if(b&&TOUR){const a=b.dataset.tour;
     if(a==="next"){if(TOUR.i>=TOUR.steps.length-1)tourEnd(true);else{TOUR.i++;tourShow()}}else if(a==="prev"){TOUR.i=Math.max(0,TOUR.i-1);tourShow()}else tourEnd(true);return}
   if(e.target.closest&&e.target.closest("#tourBtn"))tourStart()});
 document.addEventListener("keydown",e=>{if(!TOUR)return;if(e.key==="Escape"){e.preventDefault();e.stopPropagation();tourEnd(true)}
   else if(e.key==="ArrowRight"&&TOUR.card.contains(document.activeElement)){TOUR.i=Math.min(TOUR.steps.length-1,TOUR.i+1);tourShow()}
   else if(e.key==="ArrowLeft"&&TOUR.card.contains(document.activeElement)){TOUR.i=Math.max(0,TOUR.i-1);tourShow()}},true);
-window.addEventListener("resize",()=>{if(TOUR)tourShow()});
+window.addEventListener("resize",()=>{if(TOUR)tourPlace()});
 /* first visit: show once the app has rendered */
 if(!tourSeen()&&!/[?&]notour\b/.test(location.search))setTimeout(()=>{if(!tourSeen()&&!TOUR)tourStart()},700);
