@@ -90,6 +90,10 @@ Mỗi bài có link riêng: `#/lesson/<id>` (ví dụ `#/lesson/vpc`), sandbox l
 
 App vẽ bằng JavaScript, nên công cụ chỉ tải HTML sẽ thấy trang trống. `build.py` chạy `tools/export-text.js` để sinh `llms.txt` (mục lục), `llms-full.txt` (toàn bộ bài học và giải thích thành phần) và `learn.html` (cùng nội dung, HTML tĩnh, có JSON-LD Course). Đưa link `learn.html` cho Gemini là đủ.
 
+### WebMCP
+
+`src/webmcp.js` đăng ký 16 công cụ qua `document.modelContext.registerTool()` (thử cả `navigator.modelContext` của bản Chrome cũ) khi trình duyệt hỗ trợ [WebMCP](https://github.com/webmachinelearning/webmcp): get_state, get_template, get_format_guide, list_lessons, get_lesson, explain_component, open_lesson, open_sandbox, load_template, add_component, connect, set_property, remove_component, run_simulation, check_lesson, export_iac. Trình duyệt chưa hỗ trợ thì không có gì xảy ra. Các công cụ cũng có ở `window.CloudLab.tools` để thử.
+
 ## Chạy
 
 Không có build step. Trang tải kit layout từ `../kit/`, nên khi chạy local cần serve một thư mục chứa `cloudlab/` và `kit/` (từ repo dat-2k2.github.io) cạnh nhau. Deploy bằng GitHub Pages, phục vụ tại `/cloudlab/`.
@@ -102,6 +106,7 @@ Không có build step. Trang tải kit layout từ `../kit/`, nên khi chạy lo
 - `src/org.js`: Organizations, OU, account, SCP, Control Tower (landing zone, register OU, controls), precheck enroll
 - `src/eli5.js`: giải thích từng thành phần bằng ví dụ ngân hàng
 - `src/lessons-org.js`: ba bài landing zone
+- `src/webmcp.js`: công cụ WebMCP cho trợ lý AI của trình duyệt
 - `tools/export-text.js`: sinh llms.txt, llms-full.txt, learn.html
 - `src/infra.js`: VPC, subnet, IGW, security group, EC2, ALB, CloudFront, Route 53, RDS, ElastiCache
 - `src/iam.js`: đánh giá IAM (identity policy, managed policy, bucket policy, BPA)
