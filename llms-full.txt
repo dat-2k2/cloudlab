@@ -4,6 +4,114 @@ CloudLab là IDE hạ tầng AWS chạy trong trình duyệt, dành cho người
 
 Ứng dụng: https://dat-2k2.github.io/cloudlab/
 
+## Dùng CloudLab với Gemini: mô phỏng tình huống của riêng bạn
+
+1. Mở Gemini, dán câu lệnh mẫu bên dưới và thay phần [mô tả tình huống].
+2. Gemini trả về một template CloudFormation (YAML).
+3. Mở https://dat-2k2.github.io/cloudlab/#/import (hoặc Sandbox → Dán template…), dán YAML, bấm "Mở trong sandbox". CloudLab vẽ sơ đồ; bấm ▶ Chạy để thấy traffic, quyền IAM, lỗi kết nối và chi phí; tab Vấn đề liệt kê cấu hình rủi ro.
+
+Câu lệnh mẫu:
+
+```
+Bạn là kỹ sư AWS. Hãy viết một template CloudFormation (YAML) để tôi mở trong CloudLab (https://dat-2k2.github.io/cloudlab/) và mô phỏng tình huống sau:
+
+[mô tả tình huống của bạn, ví dụ: "ngân hàng cần cổng tải lên hồ sơ vay: khách tải ảnh giấy tờ, hệ thống tự trích thông tin, lưu vào cơ sở dữ liệu, cảnh báo khi lỗi; chi phí dưới $50/tháng"]
+
+Yêu cầu:
+- Đọc hướng dẫn định dạng tại https://dat-2k2.github.io/cloudlab/learn.html#gemini (hoặc https://dat-2k2.github.io/cloudlab/llms-full.txt) và chỉ dùng các loại tài nguyên được liệt kê ở đó.
+- Thêm nguồn tải bên ngoài trong Metadata.CloudLab.External (ví dụ CloudLab::Client với RatePerSecond) để tôi bấm Chạy là thấy traffic.
+- Nối các tài nguyên bằng !Ref / !GetAtt / !Sub như template thật; cấp quyền IAM tối thiểu.
+- Chỉ trả về một khối YAML hoàn chỉnh, sau đó giải thích ngắn gọn từng tài nguyên bằng tiếng Việt cho người không chuyên kỹ thuật.
+```
+
+### Định dạng template CloudLab đọc được
+
+- CloudFormation YAML chuẩn: khóa Resources, cú pháp ngắn !Ref, !GetAtt, !Sub, !Join, !Select, !Split, !ImportValue. Mũi tên trên sơ đồ được suy ra từ các tham chiếu này.
+- Vùng mô phỏng: ap-southeast-2. Không mô phỏng route table, NAT gateway và traffic đi ra; public subnet = MapPublicIpOnLaunch: true và VPC có internet gateway gắn vào.
+- Phần chỉ dành cho mô phỏng nằm trong Metadata.CloudLab và được bỏ khi xuất ra AWS.
+
+Loại tài nguyên AWS được hỗ trợ: AWS::ApiGatewayV2::Api, AWS::Lambda::Function, AWS::IAM::Role, AWS::S3::Bucket, AWS::S3::BucketPolicy, AWS::DynamoDB::Table, AWS::SNS::Topic, AWS::SQS::Queue, AWS::Lambda::EventSourceMapping, AWS::Events::Rule, AWS::Logs::LogGroup, AWS::CloudWatch::Alarm, AWS::Budgets::Budget, AWS::EC2::VPC, AWS::EC2::Subnet, AWS::EC2::InternetGateway, AWS::EC2::VPCGatewayAttachment, AWS::EC2::SecurityGroup, AWS::EC2::Instance, AWS::IAM::InstanceProfile, AWS::ElasticLoadBalancingV2::LoadBalancer, AWS::ElasticLoadBalancingV2::TargetGroup, AWS::ElasticLoadBalancingV2::Listener, AWS::CloudFront::Distribution, AWS::Route53::RecordSet, AWS::RDS::DBInstance, AWS::RDS::DBSubnetGroup, AWS::ElastiCache::CacheCluster, AWS::Organizations::Organization, AWS::Organizations::OrganizationalUnit, AWS::Organizations::Account, AWS::Organizations::Policy, AWS::ControlTower::LandingZone, AWS::ControlTower::EnabledBaseline, AWS::ControlTower::EnabledControl.
+
+Nguồn tải và người nhận bên ngoài AWS (đặt trong Metadata.CloudLab.External ở cấp template, mỗi mục có Type và Properties):
+- CloudLab::Client (Client / người dùng): Target, RatePerSecond, Action, Key, Port, SourceIp, As, Expect
+- CloudLab::Uploader (Uploader): Target, PerHour, Prefix, Suffix, SizeKB
+- CloudLab::Inbox (Hộp thư email): Address
+- CloudLab::Monitor (Monitor / dashboard): Watch
+
+Metadata.CloudLab theo từng loại tài nguyên:
+- AWS::Lambda::Function: WorkMs
+- AWS::EC2::Instance: AppPort, Uses
+- AWS::CloudFront::Distribution: HitRatio
+- AWS::ElastiCache::CacheCluster: HitRatio
+- AWS::Organizations::Account: Origin, ExecutionRole, LegacyConfigRecorder, LegacyTrail
+- AWS::ControlTower::LandingZone: Drift
+
+Ví dụ hoàn chỉnh (API Gateway → Lambda → DynamoDB có khách gửi request):
+
+```yaml
+Description: Sandbox · một API ghi đơn hàng vào DynamoDB
+Metadata:
+  CloudLab:
+    External:
+      Shoppers:
+        Type: CloudLab::Client
+        Properties:
+          Target: !Ref OrdersApi
+          RatePerSecond: 5
+      Dashboard:
+        Type: CloudLab::Monitor
+        Properties:
+          Watch: [!Ref OrdersApi, !Ref OrdersFn, !Ref OrdersTable]
+Resources:
+  OrdersApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: orders-api
+      ProtocolType: HTTP
+      Target: !GetAtt OrdersFn.Arn
+  OrdersFn:
+    Type: AWS::Lambda::Function
+    Metadata:
+      CloudLab: {WorkMs: 400}
+    Properties:
+      FunctionName: orders
+      Runtime: python3.12
+      Handler: app.handler
+      MemorySize: 256
+      Timeout: 10
+      Role: !GetAtt OrdersRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref OrdersTable
+  OrdersRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: orders-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole]
+      Policies:
+        - PolicyName: orders-table
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: WriteOrders
+                Effect: Allow
+                Action: dynamodb:PutItem
+                Resource: !GetAtt OrdersTable.Arn
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: orders
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{AttributeName: pk, AttributeType: S}]
+      KeySchema: [{AttributeName: pk, KeyType: HASH}]
+```
+
 ## Bài 0: Cảnh báo tiền trước khi tiêu tiền
 
 Nhóm: Phase 1 · Explore · Chủ đề: Budgets + SNS · Theo FCAJ workshop 000007 (https://000007.awsstudygroup.com/)

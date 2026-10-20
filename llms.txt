@@ -31,6 +31,10 @@ Toàn bộ nội dung dạng văn bản: https://dat-2k2.github.io/cloudlab/llms
 - [Bài 12: Set up landing zone, enroll theo đợt](https://dat-2k2.github.io/cloudlab/learn.html#lz-enroll): Landing zone chạy; OU Workloads enroll 100% trước; rồi coverage 100% cả org.
 - [Bài 13: Dọn phần cũ và giữ landing zone không drift](https://dat-2k2.github.io/cloudlab/learn.html#lz-contract): Hết drift; không còn log ghi hai nơi; bật một preventive control trên Workloads.
 
+## Dùng với Gemini
+
+- [Nhờ Gemini viết template cho tình huống của bạn, rồi mở trong CloudLab](https://dat-2k2.github.io/cloudlab/learn.html#gemini): định dạng, loại tài nguyên hỗ trợ, câu lệnh mẫu. Dán template tại https://dat-2k2.github.io/cloudlab/#/import
+
 ## Thành phần
 
 - [Giải thích từng thành phần AWS bằng ví dụ ngân hàng](https://dat-2k2.github.io/cloudlab/learn.html#components)

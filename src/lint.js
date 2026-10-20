@@ -31,5 +31,9 @@ function problems(){const out=[],P=(sev,id,msg)=>out.push({sev,id,msg});if(!M)re
       case"AWS::SNS::Topic":for(const s of arr(p.Subscription))if(s&&s.Protocol==="email"&&RT&&RT.subs[n.id+"|"+s.Endpoint]==="PendingConfirmation")P("info",n.id,`${n.id}: ${s.Endpoint} chưa xác nhận subscription`);break;
       case"AWS::EC2::Instance":if(!refId(p.SubnetId))P("info",n.id,`${n.id}: chưa chọn subnet → chạy trong default VPC`);if(!sgsOf(n.id).length)P("info",n.id,`${n.id}: không có security group → dùng default SG`);break;
       case"CloudLab::Client":if(!refId(p.Target))P("info",n.id,`${n.id}: client chưa gọi tới đâu. Nối nó tới API, bucket hoặc load balancer`);break}}
+  /* templates written by hand or by an assistant (Gemini, …): say what CloudLab will ignore instead of failing silently */
+  for(const[id,r]of Object.entries(M.res))if(r&&r.Type&&!T[r.Type])P("warn",id,`${id}: loại ${r.Type} chưa được CloudLab mô phỏng, nên không hiện trên sơ đồ. Xem danh sách loại được hỗ trợ ở learn.html#gemini`);
+  for(const[id,r]of Object.entries(M.ext||{})){const d=r&&T[r.Type];if(!d){P("warn",id,`${id}: loại ${r&&r.Type} không có. Dùng một trong: ${Object.keys(T).filter(k=>k.startsWith("CloudLab::")).join(", ")}`);continue}
+    const ok=new Set(d.fields.map(f=>f.k)),bad=Object.keys(r.Properties||{}).filter(k=>!ok.has(k));if(bad.length)P("warn",id,`${id}: thuộc tính ${bad.join(", ")} không được hỗ trợ nên bị bỏ qua. ${d.label} dùng: ${[...ok].join(", ")}`)}
   if(typeof orgProblems==="function")orgProblems(P);
   const order={error:0,warn:1,info:2};return out.sort((a,b)=>order[a.sev]-order[b.sev])}

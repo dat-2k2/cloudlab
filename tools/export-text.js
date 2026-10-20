@@ -20,6 +20,7 @@ const intro=`CloudLab là IDE hạ tầng AWS chạy trong trình duyệt, dành
 /* ---- llms.txt: short index per the llms.txt convention */
 let idx=`# CloudLab\n\n> ${intro}\n\nỨng dụng: ${SITE}\nToàn bộ nội dung dạng văn bản: ${SITE}llms-full.txt · bản HTML tĩnh: ${SITE}learn.html\n`;
 for(const ph of phases){idx+=`\n## ${ph}\n\n`;for(const l of LESSONS.filter(x=>x.phase===ph))idx+=`- [Bài ${l.step}: ${l.title}](${SITE}learn.html#${l.id}): ${l.goal}\n`}
+idx+=`\n## Dùng với Gemini\n\n- [Nhờ Gemini viết template cho tình huống của bạn, rồi mở trong CloudLab](${SITE}learn.html#gemini): định dạng, loại tài nguyên hỗ trợ, câu lệnh mẫu. Dán template tại ${SITE}#/import\n`;
 idx+=`\n## Thành phần\n\n- [Giải thích từng thành phần AWS bằng ví dụ ngân hàng](${SITE}learn.html#components)\n\n## Nguồn và bản quyền\n\n- [Bản quyền, nhãn hiệu, nguồn tham khảo](${SITE}credits.html)\n`;
 /* ---- full text */
 const lessonMd=l=>{let s=`## Bài ${l.step}: ${l.title}\n\nNhóm: ${l.phase} · Chủ đề: ${l.tag}${l.lab?` · Theo FCAJ workshop ${l.lab} (https://${l.lab.split(" · ")[0]}.awsstudygroup.com/)`:""}\n\n**Mục tiêu:** ${l.goal}\n\n**Tình huống:** ${l.scenario}\n\n`;
@@ -27,7 +28,54 @@ const lessonMd=l=>{let s=`## Bài ${l.step}: ${l.title}\n\nNhóm: ${l.phase} · 
   s+=`**Nhiệm vụ:**\n${l.tasks.map((t,i)=>`${i+1}. ${t.t} (${t.c})`).join("\n")}\n\n**Các khối trong template:**\n${Object.entries(l.explain||{}).map(([k,v])=>`- ${k}: ${v}`).join("\n")}\n\n**Khái niệm:** ${l.concepts.join(", ")}\n\n**Gợi ý:** ${l.hints().join(" ")}\n\n**Sau khi đạt:** ${l.pass}\n\n`;
   if(l.reading)s+=`**Đọc thêm (${l.reading.title}):**\n${strip(l.reading.html)}\n\n`;return s};
 const comps=Object.values(T).filter(t=>!t.edge||ELI5[t.type]);
-let full=`# CloudLab: toàn bộ nội dung\n\n${intro}\n\nỨng dụng: ${SITE}\n\n`+LESSONS.map(lessonMd).join("")+`## Thành phần AWS (giải thích bằng ví dụ ngân hàng)\n\n`+comps.map(t=>`### ${t.label} (${t.type})\n\n${ELI5[t.type]||""}\n\n${t.doc||""}\n`).join("\n");
+/* ---- guide for Gemini (or any assistant) to write templates CloudLab can open: format, supported types, metadata, prompt */
+const fieldKeys=t=>(t.fields||[]).map(f=>f.k).filter(k=>k&&!k.startsWith("@@"));
+const extTypes=Object.values(T).filter(t=>t.type.startsWith("CloudLab::"));
+const awsTypes=Object.values(T).filter(t=>!t.type.startsWith("CloudLab::"));
+const metaKeys=awsTypes.map(t=>[t.type,fieldKeys(t).filter(k=>k.startsWith("@")).map(k=>k.slice(1))]).filter(x=>x[1].length);
+const STARTER_YAML=(STARTERS.serverless||Object.values(STARTERS)[0]).yaml;
+const PROMPT=`Bạn là kỹ sư AWS. Hãy viết một template CloudFormation (YAML) để tôi mở trong CloudLab (${SITE}) và mô phỏng tình huống sau:
+
+[mô tả tình huống của bạn, ví dụ: "ngân hàng cần cổng tải lên hồ sơ vay: khách tải ảnh giấy tờ, hệ thống tự trích thông tin, lưu vào cơ sở dữ liệu, cảnh báo khi lỗi; chi phí dưới $50/tháng"]
+
+Yêu cầu:
+- Đọc hướng dẫn định dạng tại ${SITE}learn.html#gemini (hoặc ${SITE}llms-full.txt) và chỉ dùng các loại tài nguyên được liệt kê ở đó.
+- Thêm nguồn tải bên ngoài trong Metadata.CloudLab.External (ví dụ CloudLab::Client với RatePerSecond) để tôi bấm Chạy là thấy traffic.
+- Nối các tài nguyên bằng !Ref / !GetAtt / !Sub như template thật; cấp quyền IAM tối thiểu.
+- Chỉ trả về một khối YAML hoàn chỉnh, sau đó giải thích ngắn gọn từng tài nguyên bằng tiếng Việt cho người không chuyên kỹ thuật.`;
+const geminiMd=`## Dùng CloudLab với Gemini: mô phỏng tình huống của riêng bạn
+
+1. Mở Gemini, dán câu lệnh mẫu bên dưới và thay phần [mô tả tình huống].
+2. Gemini trả về một template CloudFormation (YAML).
+3. Mở ${SITE}#/import (hoặc Sandbox → Dán template…), dán YAML, bấm "Mở trong sandbox". CloudLab vẽ sơ đồ; bấm ▶ Chạy để thấy traffic, quyền IAM, lỗi kết nối và chi phí; tab Vấn đề liệt kê cấu hình rủi ro.
+
+Câu lệnh mẫu:
+
+\`\`\`
+${PROMPT}
+\`\`\`
+
+### Định dạng template CloudLab đọc được
+
+- CloudFormation YAML chuẩn: khóa Resources, cú pháp ngắn !Ref, !GetAtt, !Sub, !Join, !Select, !Split, !ImportValue. Mũi tên trên sơ đồ được suy ra từ các tham chiếu này.
+- Vùng mô phỏng: ap-southeast-2. Không mô phỏng route table, NAT gateway và traffic đi ra; public subnet = MapPublicIpOnLaunch: true và VPC có internet gateway gắn vào.
+- Phần chỉ dành cho mô phỏng nằm trong Metadata.CloudLab và được bỏ khi xuất ra AWS.
+
+Loại tài nguyên AWS được hỗ trợ: ${awsTypes.map(t=>t.type).join(", ")}.
+
+Nguồn tải và người nhận bên ngoài AWS (đặt trong Metadata.CloudLab.External ở cấp template, mỗi mục có Type và Properties):
+${extTypes.map(t=>`- ${t.type} (${t.label}): ${fieldKeys(t).join(", ")}`).join("\n")}
+
+Metadata.CloudLab theo từng loại tài nguyên:
+${metaKeys.map(([ty,ks])=>`- ${ty}: ${ks.join(", ")}`).join("\n")}
+
+Ví dụ hoàn chỉnh (API Gateway → Lambda → DynamoDB có khách gửi request):
+
+\`\`\`yaml
+${STARTER_YAML.trim()}
+\`\`\`
+`;
+let full=`# CloudLab: toàn bộ nội dung\n\n${intro}\n\nỨng dụng: ${SITE}\n\n`+geminiMd+"\n"+LESSONS.map(lessonMd).join("")+`## Thành phần AWS (giải thích bằng ví dụ ngân hàng)\n\n`+comps.map(t=>`### ${t.label} (${t.type})\n\n${ELI5[t.type]||""}\n\n${t.doc||""}\n`).join("\n");
 /* ---- static HTML with the same content */
 const html=`<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CloudLab · Nội dung bài học</title><meta name="description" content="${esc(intro)}"><link rel="canonical" href="${SITE}learn.html"><link rel="alternate" type="text/markdown" href="llms-full.txt">
@@ -36,7 +84,15 @@ const html=`<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta nam
 <style>:root{color-scheme:light dark;--bg:#fff;--fg:#111827;--mut:#4b5563;--line:#e5e7eb;--acc:#4f46e5}@media (prefers-color-scheme:dark){:root{--bg:#0b0d12;--fg:#e5e7eb;--mut:#9ca3af;--line:#1f2937;--acc:#818cf8}}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,sans-serif}main{max-width:760px;margin:0 auto;padding:24px 16px 64px}a{color:var(--acc)}h2{margin-top:40px;padding-top:16px;border-top:1px solid var(--line)}h3{margin-top:24px}.mut{color:var(--mut)}li{margin:4px 0}table{border-collapse:collapse;width:100%}td,th{border-top:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}</style></head>
 <body><main><p><a href="./">← Mở CloudLab</a></p><h1>CloudLab · Nội dung bài học</h1><p>${esc(intro)}</p>
-<nav aria-label="Mục lục"><ul>${LESSONS.map(l=>`<li><a href="#${l.id}">Bài ${l.step}: ${esc(l.title)}</a></li>`).join("")}<li><a href="#components">Thành phần AWS</a></li></ul></nav>
+<nav aria-label="Mục lục"><ul><li><a href="#gemini">Dùng CloudLab với Gemini</a></li>${LESSONS.map(l=>`<li><a href="#${l.id}">Bài ${l.step}: ${esc(l.title)}</a></li>`).join("")}<li><a href="#components">Thành phần AWS</a></li></ul></nav>
+<section id="gemini"><h2>Dùng CloudLab với Gemini: mô phỏng tình huống của riêng bạn</h2>
+<ol><li>Mở Gemini, dán câu lệnh mẫu bên dưới và thay phần [mô tả tình huống].</li><li>Gemini trả về một template CloudFormation (YAML).</li><li>Mở <a href="./#/import">CloudLab → Dán template</a>, dán YAML, bấm “Mở trong sandbox”. Bấm ▶ Chạy để thấy traffic, quyền, lỗi kết nối và chi phí; tab Vấn đề liệt kê cấu hình rủi ro.</li></ol>
+<h3>Câu lệnh mẫu</h3><pre style="white-space:pre-wrap;background:var(--line);padding:12px;border-radius:8px">${esc(PROMPT)}</pre>
+<h3>Định dạng template CloudLab đọc được</h3><ul><li>CloudFormation YAML chuẩn: khóa Resources, cú pháp ngắn !Ref, !GetAtt, !Sub, !Join, !Select, !Split, !ImportValue. Mũi tên trên sơ đồ được suy ra từ các tham chiếu này.</li><li>Vùng mô phỏng ap-southeast-2. Không mô phỏng route table, NAT gateway và traffic đi ra; public subnet = MapPublicIpOnLaunch: true và VPC có internet gateway gắn vào.</li><li>Phần chỉ dành cho mô phỏng nằm trong <code>Metadata.CloudLab</code>, được bỏ khi xuất ra AWS.</li></ul>
+<p><b>Loại tài nguyên AWS được hỗ trợ:</b> ${awsTypes.map(t=>`<code>${esc(t.type)}</code>`).join(", ")}.</p>
+<p><b>Nguồn tải và người nhận bên ngoài AWS</b> (trong <code>Metadata.CloudLab.External</code>, mỗi mục có Type và Properties):</p><ul>${extTypes.map(t=>`<li><code>${esc(t.type)}</code> (${esc(t.label)}): ${esc(fieldKeys(t).join(", "))}</li>`).join("")}</ul>
+<p><b>Metadata.CloudLab theo loại tài nguyên:</b></p><ul>${metaKeys.map(([ty,ks])=>`<li><code>${esc(ty)}</code>: ${esc(ks.join(", "))}</li>`).join("")}</ul>
+<h3>Ví dụ hoàn chỉnh</h3><pre style="white-space:pre;overflow:auto;background:var(--line);padding:12px;border-radius:8px">${esc(STARTER_YAML.trim())}</pre></section>
 ${LESSONS.map(l=>`<article id="${l.id}"><h2>Bài ${l.step}: ${esc(l.title)}</h2><p class="mut">${esc(l.phase)} · ${esc(l.tag)}${l.lab?` · FCAJ workshop ${l.lab.split(" · ").map(x=>`<a href="https://${x}.awsstudygroup.com/">${x}</a>`).join(", ")}`:""}</p>
 <p><b>Mục tiêu:</b> ${esc(l.goal)}</p><p><b>Tình huống:</b> ${esc(l.scenario)}</p>
 ${l.bank?`<h3>Trong ngân hàng</h3><p>${esc(l.bank.why||"")}</p><ul>${(l.bank.cases||[]).map(c=>`<li>${esc(c.t)}${c.url?` <a href="${esc(c.url)}">nguồn</a>`:""}</li>`).join("")}${l.bank.rule?`<li>Quy định: ${esc(l.bank.rule.t)}${l.bank.rule.url?` <a href="${esc(l.bank.rule.url)}">nguồn</a>`:""}</li>`:""}</ul>${l.bank.q?`<p><b>Câu hỏi thảo luận:</b> ${esc(l.bank.q)}</p>`:""}`:""}

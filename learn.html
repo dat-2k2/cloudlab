@@ -4,7 +4,83 @@
 <style>:root{color-scheme:light dark;--bg:#fff;--fg:#111827;--mut:#4b5563;--line:#e5e7eb;--acc:#4f46e5}@media (prefers-color-scheme:dark){:root{--bg:#0b0d12;--fg:#e5e7eb;--mut:#9ca3af;--line:#1f2937;--acc:#818cf8}}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,sans-serif}main{max-width:760px;margin:0 auto;padding:24px 16px 64px}a{color:var(--acc)}h2{margin-top:40px;padding-top:16px;border-top:1px solid var(--line)}h3{margin-top:24px}.mut{color:var(--mut)}li{margin:4px 0}table{border-collapse:collapse;width:100%}td,th{border-top:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}</style></head>
 <body><main><p><a href="./">← Mở CloudLab</a></p><h1>CloudLab · Nội dung bài học</h1><p>CloudLab là IDE hạ tầng AWS chạy trong trình duyệt, dành cho người học (kể cả người không chuyên kỹ thuật, ví dụ nhân viên ngân hàng). Người học kéo thả thành phần AWS hoặc viết CloudFormation YAML, chạy mô phỏng để thử kết nối, security group, quyền IAM và chi phí, rồi xuất ra CloudFormation, Terraform hoặc CDK. Bài học là template có lỗi cài sẵn; người học sửa rồi bấm Check. Mô phỏng chạy hoàn toàn trong trình duyệt, không gọi AWS thật; giá là giá tham khảo.</p>
-<nav aria-label="Mục lục"><ul><li><a href="#guardrails">Bài 0: Cảnh báo tiền trước khi tiêu tiền</a></li><li><a href="#iam">Bài 1: AccessDenied không còn ngẫu nhiên</a></li><li><a href="#vpc">Bài 2: VPC: public, private và tường lửa</a></li><li><a href="#ec2role">Bài 3: EC2 dùng IAM role, không dùng access key</a></li><li><a href="#s3cf">Bài 4: Website S3 qua CloudFront</a></li><li><a href="#rds">Bài 5: RDS ở private subnet, chỉ app vào được</a></li><li><a href="#alb">Bài 6: Load balancer chia tải qua 2 AZ</a></li><li><a href="#lambda">Bài 7: Function lỗi mà không thấy log</a></li><li><a href="#events">Bài 8: Upload một ảnh, gọi một lần</a></li><li><a href="#apiddb">Bài 9: API → Lambda → DynamoDB</a></li><li><a href="#stack">Bài 10: Xóa stack mà vẫn bị tính tiền</a></li><li><a href="#lz-prep">Bài 11: Chuẩn bị org cũ trước khi bật Control Tower</a></li><li><a href="#lz-enroll">Bài 12: Set up landing zone, enroll theo đợt</a></li><li><a href="#lz-contract">Bài 13: Dọn phần cũ và giữ landing zone không drift</a></li><li><a href="#components">Thành phần AWS</a></li></ul></nav>
+<nav aria-label="Mục lục"><ul><li><a href="#gemini">Dùng CloudLab với Gemini</a></li><li><a href="#guardrails">Bài 0: Cảnh báo tiền trước khi tiêu tiền</a></li><li><a href="#iam">Bài 1: AccessDenied không còn ngẫu nhiên</a></li><li><a href="#vpc">Bài 2: VPC: public, private và tường lửa</a></li><li><a href="#ec2role">Bài 3: EC2 dùng IAM role, không dùng access key</a></li><li><a href="#s3cf">Bài 4: Website S3 qua CloudFront</a></li><li><a href="#rds">Bài 5: RDS ở private subnet, chỉ app vào được</a></li><li><a href="#alb">Bài 6: Load balancer chia tải qua 2 AZ</a></li><li><a href="#lambda">Bài 7: Function lỗi mà không thấy log</a></li><li><a href="#events">Bài 8: Upload một ảnh, gọi một lần</a></li><li><a href="#apiddb">Bài 9: API → Lambda → DynamoDB</a></li><li><a href="#stack">Bài 10: Xóa stack mà vẫn bị tính tiền</a></li><li><a href="#lz-prep">Bài 11: Chuẩn bị org cũ trước khi bật Control Tower</a></li><li><a href="#lz-enroll">Bài 12: Set up landing zone, enroll theo đợt</a></li><li><a href="#lz-contract">Bài 13: Dọn phần cũ và giữ landing zone không drift</a></li><li><a href="#components">Thành phần AWS</a></li></ul></nav>
+<section id="gemini"><h2>Dùng CloudLab với Gemini: mô phỏng tình huống của riêng bạn</h2>
+<ol><li>Mở Gemini, dán câu lệnh mẫu bên dưới và thay phần [mô tả tình huống].</li><li>Gemini trả về một template CloudFormation (YAML).</li><li>Mở <a href="./#/import">CloudLab → Dán template</a>, dán YAML, bấm “Mở trong sandbox”. Bấm ▶ Chạy để thấy traffic, quyền, lỗi kết nối và chi phí; tab Vấn đề liệt kê cấu hình rủi ro.</li></ol>
+<h3>Câu lệnh mẫu</h3><pre style="white-space:pre-wrap;background:var(--line);padding:12px;border-radius:8px">Bạn là kỹ sư AWS. Hãy viết một template CloudFormation (YAML) để tôi mở trong CloudLab (https://dat-2k2.github.io/cloudlab/) và mô phỏng tình huống sau:
+
+[mô tả tình huống của bạn, ví dụ: &quot;ngân hàng cần cổng tải lên hồ sơ vay: khách tải ảnh giấy tờ, hệ thống tự trích thông tin, lưu vào cơ sở dữ liệu, cảnh báo khi lỗi; chi phí dưới $50/tháng&quot;]
+
+Yêu cầu:
+- Đọc hướng dẫn định dạng tại https://dat-2k2.github.io/cloudlab/learn.html#gemini (hoặc https://dat-2k2.github.io/cloudlab/llms-full.txt) và chỉ dùng các loại tài nguyên được liệt kê ở đó.
+- Thêm nguồn tải bên ngoài trong Metadata.CloudLab.External (ví dụ CloudLab::Client với RatePerSecond) để tôi bấm Chạy là thấy traffic.
+- Nối các tài nguyên bằng !Ref / !GetAtt / !Sub như template thật; cấp quyền IAM tối thiểu.
+- Chỉ trả về một khối YAML hoàn chỉnh, sau đó giải thích ngắn gọn từng tài nguyên bằng tiếng Việt cho người không chuyên kỹ thuật.</pre>
+<h3>Định dạng template CloudLab đọc được</h3><ul><li>CloudFormation YAML chuẩn: khóa Resources, cú pháp ngắn !Ref, !GetAtt, !Sub, !Join, !Select, !Split, !ImportValue. Mũi tên trên sơ đồ được suy ra từ các tham chiếu này.</li><li>Vùng mô phỏng ap-southeast-2. Không mô phỏng route table, NAT gateway và traffic đi ra; public subnet = MapPublicIpOnLaunch: true và VPC có internet gateway gắn vào.</li><li>Phần chỉ dành cho mô phỏng nằm trong <code>Metadata.CloudLab</code>, được bỏ khi xuất ra AWS.</li></ul>
+<p><b>Loại tài nguyên AWS được hỗ trợ:</b> <code>AWS::ApiGatewayV2::Api</code>, <code>AWS::Lambda::Function</code>, <code>AWS::IAM::Role</code>, <code>AWS::S3::Bucket</code>, <code>AWS::S3::BucketPolicy</code>, <code>AWS::DynamoDB::Table</code>, <code>AWS::SNS::Topic</code>, <code>AWS::SQS::Queue</code>, <code>AWS::Lambda::EventSourceMapping</code>, <code>AWS::Events::Rule</code>, <code>AWS::Logs::LogGroup</code>, <code>AWS::CloudWatch::Alarm</code>, <code>AWS::Budgets::Budget</code>, <code>AWS::EC2::VPC</code>, <code>AWS::EC2::Subnet</code>, <code>AWS::EC2::InternetGateway</code>, <code>AWS::EC2::VPCGatewayAttachment</code>, <code>AWS::EC2::SecurityGroup</code>, <code>AWS::EC2::Instance</code>, <code>AWS::IAM::InstanceProfile</code>, <code>AWS::ElasticLoadBalancingV2::LoadBalancer</code>, <code>AWS::ElasticLoadBalancingV2::TargetGroup</code>, <code>AWS::ElasticLoadBalancingV2::Listener</code>, <code>AWS::CloudFront::Distribution</code>, <code>AWS::Route53::RecordSet</code>, <code>AWS::RDS::DBInstance</code>, <code>AWS::RDS::DBSubnetGroup</code>, <code>AWS::ElastiCache::CacheCluster</code>, <code>AWS::Organizations::Organization</code>, <code>AWS::Organizations::OrganizationalUnit</code>, <code>AWS::Organizations::Account</code>, <code>AWS::Organizations::Policy</code>, <code>AWS::ControlTower::LandingZone</code>, <code>AWS::ControlTower::EnabledBaseline</code>, <code>AWS::ControlTower::EnabledControl</code>.</p>
+<p><b>Nguồn tải và người nhận bên ngoài AWS</b> (trong <code>Metadata.CloudLab.External</code>, mỗi mục có Type và Properties):</p><ul><li><code>CloudLab::Client</code> (Client / người dùng): Target, RatePerSecond, Action, Key, Port, SourceIp, As, Expect</li><li><code>CloudLab::Uploader</code> (Uploader): Target, PerHour, Prefix, Suffix, SizeKB</li><li><code>CloudLab::Inbox</code> (Hộp thư email): Address</li><li><code>CloudLab::Monitor</code> (Monitor / dashboard): Watch</li></ul>
+<p><b>Metadata.CloudLab theo loại tài nguyên:</b></p><ul><li><code>AWS::Lambda::Function</code>: WorkMs</li><li><code>AWS::EC2::Instance</code>: AppPort, Uses</li><li><code>AWS::CloudFront::Distribution</code>: HitRatio</li><li><code>AWS::ElastiCache::CacheCluster</code>: HitRatio</li><li><code>AWS::Organizations::Account</code>: Origin, ExecutionRole, LegacyConfigRecorder, LegacyTrail</li><li><code>AWS::ControlTower::LandingZone</code>: Drift</li></ul>
+<h3>Ví dụ hoàn chỉnh</h3><pre style="white-space:pre;overflow:auto;background:var(--line);padding:12px;border-radius:8px">Description: Sandbox · một API ghi đơn hàng vào DynamoDB
+Metadata:
+  CloudLab:
+    External:
+      Shoppers:
+        Type: CloudLab::Client
+        Properties:
+          Target: !Ref OrdersApi
+          RatePerSecond: 5
+      Dashboard:
+        Type: CloudLab::Monitor
+        Properties:
+          Watch: [!Ref OrdersApi, !Ref OrdersFn, !Ref OrdersTable]
+Resources:
+  OrdersApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: orders-api
+      ProtocolType: HTTP
+      Target: !GetAtt OrdersFn.Arn
+  OrdersFn:
+    Type: AWS::Lambda::Function
+    Metadata:
+      CloudLab: {WorkMs: 400}
+    Properties:
+      FunctionName: orders
+      Runtime: python3.12
+      Handler: app.handler
+      MemorySize: 256
+      Timeout: 10
+      Role: !GetAtt OrdersRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref OrdersTable
+  OrdersRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: orders-role
+      AssumeRolePolicyDocument:
+        Version: &quot;2012-10-17&quot;
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole]
+      Policies:
+        - PolicyName: orders-table
+          PolicyDocument:
+            Version: &quot;2012-10-17&quot;
+            Statement:
+              - Sid: WriteOrders
+                Effect: Allow
+                Action: dynamodb:PutItem
+                Resource: !GetAtt OrdersTable.Arn
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: orders
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{AttributeName: pk, AttributeType: S}]
+      KeySchema: [{AttributeName: pk, KeyType: HASH}]</pre></section>
 <article id="guardrails"><h2>Bài 0: Cảnh báo tiền trước khi tiêu tiền</h2><p class="mut">Phase 1 · Explore · Budgets + SNS · FCAJ workshop <a href="https://000007.awsstudygroup.com/">000007</a></p>
 <p><b>Mục tiêu:</b> Chi tiêu vượt 80% và 100% của $20 → email về hộp thư của bạn (như lab 000007).</p><p><b>Tình huống:</b> Đội digital của Ngân hàng An Phát đang chạy thử API đăng ký mở thẻ trên AWS. Khối Tài chính duyệt hạn mức $20/tháng cho môi trường thử nghiệm và yêu cầu: chạm 80% và 100% thì phải có email báo. Hiện budget mới cài ngưỡng 50%, còn email nhận cảnh báo thì chưa ai xác nhận.</p>
 <h3>Trong ngân hàng</h3><p>Chi phí cloud là chi phí vận hành tính theo từng giờ, từng request, không chờ tới kỳ thanh toán hóa đơn. Một môi trường thử nghiệm quên tắt hoặc một lỗi lặp vô hạn có thể đốt cả ngân sách quý trong vài ngày. Đặt hạn mức và cảnh báo giống như hạn mức tín dụng có cảnh báo khi gần chạm trần.</p><ul></ul><p><b>Câu hỏi thảo luận:</b> Ở đơn vị bạn, ai được duyệt hạn mức chi phí cho một dự án cloud, và ai nhận cảnh báo khi vượt?</p>
