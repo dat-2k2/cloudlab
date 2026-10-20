@@ -645,3 +645,4 @@ body:has(.shell[data-fs]) .drawer{--drawer-top:12px;--drawer-bottom:12px;right:1
 .mcp-status{display:flex;gap:10px;align-items:flex-start}.mcp-steps{margin:8px 0 0;padding-left:20px}.mcp-steps li{margin:0 0 8px}
 .mcp-copy{display:inline-flex;align-items:center;gap:6px;font:400 12.5px/18px var(--font-mono);background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:2px 4px 2px 8px}
 .mcp-tools{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;max-height:200px;overflow:auto;margin:6px 0 0;padding:0;list-style:none;font-size:13px}.mcp-tools code{font-size:12px}
+.icon-btn{padding:0;display:inline-grid;place-items:center;text-align:center;line-height:1}
