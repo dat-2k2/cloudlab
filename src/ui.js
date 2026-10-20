@@ -1,0 +1,324 @@
+"use strict";
+/* UI: shell (kit layout), palette + templates sidebar, stack bar, canvas / YAML, simulation bar with live cost meter,
+   inspector drawer (properties, explanation, runtime), lesson pane, modals, events, boot. */
+const KIT=window.Kit||{layer:{open(){},close(){},isOpen(){return false},top(){return null}},isNarrow(){return false}};
+const L_=()=>UI.mode==="lesson"?LESSONS[UI.lesson]:null;
+const CATN={ext:"Bên ngoài",notify:"Tích hợp",comp:"Compute",store:"Lưu trữ",sec:"Bảo mật",mon:"Giám sát",cost:"Chi phí",infra:"Hạ tầng"};
+const REL_DOC={calls:"Client gửi request (HTTP hoặc S3 API) tới tài nguyên này.",uploads:"Mỗi file là một s3:PutObject vào bucket.",invokes:"Gọi Lambda: API gọi đồng bộ (chờ kết quả), S3 / lịch gọi bất đồng bộ.",
+  delivers:"Topic đẩy mỗi message tới subscription này. Email cần được xác nhận.",notifies:"Khi vượt ngưỡng / chuyển ALARM, publish một message vào topic.",uses:"Code của Lambda dùng tài nguyên này qua biến môi trường. Role phải cho phép thao tác tương ứng.",
+  assumes:"Mượn quyền của role (Lambda khi chạy, hoặc người qua STS AssumeRole).",grants:"Một statement trong policy của role nhắc tới tài nguyên này.",applies:"Bucket policy (resource-based) áp cho bucket này.",
+  logs:"Lambda ghi log vào log group /aws/lambda/<tên>.",metrics:"Alarm đọc metric của function này.",reports:"Số liệu của tài nguyên hiển thị trên monitor.",polls:"Lambda đọc message từ queue theo lô (event source mapping)."};
+/* ---------------- helpers ---------------- */
+function selOf(el){if(!el||el===document.body||!el.closest)return null;if(el.id)return"#"+el.id;const box=el.closest("#drawer")?"#drawer ":el.closest("#canvas")?"#canvas ":el.closest("#lesson")?"#lesson ":el.closest("#bar")?"#bar ":el.closest("#side")?"#side ":el.closest("#simbar")?"#simbar ":"";
+  const q=v=>String(v).replace(/\\/g,"\\\\").replace(/"/g,'\\"');for(const k of ["node","act","edge","ptype","lesson","log","field"]){const v=el.getAttribute&&el.getAttribute("data-"+k);if(v!=null){let s=`${box}[data-${k}="${q(v)}"]`;const a=el.getAttribute("data-arg");if(a!=null)s+=`[data-arg="${q(a)}"]`;return s}}return null}
+const fmtIntr=v=>{if(v==null)return"";if(typeof v!=="object")return String(v);if(Array.isArray(v))return v.map(fmtIntr).join(", ");if("Ref" in v)return"!Ref "+v.Ref;if("Fn::GetAtt" in v)return"!GetAtt "+arr(v["Fn::GetAtt"]).join(".");if("Fn::Sub" in v)return"!Sub "+(Array.isArray(v["Fn::Sub"])?v["Fn::Sub"][0]:v["Fn::Sub"]);return JSON.stringify(v)};
+const parseOne=s=>{s=s.trim();if(s.startsWith("!Ref "))return{Ref:s.slice(5).trim()};if(s.startsWith("!GetAtt "))return{"Fn::GetAtt":s.slice(8).trim().split(".")};if(s.startsWith("!Sub "))return{"Fn::Sub":s.slice(5).trim()};return s};
+const parseList=s=>{const parts=String(s).split(/,(?![^{]*\})/).map(x=>x.trim()).filter(Boolean);return parts.length===1?parseOne(parts[0]):parts.map(parseOne)};
+const optsOf=(types,cur)=>allNodes().filter(n=>types==="*"||types.includes(n.type)).map(n=>`<option value="${n.id}"${cur===n.id?" selected":""}>${esc(n.id)} · ${esc(n.def.label)}</option>`).join("");
+const chip=(t,c)=>`<span class="chip ${c||""}">${esc(t)}</span>`;
+/* ---------------- shell parts ---------------- */
+function renderSide(){let h="";
+  h+=`<p class="side-group">Không gian</p><button class="side-item" data-act="openSandbox" data-cat="learn"${UI.mode==="sandbox"?' aria-current="page"':""}><span class="side-ic" aria-hidden="true">✎</span><span class="side-label">Sandbox tự do</span></button>`;
+  h+=`<p class="side-group">Bài học (template)</p>`+LESSONS.map((l,i)=>`<button class="side-item" data-lesson="${i}" data-cat="learn" title="${esc(l.title)}"${UI.mode==="lesson"&&UI.lesson===i?' aria-current="page"':""}><span class="side-ic" aria-hidden="true">${l.step}</span><span class="side-label">${esc(l.tag)}</span>${DONE.has(l.id)?'<span class="side-badge chip ok">✓</span>':""}</button>`).join("");
+  for(const[g,name]of GROUPS){const items=Object.values(T).filter(t=>t.cat===g&&!t.edge);if(!items.length)continue;
+    h+=`<p class="side-group">${esc(name)}</p>`+items.map(t=>`<button class="side-item pal" draggable="true" data-ptype="${t.type}" data-cat="${t.cat}" title="Kéo vào canvas, hoặc bấm để thêm: ${esc(t.label)}"><span class="side-ic" style="--cat:var(--c-${t.cat})" aria-hidden="true">${esc(t.short)}</span><span class="side-label">${esc(t.label)}</span></button>`).join("")}
+  h+=`<button class="side-collapse" data-shell-toggle aria-controls="side" title="Thu gọn / mở"><span aria-hidden="true">«</span><span class="side-label">Thu gọn</span></button>`;
+  document.getElementById("side").innerHTML=h}
+function renderTop(){const cr=document.getElementById("crumb");if(!cr)return;const L=L_();cr.innerHTML=L?`<span class="cc">Bài ${L.step} · ${esc(L.tag)}</span> /<b>${esc(L.title)}</b>`:`<span class="cc">Sandbox</span> /<b>${esc(M.name)}</b>`}
+const STK={NOT_DEPLOYED:["","chưa deploy"],CREATE_COMPLETE:["ok","CREATE_COMPLETE"],UPDATE_COMPLETE:["ok","UPDATE_COMPLETE"],DELETE_COMPLETE:["","DELETE_COMPLETE"],DELETE_FAILED:["bad","DELETE_FAILED"],ROLLBACK_COMPLETE:["bad","ROLLBACK_COMPLETE"]};
+function renderBar(){const s=STK[RT.stack.status]||["",RT.stack.status],up=stackUp(),v=UI.code?(UI.split?"split":"code"):"graph";
+  document.getElementById("bar").innerHTML=`<span class="stk"><span class="cap">Stack</span><b class="mono">${esc(M.name)}</b>${chip(s[1],s[0])}</span>
+    ${up?`<button class="sm danger" data-act="askDelete" title="aws cloudformation delete-stack">Xóa stack</button>`:`<button class="sm primary" data-act="deploy" title="aws cloudformation deploy">Deploy</button>`}
+    <span class="grow"></span><div class="seg" role="group" aria-label="Chế độ sửa"><button class="${v==="graph"?"on":""}" data-act="vMode" data-arg="graph" aria-pressed="${v==="graph"}">Canvas</button><button class="${v==="split"?"on":""} hide-s" data-act="vMode" data-arg="split" aria-pressed="${v==="split"}">Chia đôi</button><button class="${v==="code"?"on":""}" data-act="vMode" data-arg="code" aria-pressed="${v==="code"}">YAML</button></div>
+    <button class="icon-btn" data-act="undo" ${UNDO.length?"":"disabled"} title="Undo (Ctrl+Z)" aria-label="Undo">↶</button><button class="icon-btn" data-act="redo" ${REDO.length?"":"disabled"} title="Redo" aria-label="Redo">↷</button>`}
+function renderCanvas(){const el=document.getElementById("canvas");if(!el)return;el.hidden=UI.code&&!UI.split;if(!el.hidden)el.innerHTML=canvasHtml()}
+let YAML_ERR=null,YAML_T=0;
+function renderCode(force){const el=document.getElementById("code");if(!el)return;el.hidden=!UI.code;if(el.hidden)return;
+  const ta=document.getElementById("yaml");if(ta&&document.activeElement===ta&&!force){const st=document.getElementById("ystat");if(st)st.innerHTML=ystat();return}
+  el.innerHTML=`<div class="code-head"><span class="cap">template.yaml</span><span id="ystat">${ystat()}</span><span class="grow"></span><button class="sm" data-act="copyYaml">Copy</button></div>
+    <textarea id="yaml" class="yaml" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="CloudFormation template (YAML)">${esc(toYaml())}</textarea>
+    <p class="note">Sửa YAML là sửa canvas, và ngược lại. Tài nguyên bên ngoài AWS (client, uploader, hộp thư, monitor) nằm ở <span class="mono">Metadata.CloudLab.External</span>; vị trí trên canvas không ghi vào template.</p>`}
+const ystat=()=>YAML_ERR?`<span class="chip bad">Lỗi${YAML_ERR.line?" dòng "+YAML_ERR.line:""}: ${esc(YAML_ERR.err)}</span>`:`<span class="chip ok">Hợp lệ · ${Object.keys(M.res).length} resource</span>`;
+function clockText(){const t=RT.t,d=Math.floor(t%MONTH/86400),h=Math.floor(t%86400/3600),m=Math.floor(t%3600/60);return`Tháng ${RT.month} · ngày ${d+1} · ${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`}
+function renderSim(){const el=document.getElementById("simbar");if(!el)return;const r=rateNow();
+  el.innerHTML=`<button class="${RT.running?"":"primary "}play" data-act="simToggle" aria-pressed="${!!RT.running}" title="${RT.running?"Tạm dừng":"Chạy mô phỏng"}">${RT.running?"❚❚ Dừng":"▶ Chạy"}</button>
+    <label class="spd"><span class="cap hide-s">Tốc độ</span><select id="speed" aria-label="Tốc độ mô phỏng">${SPEEDS.map(([l],i)=>`<option value="${i}"${i===UI.speed?" selected":""}>${l}</option>`).join("")}</select></label>
+    <span class="meter" role="status" aria-label="Chi phí tháng này ${money(RT.total)}"><span class="cap">Chi phí · ${clockText()}</span><b class="mono">${money(RT.total)}</b><small class="mono">${r>0?`≈ ${money(r)}/giờ · ${money(r*720)}/tháng`:"không có gì đang tính tiền"}</small></span>
+    <span class="grow"></span><button class="sm" data-act="simReset" title="Đặt lại thời gian, chi phí và dữ liệu mô phỏng">⟲<span class="hide-s"> Đặt lại</span></button>
+    <button class="sm${UI.logOpen?" on":""}" data-act="logToggle" aria-expanded="${UI.logOpen}">Event log <span class="chip">${LOG.length}</span></button>`}
+function renderLog(){const el=document.getElementById("log");if(!el)return;el.hidden=!UI.logOpen;if(el.hidden)return;const sel=LOG.find(l=>l.id===UI.logSel)||LOG.find(l=>l.cli)||LOG[0];
+  const kk=l=>l.kind==="API"||l.kind==="CLI"?"api":l.kind==="Sự kiện"?"evt":"les";
+  el.innerHTML=`<div class="logl"><ul class="log">${LOG.slice(0,120).map(l=>`<li class="${l.id===(sel&&sel.id)?"sel":""}" data-log="${l.id}" tabindex="0"><span class="t">${l.t}</span><span class="ev ${l.tone}"><span class="k k-${kk(l)}">${esc(l.kind)}</span> ${esc(l.svc)} · ${esc(l.op)}</span><span class="m">${esc(l.msg)}</span></li>`).join("")}</ul></div>
+    <div class="console"><div class="bar3"><i></i><i></i><i></i><span>aws CLI</span></div>${sel&&sel.cli?`<pre id="clitext"><span class="ps">$ </span>${esc(sel.cli)}</pre>`:`<pre class="dim"># không có lệnh tương đương</pre>`}</div>`}
+function renderLesson(){const el=document.getElementById("lesson"),L=L_();
+  if(!L){el.innerHTML=`<div><span class="cap eyebrow">Sandbox</span><h1>Dựng hạ tầng tự do</h1><p class="goal">Kéo thành phần AWS từ thanh bên vào canvas, nối chúng bằng chấm bên phải mỗi khối, hoặc viết CloudFormation YAML. Rồi bấm ▶ để mô phỏng traffic và xem chi phí chạy.</p></div>
+    <div class="sect"><span class="lab">Nguồn tạo tải</span><p class="note">Client (request/giây), Uploader (file/giờ) và EventBridge schedule là nơi sự kiện bắt đầu. Hộp thư và Monitor nhận kết quả.</p></div>
+    <div class="sect"><span class="lab">Bắt đầu từ</span><div class="acts"><button class="sm" data-act="loadStarter">API → Lambda → DynamoDB</button><button class="sm" data-act="askClear">Canvas trống</button></div>${LESSONS.map((l,i)=>`<button class="tplrow" data-act="copyLesson" data-arg="${i}"><b>${esc(l.tag)}</b><small>${esc(l.title)}</small></button>`).join("")}<p class="note">Mở template của một bài vào sandbox (không chấm điểm).</p></div>`;return}
+  const R=UI.result,hs=L.hints(),passed=R?R.res.filter(Boolean).length:0,nT=L.tasks.length;
+  let h=`<div class="lh"><span class="lab">Track 1</span><div class="ldots">${LESSONS.map((x,i)=>`<button class="ldot${DONE.has(x.id)?" done":""}${i===UI.lesson?" cur":""}" data-lesson="${i}" aria-label="Bài ${x.step}: ${esc(x.title)}${DONE.has(x.id)?" (đã đạt)":""}"><span>${x.step}</span></button>`).join("")}</div></div>
+  <div><span class="cap eyebrow">Bài ${L.step} · ${esc(L.tag)}</span><h1>${esc(L.title)}</h1><p class="goal">${esc(L.goal)}</p></div>
+  <details class="scn"><summary><span class="av">${L.who[0]}</span><span class="q">${esc(L.who[1].split(" · ")[0])}: “${esc(L.scenario)}”</span></summary><p>“${esc(L.scenario)}”</p><small class="muted">${esc(L.who[1])}</small></details>
+  <div class="sect"><div class="th"><span class="lab">Trong template này</span><button class="link" data-act="tour">${UI.tour>=0?"Dừng giới thiệu":"Giới thiệu từng khối →"}</button></div><div class="comps">${Object.keys(L.explain||{}).filter(id=>nodeOf(id)).map(id=>{const n=nodeOf(id);return`<button class="comp${UI.sel&&UI.sel.node===id?" on":""}" data-act="selNode" data-arg="${id}" title="${esc(L.explain[id])}"><span class="side-ic" style="--cat:var(--c-${n.def.cat})" aria-hidden="true">${esc(n.def.short)}</span>${esc(id)}</button>`}).join("")}</div></div>
+  <div class="sect"><div class="th"><span class="lab">Nhiệm vụ</span><span class="cnt">${passed}/${nT}</span><span class="pbar"><i style="width:${passed/nT*100}%"></i></span></div>${L.tasks.map((t,i)=>{const c=R?(R.res[i]?"pass":"fail"):"";return`<div class="task ${c}"><span class="tm2">${R?(R.res[i]?"✓":"✕"):i+1}</span><div><b>${esc(t.t)}</b>${R&&R.res[i]?`<small>${esc(t.c)}</small>`:""}</div></div>`}).join("")}
+  ${R&&UI.dirty?`<span class="chip warn dirty">Đã sửa · Check lại</span>`:""}</div>`;
+  if(R)h+=`<div class="callout ${R.ok?"ok":R.skipped?"ctx":""}"><b>${R.ok?"Đạt":R.skipped?"Đã làm hộ":`Chưa đạt · lần ${UI.attempt}`}</b>${esc(R.msg)}</div>`;
+  if(UI.hints)h+=hs.slice(0,UI.hints).map((x,i)=>`<div class="callout warn"><b>Gợi ý ${i+1}/${hs.length}</b>${esc(x)}</div>`).join("");
+  if(R&&R.ok&&!R.skipped){const nx=UI.lesson+1<LESSONS.length;h+=`<div class="lacts">${nx?`<button class="primary" data-lesson="${UI.lesson+1}">Bài tiếp: ${esc(LESSONS[UI.lesson+1].tag)} →</button>`:`<button class="primary" data-act="openSandbox">Ra sandbox tự do →</button>`}</div>`}
+  else h+=`<div class="lacts"><button class="primary" data-act="check">Check</button><button data-act="hint" ${UI.hints>=hs.length?"disabled":""}>Gợi ý ${UI.hints}/${hs.length}</button><button class="ghost" data-act="askSkip">Làm hộ</button><button class="ghost" data-act="askReset">Reset</button></div>`;
+  h+=`<details class="more"><summary>Khái niệm (${L.concepts.length})</summary><div class="tags">${L.concepts.map(c=>`<span class="tag">${esc(c)}</span>`).join("")}</div></details>`;
+  el.innerHTML=h}
+/* ---------------- inspector: fields ---------------- */
+function fieldHtml(n,f){const id=n.id,p=n.props,k=f.k;if(f.when&&!f.when(p))return"";
+  const val=k.startsWith("@@")?n.raw[k.slice(2)]:k.startsWith("@")?getP(n.raw,"Metadata.CloudLab."+k.slice(1)):getP(p,k);
+  const lab=`<span class="fl">${esc(f.label)}</span>`,help=f.help?`<small>${esc(f.help)}</small>`:"",da=`data-field="${esc(k)}" data-fid="${id}"`;
+  const opt=(o,cur)=>{const[v,l]=Array.isArray(o)?o:[o,o];return`<option value="${esc(v)}"${String(cur??"")===String(v)?" selected":""}>${esc(l)}</option>`};
+  switch(f.type){
+    case"text":return`<label class="fld">${lab}<input ${da} data-ftype="text" value="${esc(typeof val==="object"?fmtIntr(val):val??"")}">${help}</label>`;
+    case"number":return`<label class="fld">${lab}<input ${da} data-ftype="number" type="number" ${f.min!=null?`min="${f.min}"`:""} ${f.max!=null?`max="${f.max}"`:""} step="${f.step||1}" value="${esc(val??"")}">${help}</label>`;
+    case"select":return`<label class="fld">${lab}<select ${da} data-ftype="${f.num?"selnum":"select"}">${(k==="@@DeletionPolicy"?["Delete","Retain"]:f.options).map(o=>opt(o,val??(k==="@@DeletionPolicy"?"Delete":""))).join("")}</select>${help}</label>`;
+    case"ref":{const cur=refId(val);return`<label class="fld">${lab}<select ${da} data-ftype="ref" data-att="${f.att||""}" data-dim="${f.dim?1:""}"><option value="">— không —</option>${optsOf(f.to,cur)}</select>${help}</label>`}
+    case"refs":{const cur=arr(val).map(refId);const c=allNodes().filter(x=>x.id!==id&&(f.to==="*"||f.to.includes(x.type)));return`<fieldset class="fld" ${da} data-ftype="refs"><legend>${esc(f.label)}</legend>${c.map(x=>`<label class="ck"><input type="checkbox" value="${x.id}"${cur.includes(x.id)?" checked":""}> ${esc(x.id)}</label>`).join("")||'<small>Chưa có tài nguyên phù hợp.</small>'}${help}</fieldset>`}
+    case"env":{const o=val||{};return`<fieldset class="fld" ${da} data-ftype="env"><legend>${esc(f.label)}</legend>${Object.entries(o).map(([kk,vv])=>envRow(kk,vv)).join("")}<button class="sm" data-act="envAdd" data-arg="${id}">+ Biến</button>${help}</fieldset>`}
+    case"bpa":{const c=val||{};return`<fieldset class="fld" ${da} data-ftype="bpa"><legend>${esc(f.label)}</legend>${["BlockPublicAcls","IgnorePublicAcls","BlockPublicPolicy","RestrictPublicBuckets"].map(x=>`<label class="ck"><input type="checkbox" value="${x}"${c[x]?" checked":""}> ${x}</label>`).join("")}</fieldset>`}
+    case"notifs":{const L=arr(val);return`<fieldset class="fld" ${da} data-ftype="notifs"><legend>${esc(f.label)}</legend>${L.map(c=>{const rules=arr(getP(c,"Filter.S3Key.Rules")),pre=(rules.find(r=>/prefix/i.test(r.Name))||{}).Value||"",suf=(rules.find(r=>/suffix/i.test(r.Name))||{}).Value||"";
+      return`<div class="frow"><select data-k="fn" aria-label="Lambda"><option value="">— Lambda —</option>${optsOf(["AWS::Lambda::Function"],refId(c.Function))}</select><input data-k="pre" placeholder="prefix" value="${esc(pre)}" aria-label="prefix"><input data-k="suf" placeholder="suffix" value="${esc(suf)}" aria-label="suffix"><button class="sm danger" data-act="rowDel" aria-label="Xóa">✕</button></div>`}).join("")}<button class="sm" data-act="rowAdd" data-arg="notifs">+ Trigger</button><small>Trống = mọi object mới. Ví dụ prefix incoming/, suffix .jpg.</small></fieldset>`}
+    case"subs":{const L=arr(val);return`<fieldset class="fld" ${da} data-ftype="subs"><legend>${esc(f.label)}</legend>${L.map(s=>{const st=s&&s.Protocol==="email"?RT.subs[id+"|"+s.Endpoint]:null;return`<div class="frow"><select data-k="proto" aria-label="Protocol">${["email","lambda","sqs"].map(x=>opt(x,s.Protocol)).join("")}</select>${s.Protocol==="email"?`<input data-k="ep" value="${esc(s.Endpoint)}" aria-label="Email">`:`<select data-k="epref" aria-label="Endpoint">${optsOf(s.Protocol==="lambda"?["AWS::Lambda::Function"]:["AWS::SQS::Queue"],refId(s.Endpoint))}</select>`}${st?chip(st==="Confirmed"?"Confirmed":"Pending",st==="Confirmed"?"ok":"warn"):""}<button class="sm danger" data-act="rowDel" aria-label="Xóa">✕</button></div>`}).join("")}<button class="sm" data-act="rowAdd" data-arg="subs">+ Subscription</button></fieldset>`}
+    case"trust":{const lam=arr(getP(p,"AssumeRolePolicyDocument.Statement")).some(s=>arr(s.Principal&&s.Principal.Service).includes("lambda.amazonaws.com"));return`<fieldset class="fld" ${da} data-ftype="trust"><legend>${esc(f.label)}</legend><label class="ck"><input type="radio" name="tr-${id}" value="lambda"${lam?" checked":""}> Lambda (execution role)</label><label class="ck"><input type="radio" name="tr-${id}" value="account"${lam?"":" checked"}> Người trong account (STS AssumeRole)</label></fieldset>`}
+    case"managed":{const cur=arr(val).map(resolve);return`<fieldset class="fld" ${da} data-ftype="managed"><legend>${esc(f.label)}</legend>${Object.entries(MANAGED).map(([a,mp])=>`<label class="ck"><input type="checkbox" value="${a}"${cur.includes(a)?" checked":""}> ${mp.name}${mp.name==="AdministratorAccess"?' <span class="chip warn">quá rộng</span>':""}</label>`).join("")}</fieldset>`}
+    case"policies":{const L=arr(val);return`<fieldset class="fld" ${da} data-ftype="policies"><legend>${esc(f.label)}</legend>${L.map((pol,pi)=>`<div class="pol" data-pi="${pi}"><div class="frow"><input data-k="pname" value="${esc(pol.PolicyName||"")}" aria-label="Tên policy"><button class="sm danger" data-act="polDel" aria-label="Xóa policy">✕</button></div>${arr(getP(pol,"PolicyDocument.Statement")).map(s=>stmtRow(s,false)).join("")}<button class="sm" data-act="stmtAdd">+ Statement</button></div>`).join("")}<button class="sm" data-act="polAdd">+ Inline policy</button><small>Resource viết được dạng !Sub \${Bucket.Arn}/* hoặc !GetAtt Table.Arn.</small></fieldset>`}
+    case"statements":{const L=arr(val);return`<fieldset class="fld" ${da} data-ftype="statements"><legend>${esc(f.label)}</legend><div class="pol">${L.map(s=>stmtRow(s,true)).join("")}<button class="sm" data-act="stmtAdd">+ Statement</button></div></fieldset>`}
+    case"thresholds":{const L=arr(val),th=L.map(x=>+getP(x,"Notification.Threshold")),sub=L.flatMap(x=>arr(x.Subscribers)).map(s=>refId(s.Address)).find(Boolean)||"";
+      return`<fieldset class="fld" ${da} data-ftype="thresholds"><legend>${esc(f.label)}</legend><div class="acts">${[50,80,100].map(x=>`<label class="ck"><input type="checkbox" value="${x}"${th.includes(x)?" checked":""}> ${x}%</label>`).join("")}</div><label class="fld">Gửi tới SNS topic<select data-k="topic"><option value="">— chưa chọn —</option>${optsOf(["AWS::SNS::Topic"],sub)}</select></label></fieldset>`}
+    case"targets":{const cur=arr(val).map(t=>refId(t&&t.Arn));return`<fieldset class="fld" ${da} data-ftype="targets"><legend>${esc(f.label)}</legend>${allNodes().filter(x=>x.type==="AWS::Lambda::Function").map(x=>`<label class="ck"><input type="checkbox" value="${x.id}"${cur.includes(x.id)?" checked":""}> ${esc(x.id)}</label>`).join("")||"<small>Chưa có Lambda.</small>"}</fieldset>`}}
+  return""}
+const envRow=(k,v)=>{const r=refId(v);return`<div class="frow"><input data-k="key" value="${esc(k)}" aria-label="Tên biến"><select data-k="mode" aria-label="Kiểu"><option value="text"${r?"":" selected"}>chữ</option><option value="ref"${r?" selected":""}>!Ref</option></select>${r?`<select data-k="ref" aria-label="Tài nguyên">${optsOf("*",r)}</select>`:`<input data-k="val" value="${esc(v??"")}" aria-label="Giá trị">`}<button class="sm danger" data-act="rowDel" aria-label="Xóa">✕</button></div>`};
+const stmtRow=(s,princ)=>`<div class="frow st"><select data-k="eff" aria-label="Effect"><option${s.Effect==="Allow"?" selected":""}>Allow</option><option${s.Effect==="Deny"?" selected":""}>Deny</option></select><input data-k="sid" value="${esc(s.Sid||"")}" placeholder="Sid" aria-label="Sid">${princ?`<input data-k="pr" value="${esc(typeof s.Principal==="string"?s.Principal:JSON.stringify(s.Principal||"*"))}" aria-label="Principal" title="Principal">`:""}<input data-k="act" value="${esc(arr(s.Action).join(", "))}" placeholder="s3:GetObject, …" aria-label="Action"><input data-k="res" value="${esc(fmtIntr(s.Resource))}" placeholder="Resource" aria-label="Resource"><button class="sm danger" data-act="rowDel" aria-label="Xóa">✕</button></div>`;
+/* read a field's DOM back into a value */
+function collect(fs){const t=fs.dataset.ftype,q=s=>[...fs.querySelectorAll(s)];
+  switch(t){
+    case"text":return fs.value;case"number":return fs.value===""?undefined:Number(fs.value);case"select":return fs.value;case"selnum":return Number(fs.value);
+    case"ref":return fs.value?(fs.dataset.att?{"Fn::GetAtt":[fs.value,fs.dataset.att]}:{Ref:fs.value}):null;
+    case"refs":return q("input:checked").map(i=>({Ref:i.value}));
+    case"env":{const o={};q(".frow").forEach(r=>{const k=r.querySelector('[data-k="key"]').value.trim();if(!k)return;const mode=r.querySelector('[data-k="mode"]').value,rs=r.querySelector('[data-k="ref"]'),vi=r.querySelector('[data-k="val"]');o[k]=mode==="ref"?{Ref:rs?rs.value:(allNodes()[0]||{}).id}:(vi?vi.value:"")});return o}
+    case"bpa":return Object.fromEntries(["BlockPublicAcls","IgnorePublicAcls","BlockPublicPolicy","RestrictPublicBuckets"].map(k=>[k,!!fs.querySelector(`input[value="${k}"]`).checked]));
+    case"notifs":return q(".frow").map(r=>{const fn=r.querySelector('[data-k="fn"]').value,pre=r.querySelector('[data-k="pre"]').value.trim(),suf=r.querySelector('[data-k="suf"]').value.trim(),c={Event:"s3:ObjectCreated:*",Function:fn?{"Fn::GetAtt":[fn,"Arn"]}:null};
+      const rules=[...(pre?[{Name:"prefix",Value:pre}]:[]),...(suf?[{Name:"suffix",Value:suf}]:[])];if(rules.length)c.Filter={S3Key:{Rules:rules}};return c});
+    case"subs":return q(".frow").map(r=>{const p=r.querySelector('[data-k="proto"]').value,ep=r.querySelector('[data-k="ep"]'),er=r.querySelector('[data-k="epref"]');return{Protocol:p,Endpoint:p==="email"?(ep?ep.value:EMAIL):(er&&er.value?{"Fn::GetAtt":[er.value,"Arn"]}:null)}});
+    case"trust":{const v=(fs.querySelector("input:checked")||{}).value;return{Version:"2012-10-17",Statement:[{Effect:"Allow",Principal:v==="lambda"?{Service:"lambda.amazonaws.com"}:{AWS:{"Fn::Sub":"arn:aws:iam::${AWS::AccountId}:root"}},Action:"sts:AssumeRole"}]}}
+    case"managed":return q("input:checked").map(i=>i.value);
+    case"policies":return q(".pol").map(pd=>({PolicyName:pd.querySelector('[data-k="pname"]').value||"inline",PolicyDocument:{Version:"2012-10-17",Statement:[...pd.querySelectorAll(".frow.st")].map(readStmt)}}));
+    case"statements":return[...fs.querySelectorAll(".frow.st")].map(readStmt);
+    case"thresholds":{const tp=fs.querySelector('[data-k="topic"]').value;return q('input[type="checkbox"]:checked').map(i=>({Notification:{NotificationType:"ACTUAL",ComparisonOperator:"GREATER_THAN",Threshold:+i.value},Subscribers:tp?[{SubscriptionType:"SNS",Address:{Ref:tp}}]:[]}))}
+    case"targets":return q("input:checked").map(i=>({Id:i.value,Arn:{"Fn::GetAtt":[i.value,"Arn"]}}))}}
+function readStmt(r){const g=k=>{const e=r.querySelector(`[data-k="${k}"]`);return e?e.value:""};const s={};if(g("sid").trim())s.Sid=g("sid").trim();s.Effect=g("eff");
+  const pr=r.querySelector('[data-k="pr"]');if(pr){let v=pr.value.trim();try{v=JSON.parse(v)}catch(_){}s.Principal=v||"*"}
+  const acts=g("act").split(",").map(x=>x.trim()).filter(Boolean);s.Action=acts.length===1?acts[0]:acts;s.Resource=parseList(g("res")||"*");return s}
+function applyField(fs){const id=fs.dataset.fid,k=fs.dataset.field,n=nodeOf(id);if(!n)return;const v=collect(fs);
+  if(fs.dataset.ftype==="number"&&v!==undefined&&!(v>=0||(k==="Threshold"))){return}
+  edit(`${id}.${k.replace(/^@+/,"")}`,()=>{const nn=nodeOf(id);
+    if(k.startsWith("@@")){if(v==="Delete"||!v)delete nn.raw[k.slice(2)];else nn.raw[k.slice(2)]=v}
+    else if(k.startsWith("@")){nn.raw.Metadata=nn.raw.Metadata||{};nn.raw.Metadata.CloudLab=nn.raw.Metadata.CloudLab||{};nn.raw.Metadata.CloudLab[k.slice(1)]=v}
+    else if(fs.dataset.dim){nn.props.Dimensions=v?[{Name:"FunctionName",Value:v}]:[]}
+    else if(k==="Environment.Variables"){setP(nn.props,"Environment",{Variables:v})}
+    else setP(nn.props,k,v===null&&!["Target","Role","Bucket","As"].includes(k)?undefined:v)})}
+/* ---------------- inspector: runtime ---------------- */
+function costRows(id){const r=RT.n[id];if(!r||!r.costBy)return"";return kvl(Object.entries(r.costBy).map(([k,v])=>["Tiền · "+k,money(v)]))}
+const kvl=rows=>`<dl class="kv-list">${rows.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>`;
+function rtHtml(id){const n=nodeOf(id);if(!n)return"";const r=RT.n[id]||{m:{},series:[]},m=r.m,p=n.props;let h="";
+  if(!exists(id)&&!n.ext)return`<div class="empty">Chưa có trên AWS (${esc(RT.stack.status)}). Bấm Deploy để tạo.</div>`;
+  switch(n.type){
+    case"AWS::Lambda::Function":{const lg=RT.logs[logName(id)]||[];h+=kvl([["Lần chạy",num(m.inv||0)],["Lỗi",num(m.err||0)],["Thời gian TB",m.inv?Math.round((m.dur||0)/m.inv)+" ms":"—"],["GB-giây / lần",((+p.MemorySize||128)/1024*Math.ceil((r.last||{dur:0}).dur)/1000).toFixed(3)]]);
+      if(r.lastErr)h+=`<div class="callout"><b>Lỗi gần nhất</b>${esc(r.lastErr)}</div>`;
+      h+=`<p class="lab">Log ${esc(logName(id))}</p>`+(lg.length?`<div class="console"><div class="bar3"><i></i><i></i><i></i><span>aws logs tail ${esc(logName(id))}</span></div><div class="body">${lg.slice(-8).map(l=>`<div class="${l.m.startsWith("REPORT")?"ps":l.m.startsWith("START")||l.m.startsWith("END")?"dim":""}"${/ERROR|timed out/.test(l.m)?' style="color:#ff8a80"':""}>${esc(l.m)}</div>`).join("")}</div></div>`:`<div class="empty">${m.inv?"Function đã chạy nhưng CloudWatch không nhận được dòng log nào: "+esc(r.noLogs||"role thiếu quyền logs:*")+".":"Chưa chạy lần nào."}</div>`);break}
+    case"AWS::S3::Bucket":{const o=RT.obj[id]||{},ks=Object.keys(o),junk=ks.filter(k=>k.startsWith("incoming/")&&k.endsWith(".json"));h+=kvl([["Object",num(Object.values(o).reduce((a,x)=>a+x.n,0))],["Dung lượng",kb(Object.values(o).reduce((a,x)=>a+x.kb*x.n,0))],["PUT · GET",`${num(m.put||0)} · ${num(m.get||0)}`],["Bị từ chối",num(m.denied||0)]]);
+      if(m.leak)h+=`<div class="callout"><b>Đang lộ dữ liệu</b>${num(m.leak)} lần đọc ẩn danh thành công.</div>`;
+      h+=`<p class="lab">Object</p>`+(ks.slice(0,10).map(k=>`<div class="stmt"><span class="muted mono">${kb(o[k].kb)}</span><span class="mono">${esc(k)}${o[k].n>1?` <span class="chip">×${num(o[k].n)}</span>`:""}</span><span></span></div>`).join("")||`<div class="empty">Bucket trống.</div>`)+(ks.length>10?`<p class="note">… và ${ks.length-10} key khác</p>`:"");
+      if(junk.length)h+=`<button class="sm" data-act="cleanJunk" data-arg="${id}">Xóa ${junk.length} file .json trong incoming/</button>`;break}
+    case"AWS::SNS::Topic":h+=kvl([["ARN",`<span style="font-size:11px">${esc(arnOf(id))}</span>`],["Đã publish",num(m.pub||0)]])+`<p class="lab">Subscription</p>`+(arr(p.Subscription).map(s=>{const st=s.Protocol==="email"?RT.subs[id+"|"+s.Endpoint]:"Confirmed";return`<div class="stmt">${chip(st==="Confirmed"?"Confirmed":"Pending",st==="Confirmed"?"ok":"warn")}<span>${esc(s.Protocol)} · ${esc(typeof s.Endpoint==="string"?s.Endpoint:refId(s.Endpoint))}</span><span></span></div>`}).join("")||`<div class="empty">Chưa có subscription: tin publish vào đây không đi đâu cả.</div>`);break;
+    case"CloudLab::Inbox":{const L=RT.inbox[id]||[],sel=L.find(x=>x.id===UI.mailOpen)||L.find(x=>x.kind==="confirm"&&!x.done)||L[0];
+      h+=L.length?L.slice(0,8).map(x=>`<button class="mitem${sel&&x.id===sel.id?" on":""}${x.read?"":" unread"}" data-act="openMail" data-arg="${x.id}"><b>${esc(x.subject)}${x.n>1?` ×${num(x.n)}`:""}</b><small>${esc(x.t)} · ${esc(x.kind==="confirm"?"AWS Notifications":x.kind==="alert"?"AWS Budgets":x.kind==="alarm"?"CloudWatch":"SNS")}</small></button>`).join("")+(sel?`<div class="mread">${sel.kind==="confirm"?`<p style="margin-top:0">${esc(sel.body)}</p>${RT.subs[sel.topic+"|"+p.Address]==="Confirmed"?chip("Đã xác nhận","ok"):`<button class="primary" data-act="confirmMail" data-arg="${sel.id}">Confirm subscription</button>`}`:`<p style="margin-top:0">${esc(sel.body)}</p>`}</div>`:""):`<div class="empty">Chưa có thư nào.</div>`;break}
+    case"CloudLab::Client":h+=kvl([["Đã gửi",num(m.sent||0)],["Thành công",num(m.ok||0)],["Lỗi / bị chặn",num(m.err||0)]]);if(r.lastErr)h+=`<div class="callout${p.Expect==="Deny"?" ok":""}"><b>${p.Expect==="Deny"?"Bị chặn (đúng ý)":"Lỗi gần nhất"}</b>${esc(r.lastErr)}</div>`;if(m.leak)h+=`<div class="callout"><b>Đọc được dù không đăng nhập</b>Dữ liệu đang public.</div>`;break;
+    case"CloudLab::Uploader":h+=kvl([["Đã upload",num(m.sent||0)]]);break;
+    case"CloudLab::Monitor":h+=arr(p.Watch).map(refId).filter(Boolean).map(w=>{const s=(RT.n[w]||{series:[],m:{}}),wn=nodeOf(w);if(!wn)return"";return`<div class="mon"><b>${esc(w)}</b>${spark(s.series,wn.type==="AWS::Lambda::Function"?"inv":wn.type==="AWS::S3::Bucket"?"put":"req")}<small>${wn.type==="AWS::Lambda::Function"?`${num(s.m.inv||0)} lần · ${num(s.m.err||0)} lỗi`:wn.type==="AWS::S3::Bucket"?`${num(s.m.put||0)} PUT`:`${num(s.m.req||s.m.inv||0)} request`} · ${money(s.cost||0)}</small></div>`}).join("")||`<div class="empty">Nối tài nguyên vào monitor để theo dõi.</div>`;break;
+    case"AWS::ApiGatewayV2::Api":h+=kvl([["Request",num(m.req||0)],["Lỗi",num(m.err||0)]]);if(r.lastErr)h+=`<div class="callout"><b>Lỗi</b>${esc(r.lastErr)}</div>`;break;
+    case"AWS::Budgets::Budget":{const lim=+getP(p,"Budget.BudgetLimit.Amount")||0,f=(RT.budgets[id]||{fired:[]}).fired;h+=`<div class="big">${money(RT.total)} <span class="muted" style="font-size:16px">/ ${money(lim)}</span></div><div class="bar"><i class="${RT.total/lim>=.5?"hi":""}" style="width:${Math.min(100,RT.total/(lim||1)*100)}%"></i></div>`+kvl([["Ngưỡng đã vượt",f.length?f.map(x=>x+"%").join(", "):"—"]]);break}
+    case"AWS::CloudWatch::Alarm":{const a=RT.alarms[id];h+=kvl([["Trạng thái",a?a.state:"INSUFFICIENT_DATA"]]);break}
+    case"AWS::IAM::Role":{h+=`<p class="lab">Quyền thực tế</p>`+(roleStatements(id).map(s=>`<div class="stmt">${chip(s.Effect,s.Effect==="Allow"?"ok":"warn")}<span>${esc(arr(s.Action).join(", "))}<br><span class="muted">${esc(arr(resolve(s.Resource)).join(", "))}</span></span><span class="muted" style="font-size:11px">${esc(s._by)}</span></div>`).join("")||`<div class="empty">Role chưa có quyền gì.</div>`);
+      const q=UI.iamq||{a:"s3:GetObject",r:""};const res=q.r||(allNodes().find(x=>x.type==="AWS::S3::Bucket")?arnOf(allNodes().find(x=>x.type==="AWS::S3::Bucket").id)+"/report.csv":"*"),e=evalRole(id,q.a,res);
+      h+=`<p class="lab">Thử quyền (policy simulator)</p><div class="frow"><input id="iq-a" value="${esc(q.a)}" aria-label="Action"><input id="iq-r" value="${esc(res)}" aria-label="Resource ARN"></div><div class="callout ${e.allow?"ok":""}"><b>${e.allow?"Allow":e.kind==="explicit"?"Explicit deny":"Implicit deny"}</b>${esc(e.by)}</div>`;break}
+    case"AWS::Logs::LogGroup":{const L=RT.logs[resolve(p.LogGroupName)]||[];h+=L.length?`<div class="console"><div class="body">${L.slice(-8).map(l=>`<div>${esc(l.m)}</div>`).join("")}</div></div>`:`<div class="empty">Log group trống.</div>`;break}
+    case"AWS::DynamoDB::Table":h+=kvl([["Item",num(RT.items[id]||0)],["Lần ghi",num(m.wr||0)]]);break;
+    case"AWS::SQS::Queue":h+=kvl([["Đang chờ",num(RT.items[id]||0)],["Đã nhận",num(m.sent||0)]]);break}
+  return h+costRows(id)}
+function nodeActs(n){const id=n.id,t=n.type;let a="";
+  if(t==="CloudLab::Client"&&refId(n.props.Target))a+=`<button class="sm" data-act="inject" data-arg="${id}">Gửi 1 request</button>`;
+  if(t==="CloudLab::Uploader"&&refId(n.props.Target))a+=`<button class="sm" data-act="inject" data-arg="${id}">Upload 1 file</button>`;
+  if(t==="AWS::SNS::Topic"&&exists(id))a+=`<button class="sm" data-act="pubTest" data-arg="${id}">Gửi tin thử</button>`;
+  if(t==="AWS::S3::Bucket"&&exists(id)&&Object.keys(RT.obj[id]||{}).length)a+=`<button class="sm" data-act="askEmpty" data-arg="${id}">Empty</button>`;
+  a+=`<button class="sm" data-act="connectFrom" data-arg="${id}">Nối tới…</button><button class="sm danger" data-act="askDelNode" data-arg="${id}">${n.scope==="manual"?"Xóa (ngoài stack)":"Xóa"}</button>`;return a}
+let DRAWER_KEY=null;
+function renderDrawer(){const el=document.getElementById("drawer");if(!el)return;const S=UI.sel;let c=null;
+  if(S&&S.node&&nodeOf(S.node)){const n=nodeOf(S.node),L=L_(),ex=L&&L.explain&&L.explain[n.id],v=nodeView(n);
+    c={key:"n:"+n.id,cat:n.def.cat,icon:n.def.short,eyebrow:n.def.label+(n.scope==="manual"?" · ngoài stack":n.ext?" · ngoài AWS":""),title:n.id,status:v.st?chip(v.st[1],v.st[0]):"",
+      body:(ex?`<div class="callout ctx"><b>Trong bài này</b>${esc(ex)}</div>`:"")+`<details class="doc"${ex?"":" open"}><summary>${esc(n.def.label)} là gì?</summary><p>${esc(n.def.doc||"")}</p></details>`+
+        `<p class="lab">Cấu hình</p><label class="fld"><span class="fl">Logical ID</span><input data-act="rename" id="f-lid" data-fid="${n.id}" value="${esc(n.id)}"></label>`+n.def.fields.map(f=>fieldHtml(n,f)).join("")+
+        `<p class="lab">Đang chạy</p><div class="rt" id="rt">${rtHtml(n.id)}</div>`,foot:nodeActs(n)}}
+  else if(S&&S.edge){const e=(GLAST?GLAST.edges:edges()).find(x=>x.id===S.edge);if(e){const v=edgeView(e),f=RT.flow[e.id]||{ok:0,err:0};
+    c={key:"e:"+e.id,cat:"learn",icon:"→",eyebrow:"Quan hệ · "+e.kind,title:`${e.from} → ${e.to}`,status:chip(v.st==="ok"?"đang chạy":v.st==="stop"?"bị chặn":v.st==="blocked"?"bị chặn đúng ý":v.st==="loop"?"vòng lặp":v.st==="leak"?"không bị chặn":"chưa có dữ liệu",{ok:"ok",stop:"bad",loop:"bad",leak:"bad",blocked:"ok"}[v.st]||""),
+      body:`<p>${esc(REL_DOC[e.kind]||"Tham chiếu giữa hai tài nguyên.")}</p>`+kvl([["Khai báo ở",`<span class="mono">${esc(e.owner)}.${esc(e.path)}</span>`],["Thành công",num(f.ok)],["Lỗi / bị chặn",num(f.err)]])+(v.why?`<div class="callout"><b>Lý do</b>${esc(v.why)}</div>`:""),
+      foot:`<button class="sm" data-act="selNode" data-arg="${e.from}">${esc(e.from)}</button><button class="sm" data-act="selNode" data-arg="${e.to}">${esc(e.to)}</button><button class="sm danger" data-act="delEdge" data-arg="${esc(e.id)}">Xóa quan hệ</button>`}}}
+  if(!c){if(DRAWER_KEY){DRAWER_KEY=null;UI.sel=null;el.hidden=true;el.innerHTML="";KIT.layer.close(el)}return}
+  const ae=document.activeElement,inside=ae&&el.contains(ae)?selOf(ae):null;
+  el.dataset.cat=c.cat;el.setAttribute("aria-labelledby","dt");
+  el.innerHTML=`<div class="drawer-grab" aria-hidden="true"></div><div class="drawer-head"><div class="drawer-eyebrow"><span class="side-ic" style="--cat:var(--c-${c.cat})" aria-hidden="true">${esc(c.icon)}</span><span class="grow">${esc(c.eyebrow)}</span><button class="modal-x" data-act="closeDrawer" aria-label="Đóng">✕</button></div><h2 class="drawer-title" id="dt" tabindex="-1">${esc(c.title)}</h2>${c.status?`<div class="drawer-status">${c.status}</div>`:""}</div><div class="drawer-body">${c.body}</div>${c.foot?`<div class="drawer-foot">${c.foot}</div>`:""}`;
+  if(!DRAWER_KEY){el.hidden=false;KIT.layer.open(el,{modal:KIT.isNarrow(),returnFocus:UI.selRet,onClose:()=>{UI.sel=null;render()},initialFocus:"#dt"})}
+  else if(inside){const x=el.querySelector(inside);if(x)try{x.focus({preventScroll:true})}catch(_){}}else if(DRAWER_KEY!==c.key){const t=document.getElementById("dt");if(t)t.focus({preventScroll:true})}
+  DRAWER_KEY=c.key}
+function refreshRt(){const rt=document.getElementById("rt");if(!rt||!UI.sel||!UI.sel.node)return;const ae=document.activeElement;if(ae&&rt.contains(ae)&&ae.tagName==="INPUT")return;rt.innerHTML=rtHtml(UI.sel.node)}
+/* ---------------- modal ---------------- */
+let MODAL_SHOWN=null;
+function renderModal(){const el=document.getElementById("modal"),Md=UI.modal;
+  if(!Md){if(MODAL_SHOWN){MODAL_SHOWN=null;const d=el.querySelector(".modal");if(d)KIT.layer.close(d);el.innerHTML=""}return}
+  if(Md===MODAL_SHOWN)return;const prev=el.querySelector(".modal");if(prev)KIT.layer.close(prev);Md.ret=Md.ret||UI.lastOpener;
+  const v=modalValues();
+  el.innerHTML=`<div class="scrim" data-act="scrim"><div class="modal" aria-labelledby="mt"><div class="modal-head"><h3 id="mt">${esc(Md.title)}</h3><button class="modal-x" data-act="closeModal" aria-label="Đóng">✕</button></div>${Md.body||""}
+    ${(Md.fields||[]).map(f=>f.type==="checks"?`<fieldset class="fld"><legend>${esc(f.label)}</legend>${f.items.map(([k,l])=>`<label class="ck"><input type="checkbox" id="m-${k}" ${Md.init[k]?"checked":""}> ${esc(l)}</label>`).join("")}</fieldset>`:`<label class="fld">${esc(f.label)}<input id="m-${f.id}" value="${esc(Md.init[f.id]??"")}"></label>`).join("")}
+    <div id="mnote">${Md.note?Md.note(v):""}</div><p class="ferr" id="merr" role="alert">${esc(Md.err||"")}</p>
+    <div class="mfoot"><button class="ghost" data-act="closeModal">${esc(Md.cancel||"Hủy")}</button>${Md.submitLabel?`<button class="primary ${Md.danger?"dangerbtn":""}" data-act="submitModal">${esc(Md.submitLabel)}</button>`:""}</div></div></div>`;
+  MODAL_SHOWN=Md;KIT.layer.open(el.querySelector(".modal"),{modal:true,returnFocus:Md.ret,onClose:()=>{UI.modal=null;render()},initialFocus:el.querySelector(".modal input")||el.querySelector(".mfoot .primary")})}
+function modalValues(){const Md=UI.modal,v={...(Md?Md.init:{})};if(!Md)return v;for(const f of Md.fields||[]){if(f.type==="checks")f.items.forEach(([k])=>{const e=document.getElementById("m-"+k);if(e)v[k]=e.checked?1:0});else{const e=document.getElementById("m-"+f.id);if(e)v[f.id]=e.value}}return v}
+function confirmModal(title,body,label,fn,danger){UI.modal={title,body:`<p>${body}</p>`,submitLabel:label,danger,init:{},fields:[],submit:()=>{const r=fn();return r&&r.ok===false?r:{ok:true}}}}
+/* ---------------- render ---------------- */
+function render(){const ae=document.activeElement,keep=ae&&ae!==document.body&&!(ae.closest&&ae.closest("#modal"))?selOf(ae):null;
+  document.querySelector("[data-shell]").classList.toggle("no-lesson",false);
+  renderSide();renderTop();renderBar();renderCanvas();renderCode();renderSim();renderLog();renderLesson();renderDrawer();renderModal();
+  const now=document.activeElement;if(keep&&(!now||now===document.body)){const n=document.querySelector(keep);if(n)try{n.focus({preventScroll:true})}catch(_){}}
+  if(UI.gfocus){const f=document.querySelector(UI.gfocus);UI.gfocus=null;if(f)try{f.focus({preventScroll:true})}catch(_){}}
+  keepVisible();if(window.Kit&&Kit.shellSync)Kit.shellSync()}
+let SEEN=null;
+function keepVisible(){const id=UI.sel&&UI.sel.node;if(!id||id===SEEN||KIT.isNarrow()){if(!id)SEEN=null;return}SEEN=id;
+  const el=document.querySelector(`.gnode[data-gid="${id}"]`),dw=document.getElementById("drawer"),gx=document.querySelector(".gx");if(!el||!dw||dw.hidden||!gx||!el.getBoundingClientRect)return;
+  const r=el.getBoundingClientRect(),d=dw.getBoundingClientRect(),g=gx.getBoundingClientRect();if(!d.width)return;const over=r.right-Math.min(d.left,g.right)+24;
+  if(over>0){gFreeze();GCUR.pan=[GCUR.pan[0]-over,GCUR.pan[1]];gs().pan=[...GCUR.pan];gApply()}}
+function onModelChanged(label,cli){if(stackUp()&&!QUIET){RT.stack.status="UPDATE_COMPLETE";syncRuntime();log("CLI","cloudformation","deploy",`${M.name} · UPDATE_COMPLETE${label?" · "+label:""}`,"ok",cli||`aws cloudformation deploy \\\n  --stack-name ${M.name} \\\n  --template-file template.yaml`)}
+  YAML_ERR=null;saveSandbox();render()}
+function onSimTick(){gRefresh();renderSim();refreshRt();if(UI.logOpen&&LOG.length&&LOG[0].id!==onSimTick.last){onSimTick.last=LOG[0].id;renderLog()}}
+function saveSandbox(){if(UI.mode!=="sandbox")return;store.set("sandbox",{yaml:toYaml(),pos:M.pos,manual:M.manual,name:M.name})}
+/* ---------------- simulation clock ---------------- */
+let TIMER=null;
+function simPlay(on){RT.running=!!on;if(on){if(!stackUp()&&Object.keys(M.res).length&&RT.stack.status!=="DELETE_COMPLETE")deploy();if(!TIMER)TIMER=setInterval(()=>{if(document.hidden)return;step(SPEEDS[UI.speed][1]*0.25);onSimTick()},250)}
+  else if(TIMER){clearInterval(TIMER);TIMER=null}renderSim();gRefresh()}
+/* ---------------- modes ---------------- */
+function resetUi(){if(TIMER){clearInterval(TIMER);TIMER=null}if(RT)RT.running=false;UI.sel=null;UI.result=null;UI.hints=0;UI.attempt=0;UI.dirty=false;UI.gmenu=null;UI.gdrag=null;UI.tour=-1;UI.mailOpen=null;if(UI.g){UI.g.zoom=null;UI.g.trace=false}UNDO=[];REDO=[]}
+function startLesson(i,quiet){const L=LESSONS[i];resetUi();UI.mode="lesson";UI.lesson=i;UI.speed=L.speed??2;
+  M=loadTemplate(L.yaml,L.layout,"lab-"+L.id,L.manual);RT=freshRuntime();QUIET++;deploy();QUIET--;RT.stack.status="CREATE_COMPLETE";syncRuntime();
+  store.set("mode",{mode:"lesson",i});if(!quiet)log("Bài học","lesson","setup",`Bài ${L.step}: ${L.title} · stack ${M.name} đã deploy`,"")}
+function startSandbox(m){resetUi();UI.mode="sandbox";UI.lesson=-1;UI.speed=2;
+  if(m)M=m;else{const s=store.get("sandbox",null);let ok=false;if(s&&s.yaml){const r=fromYaml(s.yaml,{name:s.name||"sandbox",pos:s.pos,manual:s.manual});if(r.ok){M=r.model;ok=true}}if(!ok)M=loadTemplate(STARTER.yaml,STARTER.layout,"sandbox")}
+  RT=freshRuntime();if(Object.keys(M.res).length){QUIET++;deploy();QUIET--;RT.stack.status="CREATE_COMPLETE";syncRuntime()}store.set("mode",{mode:"sandbox"});saveSandbox();
+  log("CloudLab","sandbox","open",`Sandbox · ${Object.keys(M.res).length} resource`,"")}
+function check(){const L=L_();if(!L)return;UI.attempt++;UI.dirty=false;const res=L.tasks.map(t=>{try{return!!t.test()}catch(e){console.error(e);return false}}),ok=res.every(Boolean);
+  const cause=res.join()+"|"+(L.diagnose?L.diagnose(0):"");UI.ladder=cause===UI.lastCause?(UI.ladder||0)+1:0;UI.lastCause=cause;
+  UI.result={ok,res,msg:ok?L.pass:L.diagnose(UI.ladder)};log("Bài học","lesson","check",ok?`Đạt ${res.length}/${res.length}`:`Chưa đạt · lần ${UI.attempt} · ${res.filter(Boolean).length}/${res.length}`,ok?"ok":"bad");
+  if(ok){DONE.add(L.id);store.set("done",[...DONE])}}
+/* ---------------- events ---------------- */
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-act],[data-lesson],[data-log],[data-node],[data-edge],[data-ptype]");if(!t||t.closest("[inert]"))return;
+  if((t.dataset.node||t.dataset.gconnect||t.dataset.edge)&&Date.now()-GSUP<350)return;
+  UI.lastOpener=selOf(t);
+  if(t.dataset.ptype){const[x,y]=viewCenter();let id;edit("add "+t.dataset.ptype,()=>{id=addNode(t.dataset.ptype,x,y)});log("CloudLab","editor","add",`${id} (${T[t.dataset.ptype].label})`,"ok");UI.sel={node:id};UI.selRet=`[data-node="${id}"]`;if(KIT.isNarrow()&&document.querySelector("[data-shell]").hasAttribute("data-side-open"))document.querySelector("[data-shell]").removeAttribute("data-side-open");render();return}
+  if(t.dataset.node){UI.gmenu=null;UI.sel={node:t.dataset.node};UI.selRet=`[data-node="${t.dataset.node}"]`;render();return}
+  if(t.dataset.edge){UI.sel={edge:t.dataset.edge};UI.selRet=null;render();return}
+  if(t.dataset.lesson!==undefined&&t.dataset.act===undefined){const i=+t.dataset.lesson;if(UI.mode==="lesson"&&i===UI.lesson)return;
+    if(UNDO.length&&UI.mode==="lesson"&&!(UI.result&&UI.result.ok)){confirmModal("Chuyển sang bài khác?","Thay đổi trong bài hiện tại sẽ mất. Event log vẫn giữ.","Chuyển bài",()=>startLesson(i));render();return}startLesson(i);render();return}
+  if(t.dataset.log){UI.logSel=+t.dataset.log;renderLog();return}
+  const a=t.dataset.act,arg=t.dataset.arg;
+  if(a==="closeModal"){UI.modal=null;render();return}if(a==="scrim"){if(e.target===t){UI.modal=null;render()}return}
+  if(a==="rename")return;
+  const A={
+    undo,redo,deploy(){deploy();gs().zoom=null},askDelete(){confirmModal("Xóa stack?",`aws cloudformation delete-stack --stack-name ${esc(M.name)}. CloudFormation xóa mọi tài nguyên trong template, trừ thứ có DeletionPolicy: Retain.`,"Xóa stack",()=>{simPlay(false);deleteStack()},true)},
+    vMode(){UI.code=arg!=="graph";UI.split=arg==="split";YAML_ERR=null},
+    simToggle(){simPlay(!RT.running);return true},simReset(){const was=RT.running;simPlay(false);if(UI.mode==="lesson")startLesson(UI.lesson,true);else{RT=freshRuntime();if(Object.keys(M.res).length){QUIET++;deploy();QUIET--;RT.stack.status="CREATE_COMPLETE";syncRuntime()}}log("CloudLab","sim","reset","đặt lại thời gian, chi phí và dữ liệu mô phỏng","");if(was)simPlay(true)},
+    logToggle(){UI.logOpen=!UI.logOpen},
+    gFit(){const G=gs();G.zoom=null},gZoom(){gZoomAt(GCUR.z*(arg==="1"?1.2:1/1.2));return true},gTrace(){gs().trace=!gs().trace},gView(){gs().view=arg;UI.gmenu=null},
+    gMenu(){UI.gmenu=UI.gmenu&&UI.gmenu.from===arg?null:{from:arg,active:0};UI.gfocus=UI.gmenu?"#glist":`[data-gconnect="${arg}"]`},
+    connectFrom(){UI.sel=null;UI.code=false;UI.gmenu={from:arg,active:0};UI.gfocus="#glist"},
+    gPick(){if(!UI.gmenu||!connectRule(UI.gmenu.from,arg))return true;doConnect(UI.gmenu.from,arg);UI.gmenu=null},
+    closeDrawer(){UI.sel=null},selNode(){UI.sel={node:arg};UI.selRet=null;UI.gfocus="#dt"},
+    delEdge(){const e=edges().find(x=>x.id===arg);if(e){edit("bỏ quan hệ",()=>removeEdge(e));log("CloudLab","editor","disconnect",`${e.from} → ${e.to}`,"warn")}UI.sel=null},
+    askDelNode(){const n=nodeOf(arg);if(!n)return;if(n.type==="AWS::S3::Bucket"&&n.scope==="manual"&&Object.keys(RT.obj[arg]||{}).length){log("API","s3","DeleteBucket","BucketNotEmpty: The bucket you tried to delete is not empty.","bad",`aws s3 rb s3://${physName(n)}`);UI.modal=null;return}
+      const refs=edges().filter(e=>e.to===arg||e.from===arg).length;confirmModal(`Xóa ${arg}?`,`${esc(n.def.label)} sẽ bị bỏ khỏi ${n.scope==="manual"?"account":"template"}${refs?`, kèm ${refs} quan hệ`:""}.`,"Xóa",()=>{edit("xóa "+arg,()=>removeNode(arg));if(n.scope==="manual"){log("API","s3","DeleteBucket",physName(n),"warn",`aws s3 rb s3://${physName(n)}`);delete RT.obj[arg];delete RT.n[arg]}UI.sel=null},true)},
+    askEmpty(){const n=nodeOf(arg);confirmModal(`Empty ${arg}?`,`Mọi object trong ${esc(physName(n))} sẽ bị xóa.`,"Empty",()=>{RT.obj[arg]={};log("API","s3","DeleteObjects",`${physName(n)}: làm rỗng`,"warn",`aws s3 rm s3://${physName(n)} --recursive`);UI.dirty=true},true)},
+    cleanJunk(){const st=RT.obj[arg]||{},ks=Object.keys(st).filter(k=>k.startsWith("incoming/")&&k.endsWith(".json"));ks.forEach(k=>delete st[k]);log("API","s3","DeleteObjects",`${ks.length} file .json trong incoming/`,"warn",`aws s3 rm s3://${physName(nodeOf(arg))}/incoming/ --recursive --exclude "*" --include "*.json"`);UI.dirty=true},
+    inject(){const n=nodeOf(arg);if(!stackUp()&&Object.keys(M.res).length&&RT.stack.status==="NOT_DEPLOYED")deploy();inject(n,1);log("Thử","sim",n.type==="CloudLab::Uploader"?"upload":"request",`${arg}: 1 ${n.type==="CloudLab::Uploader"?"file":"request"}`,"")},
+    pubTest(){push({at:RT.t,to:arg,w:1,type:"pub",data:{subject:"Tin thử từ CloudLab",body:"Nếu bạn đọc được, subscription đang hoạt động."}});drain();log("Thử","sns","Publish",`tin thử tới ${arg}`,"",`aws sns publish --topic-arn ${arnOf(arg)} --message "test"`)},
+    openMail(){UI.mailOpen=arg;for(const L of Object.values(RT.inbox)){const m=L.find(x=>x.id===arg);if(m)m.read=true}},
+    confirmMail(){for(const[ib,L]of Object.entries(RT.inbox)){const m=L.find(x=>x.id===arg);if(m&&m.topic){if(confirmSub(m.topic,(nodeOf(ib).props||{}).Address))m.done=true}}UI.dirty=true},
+    check(){check()},hint(){UI.hints=Math.min(UI.hints+1,L_().hints().length);log("Bài học","lesson","hint",`mở gợi ý ${UI.hints}`,"")},
+    askSkip(){confirmModal("Làm hộ bài này?","CloudLab sửa template và runtime giúp bạn, ghi từng bước vào Event log. Tính là đã xem, không tính đạt.","Làm hộ",()=>{const L=L_();L.solve();check();if(UI.result.ok){DONE.delete(L.id);store.set("done",[...DONE]);UI.result.skipped=true;UI.result.msg="Xem YAML và Event log để thấy từng thay đổi. Tính là đã xem, chưa đạt."}})},
+    askReset(){confirmModal("Reset bài này?","Template và runtime về trạng thái ban đầu. Event log giữ nguyên.","Reset",()=>startLesson(UI.lesson),true)},
+    openSandbox(){if(UI.mode!=="sandbox")startSandbox()},loadStarter(){confirmModal("Mở mẫu API → Lambda → DynamoDB?","Canvas sandbox hiện tại sẽ bị thay.","Mở mẫu",()=>startSandbox(loadTemplate(STARTER.yaml,STARTER.layout,"sandbox")))},
+    askClear(){confirmModal("Canvas trống?","Xóa mọi thứ trong sandbox.","Xóa hết",()=>startSandbox(emptyModel("sandbox")),true)},
+    copyLesson(){const L=LESSONS[+arg];confirmModal(`Mở template “${L.tag}” trong sandbox?`,"Canvas sandbox hiện tại sẽ bị thay. Không chấm điểm.","Mở",()=>startSandbox(loadTemplate(L.yaml,L.layout,"sandbox",L.manual)))},
+    tour(){const L=L_();const ids=Object.keys(L.explain||{}).filter(id=>nodeOf(id));if(UI.tour>=0){UI.tour=-1;UI.sel=null;return}UI.tour=0;UI.sel={node:ids[0]};UI.gfocus="#dt"},
+    copyYaml(){try{navigator.clipboard.writeText(toYaml());t.textContent="Đã copy"}catch(_){}return true},
+    envAdd(){edit("env",()=>{const n=nodeOf(arg);const v=getP(n.props,"Environment.Variables")||{};v["VAR_"+(Object.keys(v).length+1)]="";setP(n.props,"Environment",{Variables:v})})},
+    rowAdd(){const fs=t.closest("[data-ftype]"),n=nodeOf(fs.dataset.fid),k=fs.dataset.field;edit("thêm dòng",()=>{const cur=arr(getP(n.props,k));setP(n.props,k,cur.concat([arg==="subs"?{Protocol:"email",Endpoint:EMAIL}:{Event:"s3:ObjectCreated:*",Function:null}]))})},
+    rowDel(){const fs=t.closest("[data-ftype]");t.closest(".frow").remove();applyField(fs)},
+    polAdd(){const fs=t.closest("[data-ftype]"),n=nodeOf(fs.dataset.fid);edit("thêm policy",()=>{n.props.Policies=arr(n.props.Policies).concat([{PolicyName:"inline-"+(arr(n.props.Policies).length+1),PolicyDocument:{Version:"2012-10-17",Statement:[{Effect:"Allow",Action:"s3:GetObject",Resource:"*"}]}}])})},
+    polDel(){const fs=t.closest("[data-ftype]");t.closest(".pol").remove();applyField(fs)},
+    stmtAdd(){const fs=t.closest("[data-ftype]"),pol=t.closest(".pol");pol.insertAdjacentHTML("beforeend","");const tmp=document.createElement("div");tmp.innerHTML=stmtRow({Effect:"Allow",Action:"s3:GetObject",Resource:"*"},fs.dataset.ftype==="statements");pol.insertBefore(tmp.firstChild,t);applyField(fs)},
+    submitModal(){const Md=UI.modal,v=modalValues(),r=Md.submit(v);if(r&&r.ok===false){Md.err=r.err;const er=document.getElementById("merr");if(er)er.textContent=r.err;return true}if(UI.modal===Md)UI.modal=null},
+  };
+  if(A[a]){const keep=A[a]();if(keep!==true)render()}});
+document.addEventListener("change",e=>{const t=e.target;
+  if(t.id==="speed"){UI.speed=+t.value;return}
+  if(t.id==="f-lid"){const a=t.dataset.fid,b=t.value.trim();let r;edit("đổi tên",()=>{r=renameNode(a,b)});if(!r.ok){undo();UNDO.pop();t.setAttribute("aria-invalid","true");log("CloudLab","editor","rename",r.err,"bad");return}UI.sel={node:b};render();return}
+  if(t.id==="iq-a"||t.id==="iq-r"){UI.iamq={a:document.getElementById("iq-a").value,r:document.getElementById("iq-r").value};refreshRt();return}
+  const fs=t.closest("[data-ftype]");if(fs&&fs.closest("#drawer"))applyField(fs);
+  if(t.closest(".modal")){const n=document.getElementById("mnote");if(n&&UI.modal&&UI.modal.note)n.innerHTML=UI.modal.note(modalValues())}});
+document.addEventListener("input",e=>{if(e.target.id!=="yaml")return;clearTimeout(YAML_T);const ta=e.target;YAML_T=setTimeout(()=>{const r=fromYaml(ta.value,{name:M.name,pos:M.pos,manual:M.manual});
+  if(!r.ok){YAML_ERR=r;const st=document.getElementById("ystat");if(st)st.innerHTML=ystat();return}YAML_ERR=null;const nm=r.model;edit("YAML",()=>{M=nm})},500)});
+/* palette drag & drop */
+document.addEventListener("dragstart",e=>{const p=e.target.closest&&e.target.closest("[data-ptype]");if(p&&e.dataTransfer){e.dataTransfer.setData("text/plain",p.dataset.ptype);e.dataTransfer.effectAllowed="copy"}});
+document.addEventListener("dragover",e=>{if(e.target.closest&&e.target.closest(".gx")){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect="copy"}});
+document.addEventListener("drop",e=>{const gx=e.target.closest&&e.target.closest(".gx");if(!gx||!e.dataTransfer)return;const type=e.dataTransfer.getData("text/plain");if(!T[type])return;e.preventDefault();
+  const[x,y]=toWorld(e.clientX,e.clientY);let id;gFreeze();edit("add "+type,()=>{id=addNode(type,x-GW/2,y-30)});log("CloudLab","editor","add",`${id} (${T[type].label})`,"ok");UI.sel={node:id};render()});
+/* canvas pointer: pan, drag nodes, drag-to-connect */
+document.addEventListener("pointerdown",e=>{if(e.button!==0||!e.target.closest)return;const gx=e.target.closest(".gx");if(!gx||e.target.closest(".gmenu"))return;
+  const port=e.target.closest("[data-gconnect]"),node=e.target.closest(".gnode");
+  GD={kind:port?"connect":node?"node":e.target.closest("[data-edge]")?"edge":"pan",id:port?port.dataset.gconnect:node?node.dataset.gid:null,x0:e.clientX,y0:e.clientY,moved:false,pan0:[...GCUR.pan],gx};
+  if(GD.kind==="node"){GD.pos0=[...(M.pos[GD.id]||[0,0])]}if(GD.kind==="pan")e.preventDefault()});
+document.addEventListener("pointermove",e=>{if(!GD||GD.kind==="edge")return;const dx=e.clientX-GD.x0,dy=e.clientY-GD.y0;if(!GD.moved&&Math.hypot(dx,dy)<5)return;
+  if(!GD.moved){GD.moved=true;gFreeze();UI.gmenu=null;if(GD.kind==="connect")UI.gdrag={from:GD.id}}const z=GCUR.z;
+  if(GD.kind==="pan"){GCUR.pan=[GD.pan0[0]+dx,GD.pan0[1]+dy];gs().pan=[...GCUR.pan];gApply()}
+  else if(GD.kind==="node"){M.pos[GD.id]=[Math.round(GD.pos0[0]+dx/z),Math.round(GD.pos0[1]+dy/z)];gRefresh()}
+  else{const el=document.elementFromPoint&&document.elementFromPoint(e.clientX,e.clientY),on=el&&el.closest&&el.closest(".gnode");UI.gdrag.at=toWorld(e.clientX,e.clientY);UI.gdrag.over=on?on.dataset.gid:null;gRefresh();GD.gx.classList.add("connecting")}});
+function gEnd(cancel){if(!GD)return;const d=GD;GD=null;if(!d.moved)return;GSUP=Date.now();
+  if(d.kind==="node")saveSandbox();
+  if(d.kind==="connect"){const over=!cancel&&UI.gdrag&&UI.gdrag.over;UI.gdrag=null;if(over&&connectRule(d.id,over))doConnect(d.id,over);render()}}
+document.addEventListener("pointerup",()=>gEnd(false));document.addEventListener("pointercancel",()=>gEnd(true));
+document.addEventListener("wheel",e=>{const gx=e.target.closest&&e.target.closest(".gx");if(!gx||!(e.ctrlKey||e.metaKey))return;e.preventDefault();const r=gx.getBoundingClientRect();gZoomAt(GCUR.z*Math.exp(-e.deltaY*.0025),e.clientX-r.left,e.clientY-r.top)},{passive:false});
+window.addEventListener("keydown",e=>{const tag=(e.target.tagName||"").toLowerCase(),typing=tag==="input"||tag==="textarea"||tag==="select";
+  const menu=UI.gmenu&&e.target.closest&&e.target.closest(".gmenu");
+  if(menu){const Mn=UI.gmenu,n=(Mn.ids||[]).length;
+    if(e.key==="Escape"){e.preventDefault();e.stopPropagation();const f=Mn.from;UI.gmenu=null;UI.gfocus=`[data-gconnect="${f}"]`;render();return}
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();Mn.active=((Mn.active||0)+(e.key==="ArrowDown"?1:-1)+n)%Math.max(1,n);renderCanvas();const f=document.getElementById("glist");if(f)f.focus();return}
+    if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();const to=Mn.ids[Mn.active||0];if(to&&connectRule(Mn.from,to)){doConnect(Mn.from,to);UI.gmenu=null;render()}return}return}
+  if(!typing&&(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();e.shiftKey?redo():undo();return}
+  if(!typing&&(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="y"){e.preventDefault();redo();return}
+  const nd=e.target.closest&&e.target.closest(".gnode .gn[data-node]");if(!nd)return;const id=nd.dataset.node;
+  if(e.key.startsWith("Arrow")){e.preventDefault();if(e.shiftKey){const p=M.pos[id],d={ArrowRight:[16,0],ArrowLeft:[-16,0],ArrowDown:[0,16],ArrowUp:[0,-16]}[e.key];M.pos[id]=[p[0]+d[0],p[1]+d[1]];saveSandbox();gRefresh();const el=document.querySelector(`.gn[data-node="${id}"]`);if(el)el.focus()}
+    else{const nb=gNeighbor(id,e.key);if(nb){const el=document.querySelector(`.gn[data-node="${nb}"]`);if(el)el.focus()}}return}
+  if(e.key==="Delete"||e.key==="Backspace"){e.preventDefault();UI.lastOpener=`[data-node="${id}"]`;const b=document.createElement("button");b.dataset.act="askDelNode";b.dataset.arg=id;document.body.appendChild(b);b.click();b.remove();return}
+  if((e.key==="c"||e.key==="C")&&!e.ctrlKey&&!e.metaKey){e.preventDefault();UI.gmenu={from:id,active:0};UI.gfocus="#glist";render();return}
+  if((e.key==="t"||e.key==="T")&&!e.ctrlKey&&!e.metaKey){e.preventDefault();gs().trace=!gs().trace;UI.gfocus=`.gn[data-node="${id}"]`;render()}},true);
+document.addEventListener("keydown",e=>{const g=e.target.closest&&e.target.closest("[data-log]");if(g&&(e.key==="Enter"||e.key===" ")){e.preventDefault();g.click()}});
+let RZ=0;window.addEventListener("resize",()=>{clearTimeout(RZ);RZ=setTimeout(()=>{if(!gs().zoom)renderCanvas()},150)});
+/* the tour moves through the lesson's components when the drawer closes or "tiếp" is used */
+document.addEventListener("click",e=>{const L=L_();if(!L||UI.tour<0)return;const nx=e.target.closest&&e.target.closest('[data-act="closeDrawer"]');if(!nx)return;const ids=Object.keys(L.explain||{}).filter(id=>nodeOf(id));UI.tour++;if(UI.tour>=ids.length){UI.tour=-1;return}setTimeout(()=>{UI.sel={node:ids[UI.tour]};render()},0)},true);
+/* ---------------- boot ---------------- */
+(function boot(){const s=store.get("mode",{mode:"lesson",i:0});try{if(s.mode==="sandbox")startSandbox();else startLesson(Math.min(s.i||0,LESSONS.length-1))}catch(err){console.error(err);startLesson(0)}render();
+  const btn=document.getElementById("theme");if(btn){const root=document.documentElement,cur=()=>root.dataset.theme||(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");
+    const paint=()=>{btn.textContent=cur()==="dark"?"☀":"☾"};paint();btn.addEventListener("click",()=>{root.dataset.theme=cur()==="dark"?"light":"dark";store.set("theme",root.dataset.theme);paint()})}})();
+window.CloudLab={get M(){return M},set M(v){M=v},get RT(){return RT},LESSONS,UI,T,step,deploy,deleteStack,startLesson,startSandbox,check,render,toYaml,fromYaml,edges,connectRule,doConnect,addNode,removeNode,evalRole,evalS3,inject,simPlay,probe,confirmSub,nodeOf,allNodes,edit};
