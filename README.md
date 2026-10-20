@@ -72,9 +72,23 @@ Cạnh đổi màu theo những gì vừa xảy ra và ghi lý do khi bị chặ
 | 9 | [000079](https://000079.awsstudygroup.com/) API → Lambda → DynamoDB | Book Store API | Role thiếu `dynamodb:PutItem` |
 | 10 | [000037](https://000037.awsstudygroup.com/) · [000038](https://000038.awsstudygroup.com/) CloudFormation / CDK | Pipeline sắp gỡ + bucket tạo tay | `DeletionPolicy: Retain`, bucket còn object, bucket ngoài stack |
 
+| 11 | Landing zone · chuẩn bị | Org cũ: OU Legacy + Workloads, 4 account | Billing only; SCP chặn `config:*`; account thiếu execution role, còn Config recorder cũ |
+| 12 | Landing zone · enroll theo đợt | Landing zone + OU Security (log archive, audit) | Manifest thiếu audit; app-prod còn recorder cũ; SCP gắn lại lên Legacy |
+| 13 | Landing zone · contract | Mọi account đã enroll | Drift; trail riêng ghi log hai nơi; chưa có preventive control |
+
+Ba bài landing zone chuyển từ trang [Brownfield rollout simulator](https://dat-2k2.github.io/landing-zone-sim/) (vẫn giữ nguyên), kèm nguyên tắc, bảng expand–contract, case thực tế và nguồn.
+
 CIDR, tên và cấu hình theo lab gốc. Chỗ nào CloudLab đơn giản hóa thì bài ghi rõ: NAT gateway và traffic đi ra chưa mô phỏng; Auto Scaling group thay bằng instance cố định; RDS dùng db.t3.micro thay vì db.m5.large.
 
 Mỗi khối trong bài có phần **Trong bài này** giải thích nó làm gì trong bối cảnh đó. Nhiệm vụ được chấm trên template và bằng một lần mô phỏng thử. Gợi ý mở dần (triệu chứng → chỗ hỏng → nguyên nhân); có Làm hộ và Reset.
+
+Khung bên phải chia ba tầng: việc cần làm (mục tiêu, nhiệm vụ, Check) → bối cảnh (tình huống, ví dụ trong ngân hàng) → tham khảo (thu gọn). Kéo mép trái của khung để mở rộng; canvas khi đó chỉ để tham khảo. Mỗi thành phần có phần **Hiểu nhanh** giải thích bằng ví dụ ngân hàng.
+
+Mỗi bài có link riêng: `#/lesson/<id>` (ví dụ `#/lesson/vpc`), sandbox là `#/sandbox`.
+
+## Cho Gemini và công cụ đọc web
+
+App vẽ bằng JavaScript, nên công cụ chỉ tải HTML sẽ thấy trang trống. `build.py` chạy `tools/export-text.js` để sinh `llms.txt` (mục lục), `llms-full.txt` (toàn bộ bài học và giải thích thành phần) và `learn.html` (cùng nội dung, HTML tĩnh, có JSON-LD Course). Đưa link `learn.html` cho Gemini là đủ.
 
 ## Chạy
 
@@ -85,6 +99,10 @@ Không có build step. Trang tải kit layout từ `../kit/`, nên khi chạy lo
 - `src/core.js`: hằng số, tiện ích, event log, undo
 - `src/catalog.js`: thành phần serverless, IAM, giám sát, bên ngoài AWS
 - `src/model.js`: template model, cạnh suy ra từ tham chiếu, quy tắc nối, YAML
+- `src/org.js`: Organizations, OU, account, SCP, Control Tower (landing zone, register OU, controls), precheck enroll
+- `src/eli5.js`: giải thích từng thành phần bằng ví dụ ngân hàng
+- `src/lessons-org.js`: ba bài landing zone
+- `tools/export-text.js`: sinh llms.txt, llms-full.txt, learn.html
 - `src/infra.js`: VPC, subnet, IGW, security group, EC2, ALB, CloudFront, Route 53, RDS, ElastiCache
 - `src/iam.js`: đánh giá IAM (identity policy, managed policy, bucket policy, BPA)
 - `src/sim.js`: deploy / xóa stack, mô phỏng sự kiện và request, metric, chi phí, budget, alarm
