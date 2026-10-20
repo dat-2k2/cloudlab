@@ -2,8 +2,11 @@
 /* "Có gì mới": the app's features and updates grouped by big feature (from the repo history on GitHub,
    dat-2k2/cloudlab), newest first inside each group. CHANGELOG_VERSION changes whenever entries are added: the
    top-bar button shows a dot until the viewer opens the dialog (seen flag in localStorage cloudlab:news). */
-const CHANGELOG_VERSION="2026-10-20b";
+const CHANGELOG_VERSION="2026-10-20c";
 const CHANGELOG=[
+  {id:"k8s",icon:"☸",title:"CloudLab Kubernetes",sum:"Cùng giao diện, cho Kubernetes: kéo thả Deployment, Service, Ingress… hoặc viết manifest, rồi xem pod lên và request đi qua.",items:[
+    ["20/10","Trang mới cloudlab/k8s: 10 bài trong bối cảnh Ngân hàng An Phát (pod không chạy, Service không có endpoint, probe, Ingress, requests / limits, HPA ngày lương về, Secret, NetworkPolicy cho vùng dữ liệu thẻ, PVC, CronJob đối soát)."],
+    ["20/10","Mô phỏng cluster: xếp pod theo requests, kéo image, probe, CrashLoopBackOff, OOMKilled, rolling update, HPA, cluster autoscaler, NetworkPolicy, DNS giữa namespace, chi phí EKS theo giờ."]]},
   {id:"editor",icon:"⊞",title:"Editor hạ tầng kéo thả",sum:"Dựng hạ tầng AWS như vẽ sơ đồ: mỗi khối là một thành phần thật, mỗi mũi tên là một cấu hình thật.",items:[
     ["20/10","Chế độ toàn màn hình (nút ⤢ hoặc phím F): sơ đồ phủ màn hình, công cụ và phần giải thích nổi phía trên."],
     ["20/10","Cuộn chuột để phóng to / thu nhỏ tại vị trí con trỏ; Shift + cuộn để kéo ngang."],

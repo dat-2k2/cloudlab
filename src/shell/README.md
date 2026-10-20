@@ -71,5 +71,5 @@ Optional hooks: `view(n, rows, cx)` · `rt(n, {r, m, p})` (runtime panel HTML) �
 `edgeState(e, flow, st, from)` · `parentOf(n)` (container id) · `dropHint`, `onDrop`, `dragHint`, `onDragEnd`
 (placement in containers) · `beforeDelete(n)` (return `false` to stop) · `afterDelete(n)` · `onChange(el)` ·
 `redeploy(label, cli)` (an edit while deployed) · `runtime()` (extra `RT` fields) · `onNewMonth()` ·
-`manualStatus(n)` · `lessonRef(L)` · `eli5(type)` · `fmt(value)` · `relDoc` · `keepNull` · `api` (added to
+`manualStatus(n)` · `lessonRef(L)` · `eli5(type)` · `fmt(value)` · `idValue(n)` (what the name field shows; `renameNode` may return `{ok, id}` with the new id) · `relDoc` · `keepNull` · `api` (added to
 `window.CloudLab`).

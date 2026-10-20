@@ -108,18 +108,22 @@ ${l.bank?`<h3>Trong ngân hàng</h3><p>${esc(l.bank.why||"")}</p><ul>${(l.bank.c
 const labs=[...new Set(LESSONS.flatMap(l=>l.lab?l.lab.split(" · "):[]))];
 const bankSrc=[...new Map(LESSONS.flatMap(l=>l.bank?[...(l.bank.cases||[]),...(l.bank.rule?[l.bank.rule]:[])]:[]).filter(c=>c.url).map(c=>[c.url,c])).values()];
 const YEAR=new Date().getFullYear();
+/* the Kubernetes page's banking sources (k8s/src/bank.js), for the credits list */
+const K8S_SRC=(()=>{try{const c={LESSONS:[]};vm.createContext(c);vm.runInContext(fs.readFileSync(path.join(root,"k8s/src/bank.js"),"utf8").replace(/^"use strict";/,"")+";globalThis.__K=K8S_BANK;",c);
+  const seen=new Set(),out=[];for(const b of Object.values(c.__K))for(const x of [...(b.cases||[]),b.rule].filter(Boolean))if(x.url&&!seen.has(x.url)){seen.add(x.url);out.push(x)}return out}catch(_){return[]}})();
 const credits=`<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CloudLab · Nguồn và bản quyền</title><meta name="description" content="Bản quyền, nhãn hiệu và các nguồn tham khảo của CloudLab."><link rel="canonical" href="${SITE}credits.html">
 <style>:root{color-scheme:light dark;--bg:#fff;--fg:#111827;--mut:#4b5563;--line:#e5e7eb;--acc:#4f46e5}@media (prefers-color-scheme:dark){:root{--bg:#0b0d12;--fg:#e5e7eb;--mut:#9ca3af;--line:#1f2937;--acc:#818cf8}}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,sans-serif}main{max-width:760px;margin:0 auto;padding:24px 16px 64px}a{color:var(--acc)}h2{margin-top:36px;padding-top:14px;border-top:1px solid var(--line);font-size:20px}.mut{color:var(--mut)}li{margin:4px 0}</style></head>
 <body><main><p><a href="./">← Mở CloudLab</a></p><h1>Nguồn và bản quyền</h1>
 <h2>Bản quyền</h2><p>© ${YEAR} Nguyen Quoc Dat. Mã nguồn, mô phỏng và nội dung bài học của CloudLab do tác giả viết, trừ những phần ghi nguồn bên dưới.</p>
-<h2>Nhãn hiệu, không liên kết</h2><p>Amazon Web Services, AWS và tên các dịch vụ AWS (EC2, S3, Lambda, CloudFormation, CDK, Control Tower, Organizations, …) là nhãn hiệu của Amazon.com, Inc. hoặc công ty liên kết. Terraform là nhãn hiệu của HashiCorp. CloudLab là dự án học tập cá nhân, không liên kết, không được AWS, HashiCorp hay AWS Study Group bảo trợ hoặc xác nhận.</p>
+<h2>Nhãn hiệu, không liên kết</h2><p>Kubernetes® là nhãn hiệu đã đăng ký của The Linux Foundation tại Hoa Kỳ và các nước khác; trang <a href="k8s/">CloudLab Kubernetes</a> không liên kết với The Linux Foundation hay CNCF. Amazon Web Services, AWS và tên các dịch vụ AWS (EC2, S3, Lambda, CloudFormation, CDK, Control Tower, Organizations, …) là nhãn hiệu của Amazon.com, Inc. hoặc công ty liên kết. Terraform là nhãn hiệu của HashiCorp. CloudLab là dự án học tập cá nhân, không liên kết, không được AWS, HashiCorp hay AWS Study Group bảo trợ hoặc xác nhận.</p>
 <h2>Nội dung tham khảo</h2><ul>
 <li><b>First Cloud AI Journey / First Cloud Journey</b> của AWS Study Group (<a href="https://cloudjourney.awsstudygroup.com/">cloudjourney.awsstudygroup.com</a>): thứ tự bài, số workshop, tên và dải IP trong các bài theo FCAJ. Bài tập trong CloudLab được viết mới để luyện cùng chủ đề, không sao chép nội dung workshop. Workshop gốc: ${labs.map(x=>`<a href="https://${x}.awsstudygroup.com/">${x}</a>`).join(", ")}.</li>
 <li><b>Tài liệu và bảng giá AWS</b> (<a href="https://docs.aws.amazon.com/">docs.aws.amazon.com</a>, <a href="https://aws.amazon.com/pricing/">aws.amazon.com/pricing</a>): hành vi dịch vụ và giá tham khảo (ap-southeast-2, một số theo us-east-1). Giá trong mô phỏng có thể đã cũ.</li>
 <li><b>Bài landing zone</b> (chuyển từ <a href="https://dat-2k2.github.io/landing-zone-sim/">Brownfield rollout simulator</a>): nguyên tắc và case tóm tắt từ ${LZ_SRC.map(([t,u])=>`<a href="${u}">${esc(t)}</a>`).join("; ")}.</li>
 ${bankSrc.length?`<li><b>Bối cảnh ngân hàng</b> trong từng bài: ${bankSrc.map(c=>`<a href="${esc(c.url)}">${esc(c.t.length>90?c.t.slice(0,88)+"…":c.t)}</a>`).join("; ")}.</li>`:""}
+<li><b>Bài Kubernetes</b> (<a href="k8s/">CloudLab Kubernetes</a>): hành vi mô phỏng theo <a href="https://kubernetes.io/docs/">tài liệu Kubernetes</a> (© The Kubernetes Authors, CC BY 4.0); giá theo bảng giá AWS EKS và EC2 (ap-southeast-1).${K8S_SRC.length?` Bối cảnh ngân hàng: ${K8S_SRC.map(c=>`<a href="${esc(c.url)}">${esc(c.t.length>90?c.t.slice(0,88)+"…":c.t)}</a>`).join("; ")}.`:""}</li>
 </ul>
 <h2>Phần mềm mã nguồn mở</h2><ul>
 <li><a href="https://github.com/nodeca/js-yaml">js-yaml</a> 4.1.0, © Vitaly Puzrin, giấy phép MIT.</li>

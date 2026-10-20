@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="cloudlab-app" content="k8s">
+<title>CloudLab · Kubernetes</title>
+<meta name="description" content="Học Kubernetes trong trình duyệt: kéo thả hoặc viết manifest, mô phỏng pod, Service, Ingress, HPA, NetworkPolicy và chi phí cluster. Mười bài học đặt trong bối cảnh ngân hàng, mỗi bài là một cluster có lỗi cài sẵn.">
+<link rel="preload" href="../fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<script>try{var t=localStorage.getItem("cloudlab:theme");if(t)document.documentElement.dataset.theme=JSON.parse(t)}catch(_){}</script>
+<link rel="stylesheet" href="../../kit/layout.css">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<noscript><p>CloudLab Kubernetes cần JavaScript để chạy editor và mô phỏng.</p></noscript>
+<div class="shell app" data-shell>
+  <header class="shell-top">
+    <button class="icon-btn" data-shell-toggle aria-controls="side" aria-label="Thu gọn / mở thanh bên">☰</button>
+    <a class="top-brand" href="https://dat-2k2.github.io/" title="Về trang chủ"><span class="mark" aria-hidden="true">D</span><span class="hide-s">Nguyen Quoc Dat</span><span class="app">/ CloudLab · Kubernetes</span></a>
+    <p class="top-crumb" id="crumb"></p>
+    <div class="top-actions">
+      <span class="chip live ok hide-s">cluster anphat-prod · mô phỏng</span>
+      <a class="hide-s" href="../" title="CloudLab cho AWS">CloudLab AWS</a>
+      <a class="hide-s" href="https://github.com/dat-2k2/cloudlab" target="_blank" rel="noopener">GitHub ↗</a>
+      <button class="icon-btn" id="tourBtn" aria-label="Xem hướng dẫn sử dụng" title="Hướng dẫn">?</button>
+      <button class="icon-btn" id="theme" aria-label="Đổi giao diện sáng / tối" title="Sáng / tối">☾</button>
+    </div>
+  </header>
+  <nav class="shell-side" id="side" aria-label="Bài học"></nav>
+  <main class="main">
+    <div class="stackbar" id="bar"></div>
+    <section class="work" id="work">
+      <div class="pane-canvas" id="canvas" aria-label="Canvas"></div>
+      <div class="pane-code" id="code" hidden></div>
+    </section>
+    <section class="simbar" id="simbar" aria-label="Mô phỏng"></section>
+    <section class="logp" id="log" aria-label="Event log" hidden></section>
+  </main>
+  <div class="lesson-resize" id="lessonResize" role="separator" aria-orientation="vertical" aria-controls="lesson" aria-label="Kéo để đổi độ rộng khung bài học (phím ← →)" tabindex="0"></div>
+  <aside class="lesson" id="lesson" aria-label="Bài học" aria-live="polite"></aside>
+  <footer class="shell-foot">
+    <span class="foot-l">© 2026 Nguyen Quoc Dat · <a href="../credits.html">Nguồn và bản quyền</a><span class="hide-s"> · <a href="../">← CloudLab AWS</a> · <a href="https://dat-2k2.github.io/">dat-2k2.github.io</a></span></span>
+    <span class="foot-r">Kubernetes® là nhãn hiệu của The Linux Foundation; CloudLab không liên kết · mô phỏng, giá tham khảo</span>
+  </footer>
+</div>
+<aside class="drawer" id="drawer" hidden></aside>
+<div id="modal"></div>
+<script src="../../kit/layout.js"></script>
+<script src="../vendor/js-yaml.min.js"></script>
+<!-- shared shell (../src/shell) + the Kubernetes pack (src/). Contract: ../src/shell/README.md -->
+<script src="../src/shell/core.js"></script><script src="../src/shell/model.js"></script><script src="../src/shell/sim.js"></script>
+<script src="src/catalog.js"></script><script src="src/model.js"></script><script src="src/sim.js"></script><script src="src/lessons.js"></script><script src="src/bank.js"></script><script src="src/views.js"></script><script src="src/lint.js"></script>
+<script src="../src/shell/editor.js"></script><script src="../src/shell/ui.js"></script><script src="../src/shell/tour.js"></script>
+</body>
+</html>

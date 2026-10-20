@@ -98,6 +98,16 @@ App vẽ bằng JavaScript, nên công cụ chỉ tải HTML sẽ thấy trang t
 
 Không có build step. Trang tải kit layout từ `../kit/`, nên khi chạy local cần serve một thư mục chứa `cloudlab/` và `kit/` (từ repo dat-2k2.github.io) cạnh nhau. Deploy bằng GitHub Pages, phục vụ tại `/cloudlab/`.
 
+## CloudLab Kubernetes (`k8s/`)
+
+Trang con [`/cloudlab/k8s/`](https://dat-2k2.github.io/cloudlab/k8s/) dùng chung shell (bố cục, canvas, khung bài học, mô phỏng, toàn màn hình, tour) với một domain pack riêng cho Kubernetes:
+
+- `k8s/src/catalog.js`: Namespace, Deployment, StatefulSet, CronJob, Service, Ingress, ConfigMap, Secret, PVC, HPA, NetworkPolicy; client và node pool (mô phỏng); các image app mà registry mô phỏng biết (cổng, health path, thời gian khởi động, memory, CPU mỗi request)
+- `k8s/src/model.js`: cạnh suy ra theo tên (Ingress → Service, envFrom, claimName, scaleTargetRef), theo label selector và theo tên DNS trong biến môi trường; manifest YAML nhiều tài liệu
+- `k8s/src/sim.js`: scheduler theo requests, kubelet (kéo image, cấu hình, probe, OOMKilled, CrashLoopBackOff), rolling update, HPA, cluster autoscaler, Service / Ingress / NetworkPolicy, CronJob, PVC, chi phí EKS
+- `k8s/src/lessons.js`, `bank.js`: 10 bài trong bối cảnh Ngân hàng An Phát, có nguồn
+- `k8s/src/views.js`, `lint.js`: phần giao diện riêng, panel Vấn đề, xuất manifest cho cluster thật
+
 ## Cấu trúc
 
 CloudLab tách làm hai lớp: **shell** (editor, bố cục, khung bài học, đồng hồ mô phỏng, toàn màn hình, tour) không biết gì về AWS, và **domain pack** cho từng nền tảng. Hợp đồng giữa hai lớp (hàm toàn cục và `DOMAIN`) ghi ở [`src/shell/README.md`](src/shell/README.md).

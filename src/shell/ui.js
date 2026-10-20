@@ -53,7 +53,7 @@ function renderCanvas(){const el=document.getElementById("canvas");if(!el)return
 let YAML_ERR=null,YAML_T=0;
 function renderCode(force){const el=document.getElementById("code");if(!el)return;el.hidden=!UI.code;if(el.hidden)return;
   const ta=document.getElementById("yaml");if(ta&&document.activeElement===ta&&!force){const st=document.getElementById("ystat");if(st)st.innerHTML=ystat();return}
-  const tab=UI.codeTab||"cfn",X=EXPORTS[tab],text=X.edit?toYaml():X.gen();
+  const tab=UI.codeTab||Object.keys(EXPORTS)[0],X=EXPORTS[tab],text=X.edit?toYaml():X.gen();
   el.innerHTML=`<div class="ctabs" role="tablist" aria-label="Định dạng IaC">${Object.entries(EXPORTS).map(([k,x])=>`<button role="tab" class="${k===tab?"on":""}" aria-selected="${k===tab}" data-act="codeTab" data-arg="${k}">${esc(x.label)}</button>`).join("")}</div>
     <div class="code-head"><span class="cap mono">${esc(X.file)}</span>${X.edit?`<span id="ystat">${ystat()}</span>`:`<span class="chip">chỉ đọc · sinh từ canvas</span>`}<span class="grow"></span><button class="sm" data-act="copyCode">Copy</button><button class="sm" data-act="dlCode">Tải xuống</button></div>
     ${X.edit?`<textarea id="yaml" class="yaml" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="${esc(X.aria||X.label)}">${esc(text)}</textarea>`:`<pre class="yaml ro" tabindex="0" aria-label="${esc(X.label)}">${esc(text)}</pre>`}
@@ -139,7 +139,7 @@ function renderDrawer(){const el=document.getElementById("drawer");if(!el)return
   if(S&&S.node&&nodeOf(S.node)){const n=nodeOf(S.node),L=L_(),ex=L&&L.explain&&L.explain[n.id],v=nodeView(n);
     c={key:"n:"+n.id,cat:n.def.cat,icon:n.def.short,eyebrow:n.def.label+(n.scope==="manual"?" · "+TX("manualTag"):n.ext?" · "+TX("extTag"):""),title:n.id,status:v.st?chip(v.st[1],v.st[0]):"",
       body:(DOMAIN.eli5&&DOMAIN.eli5(n.type)?`<div class="callout eli5"><b>Hiểu nhanh</b>${esc(DOMAIN.eli5(n.type))}</div>`:"")+(ex?`<div class="callout ctx"><b>Trong bài này</b>${esc(ex)}</div>`:"")+`<details class="doc"${ex||(DOMAIN.eli5&&DOMAIN.eli5(n.type))?"":" open"}><summary>${esc(n.def.label)} là gì?</summary><p>${esc(n.def.doc||"")}</p></details>`+
-        `<p class="lab">Cấu hình</p><label class="fld"><span class="fl">${esc(TX("idLabel"))}</span><input data-act="rename" id="f-lid" data-fid="${n.id}" value="${esc(n.id)}"></label>`+n.def.fields.map(f=>fieldHtml(n,f)).join("")+
+        `<p class="lab">Cấu hình</p><label class="fld"><span class="fl">${esc(TX("idLabel"))}</span><input data-act="rename" id="f-lid" data-fid="${n.id}" value="${esc(DOMAIN.idValue?DOMAIN.idValue(n):n.id)}"></label>`+n.def.fields.map(f=>fieldHtml(n,f)).join("")+
         `<p class="lab">Đang chạy</p><div class="rt" id="rt">${rtHtml(n.id)}</div>`,foot:nodeActs(n)}}
   else if(S&&S.edge){const e=(GLAST?GLAST.edges:edges()).find(x=>x.id===S.edge);if(e){const v=edgeView(e),f=RT.flow[e.id]||{ok:0,err:0};
     c={key:"e:"+e.id,cat:"learn",icon:"→",eyebrow:"Mũi tên · "+e.kind,title:`${e.from} → ${e.to}`,status:chip(v.st==="ok"?"đang chạy":v.st==="stop"?"bị chặn":v.st==="blocked"?"bị chặn đúng ý":v.st==="loop"?"vòng lặp":v.st==="leak"?"lẽ ra phải bị chặn":"chưa có dữ liệu",{ok:"ok",stop:"bad",loop:"bad",leak:"bad",blocked:"ok"}[v.st]||""),
@@ -236,8 +236,8 @@ document.addEventListener("click",e=>{
     copyLesson(){const L=LESSONS[+arg];confirmModal(`Mở template “${L.tag}” trong sandbox?`,"Template này sẽ thay canvas sandbox hiện tại. Sandbox không chấm điểm.","Mở trong sandbox",()=>startSandbox(loadTemplate(L.yaml,L.layout,"sandbox",L.manual)))},
     tour(){const L=L_();const ids=Object.keys(L.explain||{}).filter(id=>nodeOf(id));if(UI.tour>=0){UI.tour=-1;UI.sel=null;return}UI.tour=0;UI.sel={node:ids[0]};UI.gfocus="#dt"},
     codeTab(){UI.codeTab=arg;renderCode(true);return true},
-    copyCode(){const X=EXPORTS[UI.codeTab||"cfn"];try{navigator.clipboard.writeText(X.edit?toYaml():X.gen());t.textContent="Đã copy"}catch(_){}return true},
-    dlCode(){const X=EXPORTS[UI.codeTab||"cfn"];download(X.file,X.edit?toYaml():X.gen());log("CloudLab","iac","export",X.file,"ok");return true},
+    copyCode(){const X=EXPORTS[UI.codeTab||Object.keys(EXPORTS)[0]];try{navigator.clipboard.writeText(X.edit?toYaml():X.gen());t.textContent="Đã copy"}catch(_){}return true},
+    dlCode(){const X=EXPORTS[UI.codeTab||Object.keys(EXPORTS)[0]];download(X.file,X.edit?toYaml():X.gen());log("CloudLab","iac","export",X.file,"ok");return true},
     panel(){UI.panel=UI.panel===arg?null:arg;UI.logOpen=!!UI.panel},
     rowDel(){const fs=t.closest("[data-ftype]");t.closest(".frow").remove();applyField(fs)},
     submitModal(){const Md=UI.modal,v=modalValues(),r=Md.submit(v);if(r&&r.ok===false){Md.err=r.err;const er=document.getElementById("merr");if(er)er.textContent=r.err;return true}if(UI.modal===Md)UI.modal=null},
@@ -245,7 +245,7 @@ document.addEventListener("click",e=>{
   const h=A[a]||(DOMAIN.actions[a]&&(()=>DOMAIN.actions[a](arg,t,e)));if(h){const keep=h();if(keep!==true)render()}});
 document.addEventListener("change",e=>{const t=e.target;
   if(t.id==="speed"){UI.speed=+t.value;return}
-  if(t.id==="f-lid"){const a=t.dataset.fid,b=t.value.trim();let r;edit("đổi tên",()=>{r=renameNode(a,b)});if(!r.ok){undo();UNDO.pop();t.setAttribute("aria-invalid","true");log("CloudLab","editor","rename",r.err,"bad");return}UI.sel={node:b};render();return}
+  if(t.id==="f-lid"){const a=t.dataset.fid,b=t.value.trim();let r;edit("đổi tên",()=>{r=renameNode(a,b)});if(!r.ok){undo();UNDO.pop();t.setAttribute("aria-invalid","true");log("CloudLab","editor","rename",r.err,"bad");return}UI.sel={node:r.id||b};render();return}
   if(DOMAIN.onChange&&DOMAIN.onChange(t)===true)return;
   const fs=t.closest("[data-ftype]");if(fs&&fs.closest("#drawer"))applyField(fs);
   if(t.closest(".modal")){const n=document.getElementById("mnote");if(n&&UI.modal&&UI.modal.note)n.innerHTML=UI.modal.note(modalValues())}});
