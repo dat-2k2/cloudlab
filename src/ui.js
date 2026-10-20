@@ -31,7 +31,7 @@ function renderSide(){const tab=UI.sideTab||(UI.mode==="lesson"?"learn":"comp"),
   else{h+=`<label class="psearch"><span class="sr">Tìm thành phần</span><input id="psearch" type="search" placeholder="Tìm: ec2, vpc, s3, lambda…" value="${esc(q)}" autocomplete="off"></label>`;
     if(!q)h+=`<p class="side-group">Bắt đầu từ mẫu</p>`+Object.entries(STARTERS).map(([k,t])=>`<button class="side-item tpl" data-act="loadTpl" data-arg="${k}" data-cat="learn" title="${esc(t.desc)}"><span class="side-ic" aria-hidden="true">▦</span><span class="side-label">${esc(t.title)}<small>${esc(t.tag)}</small></span></button>`).join("");
     const groups=palItems(q);
-    for(const[g,name,items]of groups)h+=`<p class="side-group">${esc(name)}</p>`+items.map(t=>`<button class="side-item pal" draggable="true" data-ptype="${t.type}" data-cat="${t.cat}" title="Kéo vào canvas, hoặc bấm để thêm: ${esc(t.label)}"><span class="side-ic" style="--cat:var(--c-${t.cat})" aria-hidden="true">${esc(t.short)}</span><span class="side-label">${esc(t.label)}</span></button>`).join("");
+    for(const[g,name,items]of groups)h+=`<p class="side-group">${esc(name)}</p>`+items.map(t=>`<button class="side-item pal" data-ptype="${t.type}" data-cat="${t.cat}" title="Kéo vào canvas, hoặc bấm để thêm: ${esc(t.label)}"><span class="side-ic" style="--cat:var(--c-${t.cat})" aria-hidden="true">${esc(t.short)}</span><span class="side-label">${esc(t.label)}</span></button>`).join("");
     if(!groups.length)h+=`<p class="note pnone">Không có thành phần nào khớp “${esc(q)}”.</p>`}
   h+=`<button class="side-collapse" data-shell-toggle aria-controls="side" title="Thu gọn / mở"><span aria-hidden="true">«</span><span class="side-label">Thu gọn</span></button>`;
   document.getElementById("side").innerHTML=h}
@@ -312,13 +312,32 @@ document.addEventListener("input",e=>{if(e.target.id==="psearch"){UI.psearch=e.t
   if(e.target.id!=="yaml")return;clearTimeout(YAML_T);const ta=e.target;YAML_T=setTimeout(()=>{const r=fromYaml(ta.value,{name:M.name,pos:M.pos,manual:M.manual});
   if(!r.ok){YAML_ERR=r;const st=document.getElementById("ystat");if(st)st.innerHTML=ystat();return}YAML_ERR=null;const nm=r.model;edit("YAML",()=>{M=nm})},500)});
 /* palette drag & drop */
-document.addEventListener("dragstart",e=>{const p=e.target.closest&&e.target.closest("[data-ptype]");if(p&&e.dataTransfer){e.dataTransfer.setData("text/plain",p.dataset.ptype);e.dataTransfer.effectAllowed="copy"}});
-document.addEventListener("dragover",e=>{if(e.target.closest&&e.target.closest(".gx")){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect="copy"}});
-document.addEventListener("drop",e=>{const gx=e.target.closest&&e.target.closest(".gx");if(!gx||!e.dataTransfer)return;const type=e.dataTransfer.getData("text/plain");if(!T[type])return;e.preventDefault();
-  const[x,y]=toWorld(e.clientX,e.clientY);let id;gFreeze();edit("add "+type,()=>{id=addNode(type,x-GW/2,y-30)});log("CloudLab","editor","add",`${id} (${T[type].label})`,"ok");
+/* drag a component from the menu (or the ＋ picker) onto the canvas. Pointer events, not HTML5 drag-and-drop:
+   Chromium never starts a native drag from these buttons, and pointer events also work with touch and pen. */
+function dropComponent(type,cx,cy){const[x,y]=toWorld(cx,cy);let id;gFreeze();edit("add "+type,()=>{id=addNode(type,x-GW/2,y-30)});log("CloudLab","editor","add",`${id} (${T[type].label})`,"ok");
   const sb=GLAST&&boxAt(GLAST.boxes,x,y,"subnet"),vb=GLAST&&boxAt(GLAST.boxes,x,y,"vpc");if(sb)placeIn(id,sb.id);else if(vb&&PLACEABLE.includes(type))autoSubnet(id,vb.id);
   else if(vb&&["AWS::EC2::Subnet","AWS::EC2::SecurityGroup","AWS::ElasticLoadBalancingV2::TargetGroup"].includes(type))edit("vpc",()=>{nodeOf(id).props.VpcId={Ref:vb.id}});
-  UI.sel={node:id};render()});
+  UI.picker=null;UI.sel={node:id};UI.selRet=`[data-node="${id}"]`;saveSandbox();render();return id}
+let PD=null,PD_SUPPRESS=0;
+document.addEventListener("pointerdown",e=>{if(e.button!==0||!e.target.closest)return;const it=e.target.closest("[data-ptype]");if(!it)return;PD={type:it.dataset.ptype,x0:e.clientX,y0:e.clientY,el:it,ghost:null,pid:e.pointerId}});
+document.addEventListener("pointermove",e=>{if(!PD||e.pointerId!==PD.pid)return;
+  if(!PD.ghost){if(Math.hypot(e.clientX-PD.x0,e.clientY-PD.y0)<6)return;const d=T[PD.type],g=document.createElement("div");g.className="pal-ghost";g.setAttribute("aria-hidden","true");
+    g.innerHTML=`<span class="side-ic" style="--cat:var(--c-${d.cat})">${esc(d.short)}</span><span>${esc(d.label)}</span>`;document.body.appendChild(g);PD.ghost=g;document.body.classList.add("pal-dragging");
+    try{PD.el.releasePointerCapture&&PD.el.releasePointerCapture(e.pointerId)}catch(_){}}
+  e.preventDefault();PD.ghost.style.transform=`translate(${e.clientX+12}px,${e.clientY+12}px)`;
+  const el=document.elementFromPoint(e.clientX,e.clientY),gx=el&&el.closest&&el.closest(".gx");PD.ghost.classList.toggle("ok",!!gx);
+  document.querySelectorAll(".gx").forEach(x=>x.classList.toggle("pal-over",x===gx));
+  /* show which VPC/subnet the drop would land in */
+  let hb=null;if(gx&&GLAST){const[wx,wy]=toWorld(e.clientX,e.clientY);const b=boxAt(GLAST.boxes,wx,wy,"subnet")||boxAt(GLAST.boxes,wx,wy,"vpc");hb=b?b.id:null}
+  document.querySelectorAll(".gbox").forEach(x=>x.classList.toggle("drop",x.dataset.gid===hb))},{passive:false});
+function palEnd(e,cancel){if(!PD)return;const d=PD;PD=null;document.body.classList.remove("pal-dragging");document.querySelectorAll(".gx.pal-over").forEach(x=>x.classList.remove("pal-over"));document.querySelectorAll(".gbox.drop").forEach(x=>x.classList.remove("drop"));
+  if(!d.ghost)return;d.ghost.remove();PD_SUPPRESS=Date.now();setTimeout(()=>{PD_SUPPRESS=0},0);if(cancel)return;
+  const el=document.elementFromPoint(e.clientX,e.clientY);if(el&&el.closest&&el.closest(".gx"))dropComponent(d.type,e.clientX,e.clientY);
+  if(KIT.isNarrow()){const sh=document.querySelector("[data-shell]");if(sh&&sh.hasAttribute("data-side-open"))sh.removeAttribute("data-side-open")}}
+document.addEventListener("pointerup",e=>palEnd(e,false));document.addEventListener("pointercancel",e=>palEnd(e,true));
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&PD&&PD.ghost){palEnd(e,true)}},true);
+/* a drag that ends is not also a click on the menu item */
+document.addEventListener("click",e=>{if(PD_SUPPRESS&&Date.now()-PD_SUPPRESS<400&&e.target.closest&&e.target.closest("[data-ptype]")){e.stopPropagation();e.preventDefault();PD_SUPPRESS=0}},true);
 /* canvas pointer: pan, drag nodes, drag-to-connect */
 document.addEventListener("pointerdown",e=>{if(e.button!==0||!e.target.closest)return;const gx=e.target.closest(".gx");if(!gx||e.target.closest(".gmenu"))return;
   const port=e.target.closest("[data-gconnect]"),node=e.target.closest(".gnode"),boxh=e.target.closest(".gbox-h");
