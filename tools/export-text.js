@@ -9,7 +9,7 @@ const ctx={console,setTimeout,clearTimeout,setInterval,clearInterval,
   window:{addEventListener:noop,innerWidth:1440,innerHeight:900},localStorage:{getItem:()=>null,setItem:noop},
   document:{addEventListener:noop,getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],createElement:el,body:el(),documentElement:el()}};
 ctx.window.document=ctx.document;vm.createContext(ctx);
-const files=["vendor/js-yaml.min.js","src/core.js","src/catalog.js","src/model.js","src/infra.js","src/org.js","src/eli5.js","src/iam.js","src/sim.js","src/lessons.js","src/lessons-org.js"];
+const files=["vendor/js-yaml.min.js","src/core.js","src/catalog.js","src/model.js","src/infra.js","src/org.js","src/eli5.js","src/iam.js","src/sim.js","src/lessons.js","src/lessons-org.js","src/bank.js"];
 vm.runInContext(files.map(f=>fs.readFileSync(path.join(root,f),"utf8").replace(/^"use strict";/,"")).join("\n;\n")+"\n;globalThis.__X={LESSONS,T,GROUPS,ELI5,STARTERS,LZ_SRC};",ctx);
 const {LESSONS,T,GROUPS,ELI5,STARTERS,LZ_SRC}=ctx.__X;
 const SITE="https://dat-2k2.github.io/cloudlab/";

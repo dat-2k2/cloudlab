@@ -10,7 +10,10 @@ Nhóm: Phase 1 · Explore · Chủ đề: Budgets + SNS · Theo FCAJ workshop 00
 
 **Mục tiêu:** Chi tiêu vượt 80% và 100% của $20 → email về hộp thư của bạn (như lab 000007).
 
-**Tình huống:** API đặt hàng đang chạy thật, mỗi ngày tốn chút ít. Em đặt budget $20 cho account, báo về email ở 50, 80 và 100% nhé. Lỡ có gì chạy quá tay thì ít nhất có email.
+**Tình huống:** Đội digital của Ngân hàng An Phát đang chạy thử API đăng ký mở thẻ trên AWS. Khối Tài chính duyệt hạn mức $20/tháng cho môi trường thử nghiệm và yêu cầu: chạm 80% và 100% thì phải có email báo. Hiện budget mới cài ngưỡng 50%, còn email nhận cảnh báo thì chưa ai xác nhận.
+
+**Trong ngân hàng:** Chi phí cloud là chi phí vận hành tính theo từng giờ, từng request, không chờ tới kỳ thanh toán hóa đơn. Một môi trường thử nghiệm quên tắt hoặc một lỗi lặp vô hạn có thể đốt cả ngân sách quý trong vài ngày. Đặt hạn mức và cảnh báo giống như hạn mức tín dụng có cảnh báo khi gần chạm trần.
+- Câu hỏi thảo luận: Ở đơn vị bạn, ai được duyệt hạn mức chi phí cho một dự án cloud, và ai nhận cảnh báo khi vượt?
 
 **Nhiệm vụ:**
 1. Budget $20 · ngưỡng 80% và 100% (BudgetLimit 20 USD, notification 80 + 100)
@@ -18,11 +21,11 @@ Nhóm: Phase 1 · Explore · Chủ đề: Budgets + SNS · Theo FCAJ workshop 00
 3. Chạy cả tháng: cảnh báo 80% và 100% về hộp thư (budget → SNS → email đã xác nhận)
 
 **Các khối trong template:**
-- Customers: Khách đặt hàng qua app, khoảng 2 request mỗi giây. Đây là thứ làm hóa đơn tăng dần trong tháng — bấm ▶ để xem đồng hồ chi phí chạy.
-- OrdersApi: Mỗi request vào API Gateway tính một ít tiền rồi chuyển cho Lambda orders.
+- Customers: Khách điền form đăng ký mở thẻ trên app, khoảng 2 lượt mỗi giây.
+- OrdersApi: Cửa nhận hồ sơ đăng ký thẻ từ app.
 - OrdersFn: 512 MB × khoảng 0,9 giây mỗi lần. Phần lớn chi phí của hệ thống nằm ở GB-giây của function này.
 - OrdersRole: Quyền của orders: chỉ ghi log. Không liên quan tới cảnh báo, nhưng mọi Lambda đều cần một role.
-- MonthlyBudget: Budget nhìn tổng chi tiêu cả account trong tháng, không gắn với tài nguyên nào. Hiện chỉ có ngưỡng 50%.
+- MonthlyBudget: Hạn mức chi tiêu $20/tháng Khối Tài chính đã duyệt cho môi trường thử nghiệm.
 - BillingAlerts: Budget không gửi email trực tiếp ở đây mà publish vào topic; topic chuyển tới mọi subscription.
 - MyInbox: Hộp thư của bạn. SNS đã gửi một thư “Subscription Confirmation”. Chưa bấm Confirm thì SNS không gửi gì tới địa chỉ này.
 
@@ -38,7 +41,11 @@ Nhóm: Phase 1 · Explore · Chủ đề: IAM role + switch role · Theo FCAJ wo
 
 **Mục tiêu:** Lan (qua role) đọc được report.csv, nhưng vẫn không ghi hay xóa được.
 
-**Tình huống:** Anh Minh tạo role chỉ-đọc cho mình. Mình assume role rồi mà đọc report.csv vẫn AccessDenied. Bạn xem giúp? Nhớ là mình không được ghi hay xóa gì trong bucket đó.
+**Tình huống:** Mình là kiểm toán nội bộ của Ngân hàng An Phát. Anh Minh bên CNTT cấp cho mình một role chỉ-đọc để xem file đối soát report.csv. Mình assume role rồi mà vẫn AccessDenied. Nhớ giúp mình: kiểm toán chỉ được xem, tuyệt đối không được sửa hay xóa chứng từ.
+
+**Trong ngân hàng:** Đây là nguyên tắc tách bạch nhiệm vụ (maker–checker): người kiểm tra không được sửa thứ mình kiểm tra. Trên AWS, nguyên tắc đó là một role chỉ có quyền đọc, và một Deny được viết sai có thể chặn luôn việc đọc hợp lệ.
+- Quy định: Thông tư 50/2024/TT-NHNN (hiệu lực 01/01/2025), Điều 19: nhân sự truy cập dữ liệu khách hàng chỉ được giới hạn theo đúng chức năng công việc, và mỗi lần truy cập phải được giám sát. (https://luatvietnam.vn/tin-van-ban-moi/ngan-hang-ap-dung-toi-thieu-5-bien-phap-bao-mat-du-lieu-khach-hang-tu-01-01-2025-186-99993-article.html)
+- Câu hỏi thảo luận: Trong quy trình duyệt chi ở đơn vị bạn, ai là maker, ai là checker? Nếu cùng một người có cả hai quyền thì rủi ro gì?
 
 **Nhiệm vụ:**
 1. Lan đọc được report.csv (s3:GetObject qua role → Allow)
@@ -46,10 +53,10 @@ Nhóm: Phase 1 · Explore · Chủ đề: IAM role + switch role · Theo FCAJ wo
 3. Lan không xóa được (s3:DeleteObject → Deny)
 
 **Các khối trong template:**
-- LanReads: Lan đọc report.csv. Lan không có quyền gì trực tiếp: Lan assume role lab-readonly-s3 (STS cấp credential tạm), rồi gọi S3 bằng quyền của role.
-- LanWrites: Lan thử ghi notes.txt. Ta MUỐN lệnh này bị chặn — role chỉ được đọc. Cạnh ✕ xanh lá nghĩa là chặn đúng ý.
-- ReadOnlyRole: Trust policy cho người trong account assume. Hai policy: lab-s3-read cho phép đọc, lab-guardrail cấm thay đổi object. Deny luôn thắng Allow.
-- DataBucket: Bucket private. Không có bucket policy, nên quyền hoàn toàn nằm ở identity policy của role.
+- LanReads: Lan mở file đối soát cuối ngày để kiểm tra.
+- LanWrites: Thử ghi vào kho chứng từ. Với kiểm toán, việc này phải bị chặn.
+- ReadOnlyRole: Quyền dành cho kiểm toán: chỉ xem, không sửa.
+- DataBucket: Kho chứng từ đối soát của phòng vận hành.
 
 **Khái niệm:** IAM role, trust policy, STS AssumeRole, explicit deny, least privilege
 
@@ -63,7 +70,11 @@ Nhóm: Phase 1 · Explore · Chủ đề: VPC + Security group · Theo FCAJ work
 
 **Mục tiêu:** Web public vào được; SSH chỉ từ IP của bạn; private subnet chỉ nhận SSH từ public SG.
 
-**Tình huống:** Theo lab 000003: VPC ASG 10.10.0.0/16, 2 public + 2 private subnet. Web ở public phải vào được từ Internet, còn SSH chỉ từ IP của em. Hiện web không vào được, còn bot thì SSH vào được.
+**Tình huống:** Ngân hàng An Phát dựng trang giới thiệu sản phẩm trên một máy chủ ở vùng public, còn máy xử lý nội bộ ở vùng private (theo lab 000003). Khách vẫn chưa vào được trang, trong khi một bot lạ lại đăng nhập quản trị (SSH) được vào máy chủ. Chỉ máy của đội CNTT, IP 203.0.113.10, được quản trị.
+
+**Trong ngân hàng:** Ngân hàng chia mạng thành các vùng: sảnh đón khách (public) và khu nghiệp vụ (private), và chỉ mở đúng cửa cho đúng người. Cổng quản trị mở cho cả Internet là lỗi cấu hình kinh điển mà các đợt kiểm tra an toàn thông tin hay bắt được.
+- Quy định: Thông tư 09/2020/TT-NHNN (hiệu lực 01/01/2021), Điều 23 “Quản lý an toàn, bảo mật hệ thống mạng”. Với dữ liệu thẻ, PCI DSS v4.0 Yêu cầu 1 về kiểm soát an ninh mạng. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Hệ thống nào của đơn vị bạn cần tiếp xúc Internet, hệ thống nào tuyệt đối không?
 
 **Nhiệm vụ:**
 1. Khách vào được web (IGW gắn VPC → public subnet có đường Internet)
@@ -77,11 +88,11 @@ Nhóm: Phase 1 · Explore · Chủ đề: VPC + Security group · Theo FCAJ work
 - PrivateB: Private subnet: không có IP public, Internet không vào thẳng được.
 - PublicSg: Mở 80 cho mọi người là đúng (web). Nhưng 22 (SSH) cũng mở 0.0.0.0/0 — bot quét cổng sẽ thử đăng nhập.
 - PrivateSg: Lab: SSH vào private chỉ được từ public SG (máy public làm bastion), không phải từ Internet.
-- Visitors: Khách vào web trên PublicEc2, cổng 80.
-- You: Bạn SSH từ IP 203.0.113.10 — rule SSH nên chỉ mở cho /32 này.
-- ScanBot: Bot từ IP lạ thử SSH. Ta muốn bị chặn (✕ xanh).
-- PublicEc2: Web server + bastion.
-- PrivateEc2: App server, chỉ vào được qua bastion.
+- Visitors: Khách hàng mở trang giới thiệu sản phẩm của ngân hàng.
+- You: Kỹ sư CNTT của ngân hàng quản trị máy chủ từ IP văn phòng.
+- ScanBot: Bot dò mật khẩu từ một IP lạ trên Internet. Phải bị chặn.
+- PublicEc2: Máy chủ web, đồng thời là cửa vào duy nhất để quản trị (bastion).
+- PrivateEc2: Máy xử lý nội bộ, không được lộ ra Internet.
 
 **Khái niệm:** VPC CIDR, public vs private subnet, Internet gateway, security group, bastion, NAT gateway (lab)
 
@@ -95,7 +106,12 @@ Nhóm: Phase 1 · Explore · Chủ đề: EC2 + IAM role · Theo FCAJ workshop 0
 
 **Mục tiêu:** App ghi được vào bucket bằng instance role; role chỉ có quyền cần thiết.
 
-**Tình huống:** App trên EC2 cần ghi file vào bucket uploads. Lab 000048 cho thấy dán access key vào máy là sai. Role đã có nhưng chưa gắn vào máy, và quyền thì quá rộng.
+**Tình huống:** App vay tiêu dùng của Ngân hàng An Phát chạy trên EC2 và lưu ảnh giấy tờ của khách vào bucket hồ sơ. Một bạn dev định dán access key vào máy cho nhanh (cách lab 000048 cảnh báo). Role đúng thì đã có nhưng chưa gắn vào máy, và đang được quyền làm mọi thứ với mọi bucket.
+
+**Trong ngân hàng:** Quyền rộng tới đâu thì thiệt hại khi bị lộ rộng tới đó. Một access key dán trong máy có thể bị sao chép mà không ai biết; role gắn vào máy dùng credential tạm, tự đổi, và chỉ nên được làm đúng một việc.
+- Capital One (Mỹ): ngày 06/08/2020, OCC phạt 80 triệu USD vì ngân hàng không thiết lập quy trình đánh giá rủi ro hiệu quả trước khi chuyển phần lớn hoạt động CNTT lên public cloud, sau vụ lộ dữ liệu khách hàng năm 2019. (https://www.occ.treas.gov/news-issuances/news-releases/2020/nr-occ-2020-101.html)
+- Quy định: Thông tư 50/2024/TT-NHNN, Điều 19: giới hạn truy cập dữ liệu khách hàng theo chức năng và kiểm soát truy cập thiết bị, phương tiện lưu trữ dữ liệu khách hàng. (https://luatvietnam.vn/tin-van-ban-moi/ngan-hang-ap-dung-toi-thieu-5-bien-phap-bao-mat-du-lieu-khach-hang-tu-01-01-2025-186-99993-article.html)
+- Câu hỏi thảo luận: Ứng dụng nhận hồ sơ vay thật sự cần những quyền gì? Liệt kê, rồi gạch bỏ mọi thứ còn lại.
 
 **Nhiệm vụ:**
 1. EC2 có instance role (IamInstanceProfile → AppRole)
@@ -103,10 +119,10 @@ Nhóm: Phase 1 · Explore · Chủ đề: EC2 + IAM role · Theo FCAJ workshop 0
 3. Role chỉ có quyền cần thiết (không xóa bucket, không ghi bucket khác)
 
 **Các khối trong template:**
-- AppEc2: App ghi file vào UploadsBucket mỗi request. Không có instance profile → không có credential → AccessDenied.
-- AppRole: Role có sẵn nhưng chưa gắn vào EC2, và s3:* trên * là quá rộng (xóa được mọi bucket).
-- UploadsBucket: Bucket private, chỉ cần PutObject từ app.
-- Users: Người dùng upload qua app.
+- AppEc2: Ứng dụng nhận hồ sơ vay, mỗi hồ sơ lưu một ảnh giấy tờ.
+- AppRole: Thẻ quyền của ứng dụng. Hiện quá rộng: xóa được cả kho của phòng khác.
+- UploadsBucket: Kho ảnh CCCD và giấy tờ thu nhập của khách vay. Dữ liệu cá nhân nhạy cảm.
+- Users: Khách nộp hồ sơ vay qua app.
 - AppSg: Mở cổng 80 cho web.
 
 **Khái niệm:** instance profile, IAM role cho EC2, credential tạm, least privilege
@@ -121,7 +137,11 @@ Nhóm: Phase 1 · Explore · Chủ đề: S3 + CloudFront · Theo FCAJ workshop 
 
 **Mục tiêu:** Khách đọc web qua CloudFront; bucket không còn public.
 
-**Tình huống:** Lab 000057 dựng web tĩnh bằng cách mở public bucket. Giờ chặn public lại và cho khách đi qua CloudFront (lab 000094) để nhanh hơn và an toàn hơn.
+**Tình huống:** Trang biểu lãi suất và biểu phí của Ngân hàng An Phát đang chạy bằng cách mở công khai cả bucket (cách lab 000057). Bộ phận an toàn thông tin yêu cầu khóa bucket lại, và cho khách đọc qua CloudFront (lab 000094) để trang vẫn nhanh khi khách vào đông.
+
+**Trong ngân hàng:** Nội dung công khai (biểu phí, lãi suất) vẫn phải nằm trong kho được khóa. Kho bị mở công khai chỉ cần một lần bỏ nhầm file nội bộ vào là thành sự cố lộ dữ liệu. CloudFront cho khách đọc bản sao gần nhất, còn kho gốc giữ kín.
+- Quy định: Thông tư 50/2024/TT-NHNN, Điều 19: dữ liệu khách hàng phải được bảo mật; phải kiểm soát truy cập vào thiết bị, phương tiện lưu trữ để chống rò rỉ. (https://luatvietnam.vn/tin-van-ban-moi/ngan-hang-ap-dung-toi-thieu-5-bien-phap-bao-mat-du-lieu-khach-hang-tu-01-01-2025-186-99993-article.html)
+- Câu hỏi thảo luận: Nếu một file nội bộ lỡ được tải nhầm vào kho của trang công khai, đơn vị bạn phát hiện bằng cách nào và sau bao lâu?
 
 **Nhiệm vụ:**
 1. Khách đi qua CloudFront (Visitors → CloudFront → SiteBucket, không lỗi)
@@ -129,9 +149,9 @@ Nhóm: Phase 1 · Explore · Chủ đề: S3 + CloudFront · Theo FCAJ workshop 
 3. Block Public Access bật cả 4 (4 tùy chọn = true)
 
 **Các khối trong template:**
-- Visitors: Khách đang đọc thẳng từ S3. Sau khi sửa, nối Visitors → CloudFront.
-- SiteBucket: Bucket đang public để làm website. Sau khi có CloudFront thì bật lại Block Public Access.
-- SitePolicy: Principal "*" cho cả Internet đọc. Khi đi qua CloudFront thì không cần policy này nữa.
+- Visitors: Khách xem biểu lãi suất, khoảng 20 lượt mỗi giây vào giờ cao điểm.
+- SiteBucket: Kho file của trang biểu phí. Cùng tài khoản này còn có kho dữ liệu khác, nên bucket không được để public.
+- SitePolicy: Nội quy cho phép “*”, tức cả thiên hạ, đọc kho.
 
 **Khái niệm:** S3 static website, Block Public Access, CloudFront origin, cache hit ratio
 
@@ -145,7 +165,11 @@ Nhóm: Phase 1 · Explore · Chủ đề: RDS + VPC · Theo FCAJ workshop 000005
 
 **Mục tiêu:** App vẫn chạy; DB không public, rds-sg chỉ cho EC2; DB subnet group 2 AZ private + Multi-AZ.
 
-**Tình huống:** Lab 000005: MySQL Multi-AZ, database fcaj, security group rds-sg. Bản này chạy được nhưng DB đang public, mở 3306 cho cả Internet, chỉ một AZ.
+**Tình huống:** App tiết kiệm online của Ngân hàng An Phát lưu sổ tiết kiệm trong MySQL (theo lab 000005). Hệ thống chạy được, nhưng database đang có địa chỉ Internet, mở cổng 3306 cho cả thế giới, và chỉ nằm ở một trung tâm dữ liệu (một AZ).
+
+**Trong ngân hàng:** Sổ sách là thứ quý nhất của ngân hàng. Nó phải nằm sâu trong khu nghiệp vụ, chỉ ứng dụng được phép mới chạm tới, và phải có bản sao ở tòa nhà khác để một sự cố không làm mất dữ liệu hay ngừng giao dịch.
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 22 “Sao lưu dự phòng” và Điều 50 “Xây dựng hệ thống dự phòng thảm họa”. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Nếu trung tâm dữ liệu chính mất điện lúc 10 giờ sáng, đơn vị bạn chấp nhận mất bao nhiêu phút giao dịch và bao nhiêu dữ liệu?
 
 **Nhiệm vụ:**
 1. App vẫn chạy (request → EC2 → RDS không lỗi)
@@ -153,12 +177,12 @@ Nhóm: Phase 1 · Explore · Chủ đề: RDS + VPC · Theo FCAJ workshop 000005
 3. 2 AZ private + Multi-AZ (DB subnet group gồm 2 private subnet khác AZ, MultiAZ true)
 
 **Các khối trong template:**
-- Db: MySQL database fcaj. PubliclyAccessible = true và nằm ở public subnet: có địa chỉ Internet. Lab dùng db.m5.large Multi-AZ; ở đây db.t3.micro cho rẻ.
+- Db: Sổ tiết kiệm của khách: số dư, kỳ hạn, lãi suất. Lab dùng db.m5.large Multi-AZ; ở đây dùng db.t3.micro cho rẻ.
 - RdsSg: rds-sg mở 3306 cho 0.0.0.0/0 — ai cũng thử đăng nhập được. Đúng ra chỉ cho Ec2Sg.
-- AppEc2: App đọc ghi DB mỗi request.
+- AppEc2: Ứng dụng tiết kiệm online, mỗi request đọc hoặc ghi sổ.
 - Ec2Sg: Cổng 80 cho khách vào app.
 - PrivateA: Nơi DB nên nằm (cùng PrivateB, 2 AZ).
-- Users: Khách dùng app.
+- Users: Khách mở và tất toán sổ tiết kiệm qua app.
 
 **Khái niệm:** DB subnet group, security group tham chiếu SG, PubliclyAccessible, Multi-AZ
 
@@ -172,7 +196,11 @@ Nhóm: Phase 1 · Explore · Chủ đề: ALB + Auto Scaling · Theo FCAJ worksh
 
 **Mục tiêu:** ALB ở 2 AZ, ≥ 2 target ở 2 AZ, chịu được 60 req/s mà gần như không lỗi.
 
-**Tình huống:** Lab 000006 dựng launch template + target group + ALB + Auto Scaling group. Bản đang chạy chỉ có một t3.micro sau ALB, ALB lại chỉ ở một subnet, và giờ cao điểm có 60 request/giây.
+**Tình huống:** Ngày trả lương, lượng truy cập app Ngân hàng An Phát lên khoảng 60 request mỗi giây. Phía sau load balancer chỉ có một máy t3.micro, và load balancer lại chỉ đặt ở một trung tâm dữ liệu (lab 000006 dùng Auto Scaling group; ở đây dùng máy cố định).
+
+**Trong ngân hàng:** Ngày trả lương, Tết, ngày đáo hạn là lúc khách cần app nhất, cũng là lúc dễ quá tải nhất. Chia tải ra nhiều máy ở nhiều trung tâm dữ liệu giúp hệ thống vừa chịu được cao điểm, vừa sống sót khi một nơi gặp sự cố.
+- Quy định: Ở EU, Đạo luật DORA (Quy định (EU) 2022/2554, áp dụng từ 17/01/2025) yêu cầu tổ chức tài chính quản lý rủi ro CNTT và khả năng phục hồi hoạt động. (https://eur-lex.europa.eu/eli/reg/2022/2554/oj)
+- Câu hỏi thảo luận: Ngày nào trong năm hệ thống của đơn vị bạn chịu tải cao nhất? Đã từng thử tải trước ngày đó chưa?
 
 **Nhiệm vụ:**
 1. ALB ở 2 AZ (≥ 2 subnet, khác Availability Zone)
@@ -181,10 +209,10 @@ Nhóm: Phase 1 · Explore · Chủ đề: ALB + Auto Scaling · Theo FCAJ worksh
 
 **Các khối trong template:**
 - Alb: Chỉ ở PublicA. AWS bắt buộc ALB có ≥ 2 subnet ở 2 AZ (xem tab Vấn đề).
-- Web1: Một t3.micro chịu ~40 req/s trong CloudLab. 60 req/s → quá tải, trả 5xx.
+- Web1: Một quầy duy nhất phục vụ cả sảnh. Quá tải là khách gặp lỗi.
 - WebTargets: Health check: target nào security group không cho ALB vào thì bị loại.
-- Users: Cao điểm 60 request/giây.
-- Dashboard: Xem request và lỗi theo thời gian.
+- Users: Khách mở app kiểm tra lương về và chuyển tiền, cao điểm 60 request/giây.
+- Dashboard: Màn hình trực vận hành: số request, lỗi, CPU.
 - WebSg: Chỉ nhận cổng 80 từ alb-sg — đúng.
 - PrivateB: AZ thứ hai, đang trống. Lab dùng Auto Scaling group trải đều 2 AZ; CloudLab dùng instance cố định.
 
@@ -200,7 +228,11 @@ Nhóm: Phase 1 · Explore · Chủ đề: CloudWatch · Theo FCAJ workshop 00000
 
 **Mục tiêu:** Request qua API thành công, có log trong CloudWatch, role không thừa quyền.
 
-**Tình huống:** API extract báo lỗi 502 liên tục. Dashboard thấy lỗi tăng, alarm đã gửi email, mà vào CloudWatch lại không có dòng log nào để biết vì sao.
+**Tình huống:** API trích xuất thông tin sao kê của Ngân hàng An Phát trả lỗi 502 liên tục. Dashboard thấy lỗi tăng, alarm đã gửi email cho người trực, nhưng vào CloudWatch lại không có dòng log nào để biết vì sao.
+
+**Trong ngân hàng:** Không có nhật ký thì không điều tra được sự cố, cũng không chứng minh được với kiểm toán điều gì đã xảy ra. Nhật ký hệ thống là bằng chứng, giống chứng từ giao dịch.
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 26 “Giám sát và ghi nhật ký hoạt động của hệ thống thông tin”. PCI DSS v4.0 Yêu cầu 10: ghi và giám sát truy cập; lưu nhật ký ít nhất 12 tháng, 3 tháng gần nhất phải tra ngay được. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Khi có khiếu nại “giao dịch của tôi bị lỗi lúc 14:05”, đơn vị bạn tra nhật ký nào, mất bao lâu?
 
 **Nhiệm vụ:**
 1. Request qua API thành công (Lambda chạy xong trong timeout → 200)
@@ -208,14 +240,14 @@ Nhóm: Phase 1 · Explore · Chủ đề: CloudWatch · Theo FCAJ workshop 00000
 3. Role không thừa quyền (không xóa được object, không động được IAM)
 
 **Các khối trong template:**
-- Tester: Gửi request thử mỗi 5 giây, như health check.
+- Tester: Đội vận hành gửi sao kê mẫu để kiểm tra.
 - ExtractApi: Trả 502 khi Lambda lỗi.
-- ExtractFn: Code cần khoảng 4,2 giây ở 128 MB, nhưng Timeout là 3 giây (mặc định). Thêm memory thì thêm CPU nên chạy nhanh hơn.
+- ExtractFn: Chương trình đọc sao kê và trích xuất giao dịch.
 - ExtractRole: Lambda ghi log bằng chính role này. Role chỉ có quyền đọc S3, thiếu logs:CreateLogGroup / CreateLogStream / PutLogEvents → log mất mà không báo lỗi.
 - OpsDashboard: Monitor nhận số liệu từ extract: lần chạy, lỗi, thời gian. Nhìn đây để thấy lỗi tăng theo thời gian.
-- ErrorsAlarm: Errors > 0 trong 1 phút → ALARM → publish tới ops-alerts. Monitor tự động, không cần ai ngồi nhìn.
+- ErrorsAlarm: Chuông báo khi lỗi vượt ngưỡng, gửi tới người trực.
 - OpsAlerts: Subscription email đã xác nhận sẵn, nên alarm về tới hộp thư.
-- MyInbox: Email ALARM sẽ về đây khi function lỗi.
+- MyInbox: Hộp thư người trực vận hành.
 
 **Khái niệm:** execution role, CloudWatch Logs, timeout, memory = CPU, CloudWatch alarm, least privilege
 
@@ -229,7 +261,10 @@ Nhóm: Serverless · Chủ đề: S3 → Lambda · Theo FCAJ workshop 000078 (ht
 
 **Mục tiêu:** Mỗi ảnh vào incoming/ chạy Lambda đúng một lần, kết quả ra processed/.
 
-**Tình huống:** Mình upload ảnh vào incoming/ mà Lambda chạy liên tục, bucket đầy file .json lạ. Đồng hồ chi phí cứ nhảy. Hóa đơn tháng này có sao không?
+**Tình huống:** Khách mở tài khoản online chụp CCCD tải lên thư mục incoming/, Lambda đọc ảnh và trích thông tin. Từ sáng, Lambda chạy liên tục, bucket đầy file .json lạ, đồng hồ chi phí nhảy không dừng. Hóa đơn tháng này của Ngân hàng An Phát có sao không?
+
+**Trong ngân hàng:** Tự động hóa xử lý hồ sơ (eKYC, sao kê, chứng từ) tiết kiệm nhiều công sức, nhưng một vòng lặp vô tình có thể chạy hàng chục nghìn lần mỗi giờ, vừa tốn tiền vừa nhân bản dữ liệu cá nhân ra khắp nơi.
+- Câu hỏi thảo luận: Quy trình tự động nào ở đơn vị bạn có thể tự kích hoạt lại chính nó? Ai sẽ phát hiện nếu nó chạy sai?
 
 **Nhiệm vụ:**
 1. 1 upload → 1 lần chạy (upload incoming/x.jpg → đúng 1 invocation)
@@ -237,9 +272,9 @@ Nhóm: Serverless · Chủ đề: S3 → Lambda · Theo FCAJ workshop 000078 (ht
 3. Dọn file rác trong incoming/ (incoming/ không còn .json)
 
 **Các khối trong template:**
-- PhoneApp: App điện thoại upload ảnh vào incoming/, khoảng 30 ảnh mỗi giờ.
-- ImagesBucket: Event notification gọi extract cho MỌI object mới — không có prefix hay suffix filter, nên cả file kết quả .json cũng kích hoạt.
-- ExtractFn: Đọc ảnh, ghi kết quả <tên>.json vào OUTPUT_BUCKET/OUTPUT_PREFIX. OUTPUT_PREFIX đang là incoming/ — đúng chỗ đang bắn sự kiện.
+- PhoneApp: App mở tài khoản: khách chụp CCCD và tải lên.
+- ImagesBucket: Kho ảnh giấy tờ eKYC. Dữ liệu cá nhân nhạy cảm.
+- ExtractFn: Chương trình đọc CCCD, trích họ tên, số giấy tờ, ngày sinh.
 - ExtractRole: Đủ quyền đọc và ghi bucket, nên vòng lặp không bị gì chặn lại.
 - OpsDashboard: Nhìn số lần chạy so với số ảnh upload: lẽ ra 1:1.
 
@@ -255,7 +290,11 @@ Nhóm: Serverless · Chủ đề: API Gateway + DynamoDB · Theo FCAJ workshop 0
 
 **Mục tiêu:** Request qua API thành công, sách được ghi vào bảng, role chỉ ghi đúng bảng đó.
 
-**Tình huống:** Book Store lab 000079: frontend gọi API Gateway → Lambda → DynamoDB. API trả 502, bảng books vẫn trống.
+**Tình huống:** Ngân hàng An Phát mở API cho đối tác đặt lịch hẹn giao dịch tại quầy (theo mẫu lab 000079): đối tác gọi API Gateway, Lambda ghi lịch hẹn vào DynamoDB. API trả 502, bảng lịch hẹn vẫn trống.
+
+**Trong ngân hàng:** API mở cho đối tác là cửa mới vào hệ thống ngân hàng. Mỗi API chỉ nên chạm đúng một bảng dữ liệu với đúng một thao tác, để nếu đối tác hoặc API bị lợi dụng thì phạm vi ảnh hưởng nhỏ nhất.
+- Quy định: Thông tư 50/2024/TT-NHNN quy định an toàn, bảo mật cho dịch vụ trực tuyến ngành ngân hàng; Điều 19 yêu cầu giới hạn truy cập dữ liệu khách hàng theo chức năng. (https://luatvietnam.vn/tin-van-ban-moi/ngan-hang-ap-dung-toi-thieu-5-bien-phap-bao-mat-du-lieu-khach-hang-tu-01-01-2025-186-99993-article.html)
+- Câu hỏi thảo luận: Một API cho đối tác của đơn vị bạn được đọc, ghi những dữ liệu nào? Có ai rà lại danh sách đó định kỳ không?
 
 **Nhiệm vụ:**
 1. API trả 200 (Frontend → API → Lambda không lỗi)
@@ -264,10 +303,10 @@ Nhóm: Serverless · Chủ đề: API Gateway + DynamoDB · Theo FCAJ workshop 0
 
 **Các khối trong template:**
 - BooksFn: Ghi mỗi request thành một item vào bảng trong biến TABLE_NAME.
-- BooksRole: Chỉ có quyền ghi log. Thiếu dynamodb:PutItem → AccessDenied → API trả 502.
-- BooksTable: On-demand: trả tiền theo mỗi lần ghi.
+- BooksRole: Quyền của chương trình xử lý: hiện chỉ được ghi log, chưa được ghi lịch hẹn.
+- BooksTable: Bảng lịch hẹn giao dịch (trong mẫu lab tên là books).
 - BooksApi: HTTP API chuyển request cho Lambda.
-- Frontend: Trang web Book Store gọi API.
+- Frontend: Ứng dụng của đối tác gửi yêu cầu đặt lịch.
 
 **Khái niệm:** API Gateway HTTP API, Lambda integration, DynamoDB PutItem, execution role
 
@@ -281,7 +320,12 @@ Nhóm: Hạ tầng dưới dạng code · Chủ đề: CloudFormation / CDK · T
 
 **Mục tiêu:** Xóa stack sạch: không tài nguyên nào bị giữ lại, không còn gì tính tiền.
 
-**Tình huống:** Pipeline xong việc rồi, em xóa stack đi cho đỡ tốn. Nhớ kiểm tra: sau khi xóa, đồng hồ chi phí phải về 0 — kể cả cái bucket lab-scratch hôm trước em tạo tay.
+**Tình huống:** Dự án xử lý chứng từ thử nghiệm của Ngân hàng An Phát đã kết thúc. Khối Tài chính yêu cầu xóa toàn bộ hạ tầng để dừng tính tiền. Nhớ kiểm tra: sau khi xóa, đồng hồ chi phí phải về 0, kể cả bucket lab-scratch mà một bạn tạo tay hôm trước, ngoài quy trình.
+
+**Trong ngân hàng:** Hạ tầng dạng code (CloudFormation) giống một phiếu yêu cầu thay đổi: ai đổi gì, khi nào, đều có dấu vết và làm lại được. Thứ tạo tay ngoài quy trình thì không ai nhớ, không ai chịu trách nhiệm.
+- TSB (Anh): tháng 4/2018 chuyển dữ liệu sang nền tảng CNTT mới, nền tảng hỏng ngay, ảnh hưởng tới nhiều trong số 5,2 triệu khách. Ngày 20/12/2022, FCA và PRA phạt tổng 48,65 triệu bảng vì quản trị dự án chuyển đổi yếu và không quản lý rủi ro bên thứ ba. (https://www.fca.org.uk/news/press-releases/tsb-fined-48m-operational-resilience-failings)
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 41 “Quản lý sự thay đổi hệ thống thông tin”. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Đơn vị bạn có danh sách đầy đủ hạ tầng đang chạy không? Thứ gì nằm ngoài danh sách đó?
 
 **Nhiệm vụ:**
 1. Stack xóa xong, không bỏ sót (DELETE_COMPLETE, không gì bị Retain)
@@ -292,7 +336,7 @@ Nhóm: Hạ tầng dưới dạng code · Chủ đề: CloudFormation / CDK · T
 - ImagesBucket: DeletionPolicy: Retain → khi xóa stack, CloudFormation bỏ qua bucket này: nó còn đó và vẫn tính tiền 200 GB. Kể cả đổi thành Delete, CloudFormation không xóa được bucket còn object.
 - ExtractFn: Function và role sẽ bị xóa cùng stack.
 - ExtractRole: Role không tốn tiền, nhưng nên đi cùng stack.
-- ScratchBucket: Bucket tạo tay trên console, không thuộc stack nào. Xóa stack không đụng tới nó — 50 GB vẫn bị tính.
+- ScratchBucket: Kho tạo tay ngoài quy trình thay đổi: không ai ghi nhận, nên dễ bị quên và vẫn tính tiền.
 
 **Khái niệm:** CloudFormation stack, DeletionPolicy, bucket phải rỗng mới xóa được, tài nguyên ngoài stack
 
@@ -306,7 +350,11 @@ Nhóm: Landing zone · brownfield · Chủ đề: Organizations + precheck
 
 **Mục tiêu:** Organization bật All features; không SCP nào chặn baseline; cả 4 account qua precheck.
 
-**Tình huống:** Org đã chạy 3 năm, 4 account, chưa có governance chung. Sếp muốn bật Control Tower mà không làm gián đoạn app. Template này là bản inventory của org (bước Quét hiện trạng). Trước khi set up landing zone, phải dọn mọi thứ sẽ làm enroll fail.
+**Tình huống:** Tập đoàn Ngân hàng An Phát có 4 tài khoản AWS dùng 3 năm nay, trong đó một tài khoản của công ty tài chính tiêu dùng mới mua lại. Ban điều hành muốn quản trị tập trung bằng Control Tower mà không làm gián đoạn dịch vụ. Template này là bản kiểm kê hiện trạng; trước khi bật landing zone phải dọn mọi thứ sẽ làm enroll thất bại.
+
+**Trong ngân hàng:** Một tập đoàn tài chính có nhiều đơn vị, mỗi đơn vị một tài khoản. Quản trị tập trung giúp áp chính sách chung, gom nhật ký về một nơi cho kiểm toán. Nhưng đưa đơn vị đang chạy vào khung chung phải kiểm kê và dọn đường trước, như sáp nhập hệ thống sau một thương vụ M&A.
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 34 “Tiêu chí lựa chọn bên thứ ba cung cấp dịch vụ điện toán đám mây” và Mục 5 “Quản lý truy cập”. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Sau một thương vụ mua lại, hệ thống của đơn vị mới được đưa vào chuẩn chung của tập đoàn trong bao lâu, theo thứ tự nào?
 
 **Nhiệm vụ:**
 1. Organization bật All features (FeatureSet: ALL)
@@ -315,10 +363,10 @@ Nhóm: Landing zone · brownfield · Chủ đề: Organizations + precheck
 
 **Các khối trong template:**
 - Org: Organization o-7f3k2pq9xd. Management account 1111-2222-3333 được dùng lại (đường in-place), org ID không đổi.
-- LegacyBilling: legacy-billing: tạo từ Organizations, có execution role, nhưng còn Config recorder cũ.
-- AcquiredStartup: acquired-startup: công ty mua lại, được mời vào org. Account mời vào thường không có role AWSControlTowerExecution, và còn trail riêng.
-- AppDev: app-dev: sạch, đi đợt đầu được.
-- AppProd: app-prod: còn recorder cũ và trail riêng. Prod đi sau non-prod.
+- LegacyBilling: Tài khoản cũ của khối kế toán, còn Config recorder cũ.
+- AcquiredStartup: Tài khoản của công ty tài chính tiêu dùng mới mua lại: được mời vào tổ chức, chưa có role cho Control Tower, còn trail riêng.
+- AppDev: Tài khoản phát triển.
+- AppProd: Tài khoản chạy app ngân hàng số (production).
 - DenyConfigChanges: SCP cũ trên OU Legacy, chặn config:* để không ai tắt recorder. Nó chặn luôn cả role của Control Tower.
 - Legacy: OU cũ. Landing zone không đụng tới cho tới khi bạn register.
 - Workloads: OU cũ của các app.
@@ -356,7 +404,11 @@ Nhóm: Landing zone · brownfield · Chủ đề: Control Tower + register OU
 
 **Mục tiêu:** Landing zone chạy; OU Workloads enroll 100% trước; rồi coverage 100% cả org.
 
-**Tình huống:** Org đã sạch phần lớn chướng ngại, landing zone đã khai báo nhưng setup lỗi. OU Workloads sẽ là đợt thí điểm, Legacy đi sau. Cẩn thận: inventory bỏ sót app-prod, và SCP cũ trên Legacy đã bị gắn lại.
+**Tình huống:** Landing zone của tập đoàn Ngân hàng An Phát đã khai báo nhưng setup lỗi. Khối Workloads (app ngân hàng số) sẽ đi đợt thí điểm, khối Legacy đi sau. Cẩn thận: bản kiểm kê bỏ sót tài khoản app-prod, và chính sách chặn cũ trên Legacy vừa bị ai đó gắn lại.
+
+**Trong ngân hàng:** Đưa đơn vị vào khung quản trị theo đợt, đơn vị ít rủi ro trước, giống triển khai một quy trình mới ở chi nhánh thí điểm trước khi nhân rộng. Mỗi đợt phải đạt tiêu chí mới mở đợt sau.
+- TSB (Anh): FCA và PRA phạt 48,65 triệu bảng (12/2022) vì dự án chuyển đổi CNTT năm 2018 thiếu quản trị chặt chẽ, nền tảng mới hỏng ngay khi chuyển. (https://www.fca.org.uk/news/press-releases/tsb-fined-48m-operational-resilience-failings)
+- Câu hỏi thảo luận: Nếu đợt thí điểm có một đơn vị thất bại, đơn vị bạn dừng toàn bộ hay cho các đơn vị khác đi tiếp?
 
 **Nhiệm vụ:**
 1. Landing zone chạy (manifest có log archive + audit, org All features)
@@ -373,8 +425,8 @@ Nhóm: Landing zone · brownfield · Chủ đề: Control Tower + register OU
 - Legacy: OU cũ. Landing zone không đụng tới cho tới khi bạn register.
 - Workloads: OU cũ của các app.
 - Security: OU do landing zone dùng cho account log archive và audit.
-- LogArchive: log-archive: nhận org trail của mọi account đã enroll.
-- Audit: audit: Config aggregator và quyền đọc cho đội security.
+- LogArchive: Tài khoản lưu nhật ký tập trung của cả tập đoàn: nguồn bằng chứng cho kiểm toán và thanh tra.
+- Audit: Tài khoản của bộ phận kiểm soát và an toàn thông tin: xem được cấu hình mọi đơn vị.
 - LandingZone: Manifest đã có log archive nhưng chưa chỉ định account audit, nên setup lỗi.
 
 **Khái niệm:** landing zone manifest, log archive / audit, register OU (EnableBaseline), enroll, blast radius, đợt thí điểm
@@ -406,7 +458,11 @@ Nhóm: Landing zone · brownfield · Chủ đề: Contract + drift
 
 **Mục tiêu:** Hết drift; không còn log ghi hai nơi; bật một preventive control trên Workloads.
 
-**Tình huống:** Mọi account đã enroll, nhưng rollout chưa xong: hai account vẫn ghi log hai nơi và trả phí trùng (xem đồng hồ chi phí). Sáng nay có người gỡ SCP của Control Tower bằng console, landing zone báo drift.
+**Tình huống:** Mọi tài khoản của tập đoàn Ngân hàng An Phát đã vào khung quản trị, nhưng việc chưa xong: hai tài khoản vẫn ghi nhật ký hai nơi và trả phí trùng (xem đồng hồ chi phí). Sáng nay có người gỡ một chính sách của Control Tower bằng tay trên console, landing zone báo drift.
+
+**Trong ngân hàng:** Thay đổi ngoài quy trình (sửa tay) là rủi ro vận hành: hệ thống lệch khỏi chuẩn mà không ai duyệt. Dọn phần cũ (trail riêng, recorder cũ) không phải việc phụ: còn hai nguồn sự thật thì kiểm toán không biết tin nguồn nào.
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 41 “Quản lý sự thay đổi hệ thống thông tin” và Điều 26 “Giám sát và ghi nhật ký hoạt động của hệ thống thông tin”. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Ở đơn vị bạn, nếu ai đó sửa cấu hình production ngoài quy trình, bao lâu thì có người biết?
 
 **Nhiệm vụ:**
 1. Hết drift (landing zone đã repair)
