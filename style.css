@@ -713,7 +713,11 @@ body:has(.shell[data-fs]) .drawer{--drawer-top:12px;--drawer-bottom:12px;right:1
   .shell[data-fs] .logp,.shell[data-fs] .gpicker.glib,.shell[data-fs] .pane-code:not([hidden]){top:calc(var(--fs-top,112px) + 8px);height:auto}
   .shell[data-fs] .lbar{display:flex}.shell[data-fs] .lbar [data-act="lessonWide"]{display:none}
   .shell.app[data-fs][data-desc-min] .lesson{left:auto}
-  .shell[data-fs][data-desc-min] .gpicker.glib,.shell[data-fs][data-desc-min] .pane-code:not([hidden]),.shell[data-fs][data-desc-min] .logp{bottom:calc(56px + var(--fs-sim-h,56px) + 3*var(--fs-gap))}}
+  .shell[data-fs][data-desc-min] .gpicker.glib,.shell[data-fs][data-desc-min] .pane-code:not([hidden]),.shell[data-fs][data-desc-min] .logp{bottom:calc(56px + var(--fs-sim-h,56px) + 3*var(--fs-gap))}
+  /* the folded description stays a pill at the bottom; bars and panels keep the full width */
+  .shell[data-fs][data-desc-min]{--fs-left-w:calc(100vw - 2*var(--fs-gap))}
+  .shell[data-fs][data-desc-min] .gx-tools,.shell[data-fs][data-desc-min] .stackbar,.shell[data-fs][data-desc-min] .simbar{max-width:var(--fs-left-w)}
+  .shell.app[data-fs][data-desc-min] .lesson{top:auto;bottom:var(--fs-gap)}}
 .shell[data-fs] .lbar{position:sticky;top:-12px;z-index:3;background:inherit;padding:4px 0}
 
 /* ---------- Kubernetes pack: categories, namespace boxes, pod table ---------- */

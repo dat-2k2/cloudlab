@@ -167,7 +167,13 @@ function renderModal(){const el=document.getElementById("modal"),Md=UI.modal;
 function modalValues(){const Md=UI.modal,v={...(Md?Md.init:{})};if(!Md)return v;for(const f of Md.fields||[]){if(f.type==="checks")f.items.forEach(([k])=>{const e=document.getElementById("m-"+k);if(e)v[k]=e.checked?1:0});else{const e=document.getElementById("m-"+f.id);if(e)v[f.id]=e.value}}return v}
 function confirmModal(title,body,label,fn,danger){UI.modal={title,body:`<p>${body}</p>`,submitLabel:label,danger,cancel:danger?"Giữ nguyên":undefined,init:{},fields:[],submit:()=>{const r=fn();return r&&r.ok===false?r:{ok:true}}}}
 /* ---------------- render ---------------- */
-function render(){LW_SNAP=null;LW_SNAP=lwMax();try{renderAll()}finally{LW_SNAP=null}if(UI.fs)fsMeasure()}
+function render(){LW_SNAP=null;LW_SNAP=lwMax();try{renderAll()}finally{LW_SNAP=null}if(UI.fs){fsDescAttr();fsMeasure()}}
+/* phones in full screen: a working panel (library, YAML, log / problems) and the description sheet don't both fit,
+   so opening a panel folds the sheet to its pill; "Mở giải thích" brings the sheet back and closes the panel */
+const fsPhone=()=>!!(window.matchMedia&&window.matchMedia("(max-width:900px)").matches);
+const fsAutoMin=()=>!!(UI.fs&&fsPhone()&&(UI.picker||UI.code||UI.panel));
+const fsDescMin=()=>!!(UI.fs&&(UI.descMin||fsAutoMin()));
+function fsDescAttr(){const sh=document.querySelector("[data-shell]");if(sh&&sh.hasAttribute("data-desc-min")!==fsDescMin())sh.toggleAttribute("data-desc-min",fsDescMin())}
 function renderAll(){syncHash();const ae=document.activeElement,keep=ae&&ae!==document.body&&!(ae.closest&&ae.closest("#modal"))?selOf(ae):null;
   document.querySelector("[data-shell]").classList.toggle("no-lesson",false);
   renderSide();renderTop();renderBar();renderCanvas();renderCode();renderSim();renderLog();renderLesson();renderDrawer();renderModal();
@@ -220,7 +226,7 @@ document.addEventListener("click",e=>{
     simToggle(){simPlay(!RT.running);return true},simReset(){const was=RT.running;simPlay(false);if(UI.mode==="lesson")startLesson(UI.lesson,true);else{RT=freshRuntime();if(Object.keys(M.res).length){QUIET++;deploy();QUIET--;RT.stack.status="CREATE_COMPLETE";syncRuntime()}}log("CloudLab","sim","reset","đặt lại thời gian, chi phí và dữ liệu mô phỏng","");if(was)simPlay(true)},
     logToggle(){UI.panel=UI.panel?null:"log";UI.logOpen=!!UI.panel},picker(){UI.picker=UI.picker?null:{q:"",active:0};libSave(!!UI.picker);UI.gfocus=UI.picker?"#pkq":null;gs().zoom=null},
     loadTpl(){const t=STARTERS[arg];confirmModal(`Mở mẫu “${t.title}”?`,`${esc(t.desc)}<br><br>Mẫu này sẽ thay toàn bộ canvas sandbox hiện tại.`,"Mở mẫu",()=>{startSandbox(loadTemplate(t.yaml,t.layout,"sandbox"));UI.sideTab="comp";gs().zoom=null})},
-    gFit(){const G=gs();G.zoom=null},gNoteClose(){UI.gnote=null},fullscreen(){setFullscreen(!UI.fs)},descMin(){UI.descMin=!UI.descMin;applyFs()},importYaml(){openImport()},lessonWide(){const wide=lessonW()>=Math.min(lwMax(),window.innerWidth*0.5);setLessonW(wide?LW_DEF:Math.round(window.innerWidth*0.55),true);gs().zoom=null},gZoom(){gZoomAt(GCUR.z*(arg==="1"?1.2:1/1.2));return true},gTrace(){gs().trace=!gs().trace},gView(){gs().view=arg;UI.gmenu=null},
+    gFit(){const G=gs();G.zoom=null},gNoteClose(){UI.gnote=null},fullscreen(){setFullscreen(!UI.fs)},descMin(){if(fsAutoMin()){UI.picker=null;UI.panel=null;UI.logOpen=false;UI.code=false;UI.descMin=false}else UI.descMin=!UI.descMin;applyFs()},importYaml(){openImport()},lessonWide(){const wide=lessonW()>=Math.min(lwMax(),window.innerWidth*0.5);setLessonW(wide?LW_DEF:Math.round(window.innerWidth*0.55),true);gs().zoom=null},gZoom(){gZoomAt(GCUR.z*(arg==="1"?1.2:1/1.2));return true},gTrace(){gs().trace=!gs().trace},gView(){gs().view=arg;UI.gmenu=null},
     gMenu(){UI.gmenu=UI.gmenu&&UI.gmenu.from===arg?null:{from:arg,active:0};UI.gfocus=UI.gmenu?"#glist":`[data-gconnect="${arg}"]`},
     connectFrom(){UI.sel=null;UI.code=false;UI.gmenu={from:arg,active:0};UI.gfocus="#glist"},
     gPick(){if(!UI.gmenu||!connectRule(UI.gmenu.from,arg))return true;doConnect(UI.gmenu.from,arg);UI.gmenu=null},
@@ -347,7 +353,7 @@ function setLessonW(w,save){w=Math.round(Math.min(Math.max(w,LW_MIN),lwMax()));d
   const h=document.getElementById("lessonResize");if(h){h.setAttribute("aria-valuenow",w);h.setAttribute("aria-valuemin",LW_MIN);h.setAttribute("aria-valuemax",lwMax())}
   if(save)try{localStorage.setItem("cloudlab:lessonW",w)}catch(_){}return w}
 function lessonBar(){const wide=lessonW()>=Math.min(lwMax(),window.innerWidth*0.5);
-  return`<div class="lbar">${UI.fs?`<button class="sm ghost fs-only" data-act="descMin" aria-pressed="${!!UI.descMin}" title="${UI.descMin?"Mở lại phần giải thích":"Thu nhỏ phần giải thích để nhìn trọn sơ đồ"}">${UI.descMin?"▾ Mở giải thích":"▴ Thu nhỏ"}</button>`:""}<button class="sm ghost" data-act="lessonWide" aria-pressed="${wide}" title="${wide?"Thu hẹp khung này, trả chỗ cho canvas":"Mở rộng khung này để đọc thoải mái, canvas thu nhỏ lại"}">${wide?"⇥ Thu hẹp":"⇤ Mở rộng"}</button></div>`}
+  return`<div class="lbar">${UI.fs?(dm=>`<button class="sm ghost fs-only" data-act="descMin" aria-pressed="${dm}" title="${dm?(fsAutoMin()?"Mở lại phần giải thích (đóng bảng đang mở)":"Mở lại phần giải thích"):"Thu nhỏ phần giải thích để nhìn trọn sơ đồ"}">${dm?"▾ Mở giải thích":"▴ Thu nhỏ"}</button>`)(fsDescMin()):""}<button class="sm ghost" data-act="lessonWide" aria-pressed="${wide}" title="${wide?"Thu hẹp khung này, trả chỗ cho canvas":"Mở rộng khung này để đọc thoải mái, canvas thu nhỏ lại"}">${wide?"⇥ Thu hẹp":"⇤ Mở rộng"}</button></div>`}
 function lessonRelayout(){if(!gs().zoom)renderCanvas();renderLesson()}
 setLessonW(lessonW(),false);
 (function(){const h=document.getElementById("lessonResize");if(!h)return;let drag=null;
@@ -379,7 +385,7 @@ function fsMeasure(){const sh=document.querySelector("[data-shell]");if(!sh||!UI
   const tools=h(q(".gx-tools")),stack=h(q("#bar")),sim=h(q("#simbar")),top=12+tools+8+stack;
   const set=(k,v)=>{if(sh.style.getPropertyValue(k)!==v)sh.style.setProperty(k,v)};set("--fs-tools-h",tools+"px");set("--fs-top",top+"px");set("--fs-sim-h",sim+"px");
   if(!FS_RO&&window.ResizeObserver){FS_RO=new ResizeObserver(()=>{if(UI.fs)fsMeasure()});["#bar","#simbar"].forEach(s=>{const e=q(s);if(e)FS_RO.observe(e)})}}
-function applyFs(){const sh=document.querySelector("[data-shell]");if(!sh)return;sh.toggleAttribute("data-fs",!!UI.fs);sh.toggleAttribute("data-desc-min",!!(UI.fs&&UI.descMin));gs().zoom=null;render()}
+function applyFs(){const sh=document.querySelector("[data-shell]");if(!sh)return;sh.toggleAttribute("data-fs",!!UI.fs);sh.toggleAttribute("data-desc-min",fsDescMin());gs().zoom=null;render()}
 function setFullscreen(on){UI.fs=!!on;if(!on)UI.descMin=false;const sh=document.querySelector("[data-shell]");
   /* the whole document goes full screen, so the inspector drawer and dialogs (outside the shell) stay visible */
   try{const de=document.documentElement;if(on&&de.requestFullscreen&&!document.fullscreenElement)de.requestFullscreen().catch(()=>{});else if(!on&&document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{})}catch(_){}
