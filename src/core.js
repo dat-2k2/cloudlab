@@ -5,7 +5,9 @@ const ACCT="111122223333",REGION="ap-southeast-2",EMAIL="dat@example.com";
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const clone=o=>o===undefined?undefined:JSON.parse(JSON.stringify(o));
 const store={get(k,d){try{const v=localStorage.getItem("cloudlab:"+k);return v===null?d:JSON.parse(v)}catch(_){return d}},set(k,v){try{localStorage.setItem("cloudlab:"+k,JSON.stringify(v))}catch(_){}}};
-const glob=p=>new RegExp("^"+String(p).replace(/[.+^${}()|[\]\\]/g,"\\$&").replace(/\*/g,".*").replace(/\?/g,".")+"$","i");
+/* IAM / S3 pattern → RegExp, compiled once per pattern (the simulation evaluates policies for every event) */
+const GLOB_RE=new Map();
+const glob=p=>{const k=String(p);let r=GLOB_RE.get(k);if(!r){if(GLOB_RE.size>2000)GLOB_RE.clear();r=new RegExp("^"+k.replace(/[.+^${}()|[\]\\]/g,"\\$&").replace(/\*/g,".*").replace(/\?/g,".")+"$","i");GLOB_RE.set(k,r)}return r};
 const matchAny=(pats,v)=>[].concat(pats||[]).some(p=>glob(p).test(v));
 const arr=v=>v===undefined||v===null?[]:Array.isArray(v)?v:[v];
 /* money with enough precision to see a meter tick */

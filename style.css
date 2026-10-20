@@ -630,15 +630,15 @@ body.lw-dragging,body.lw-dragging *{cursor:col-resize!important;user-select:none
 .shell[data-fs] .simbar{position:absolute;z-index:32;left:var(--fs-gap);bottom:var(--fs-gap);right:auto;padding:8px 12px;max-width:calc(100% - var(--lesson-w,380px) - 3*var(--fs-gap))}
 .shell[data-fs] .logp{position:absolute;z-index:31;left:var(--fs-gap);bottom:calc(var(--fs-gap) + 72px);width:min(720px,calc(100% - var(--lesson-w,380px) - 3*var(--fs-gap)));height:240px}
 .shell[data-fs] .pane-code:not([hidden]){position:absolute;z-index:29;top:calc(var(--fs-gap) + 112px);left:var(--fs-gap);right:calc(var(--lesson-w,380px) + 2*var(--fs-gap));bottom:calc(var(--fs-gap) + 72px)}
-.shell[data-fs] .lesson{position:fixed;z-index:33;top:var(--fs-gap);right:var(--fs-gap);bottom:var(--fs-gap);width:var(--lesson-w,380px);border-left:1px solid var(--line)}
-.shell[data-fs] .lesson-resize{position:fixed;z-index:34;top:var(--fs-gap);bottom:var(--fs-gap);right:calc(var(--lesson-w,380px) + var(--fs-gap) - 5px);margin:0}
-.shell[data-fs][data-desc-min] .lesson{bottom:auto;overflow:hidden;padding:10px 12px}
-.shell[data-fs][data-desc-min] .lesson>*:not(.lbar){display:none}
+.shell.app[data-fs] .lesson{position:fixed;z-index:33;top:var(--fs-gap);right:var(--fs-gap);bottom:var(--fs-gap);width:var(--lesson-w,380px);border-left:1px solid var(--line)}
+.shell.app[data-fs] .lesson-resize{position:fixed;z-index:34;top:var(--fs-gap);bottom:var(--fs-gap);right:calc(var(--lesson-w,380px) + var(--fs-gap) - 5px);margin:0}
+.shell.app[data-fs][data-desc-min] .lesson{bottom:auto;overflow:hidden;padding:10px 12px}
+.shell.app[data-fs][data-desc-min] .lesson>*:not(.lbar){display:none}
 .shell[data-fs][data-desc-min] .lbar{margin:0}
 .shell[data-fs][data-desc-min] .lesson-resize{display:none}
 .shell[data-fs][data-desc-min] .gx-tools,.shell[data-fs][data-desc-min] .stackbar,.shell[data-fs][data-desc-min] .simbar{max-width:calc(100% - 260px)}
 body:has(.shell[data-fs]) .drawer{--drawer-top:12px;--drawer-bottom:12px;right:12px;border-radius:var(--r-md);z-index:40}
-@media (max-width:900px){.shell[data-fs] .lesson{top:auto;left:var(--fs-gap);width:auto;height:45vh}.shell[data-fs] .gx-tools,.shell[data-fs] .stackbar,.shell[data-fs] .simbar{max-width:calc(100% - 2*var(--fs-gap))}.shell[data-fs] .simbar{bottom:calc(45vh + 2*var(--fs-gap))}.shell[data-fs] .gpicker.glib{bottom:calc(45vh + 84px)}}
+@media (max-width:900px){.shell.app[data-fs] .lesson{top:auto;left:var(--fs-gap);width:auto;height:45vh}.shell[data-fs] .gx-tools,.shell[data-fs] .stackbar,.shell[data-fs] .simbar{max-width:calc(100% - 2*var(--fs-gap))}.shell[data-fs] .simbar{bottom:calc(45vh + 2*var(--fs-gap))}.shell[data-fs] .gpicker.glib{bottom:calc(45vh + 84px)}}
 .lbar{position:relative;z-index:2}
 /* WebMCP button + setup dialog */
 #mcpBtn{position:relative}#mcpBtn[data-on]::after{content:"";position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--ok,#16a34a);box-shadow:0 0 0 2px var(--surface)}
@@ -678,6 +678,40 @@ body:has(.shell[data-fs]) .drawer{--drawer-top:12px;--drawer-bottom:12px;right:1
 .pane-code .yaml,.pane-code{background:transparent}
 /* full screen keeps the same layers */
 .shell[data-fs]>.main{background:var(--canvas)}
-.shell[data-fs] .lesson{background:color-mix(in srgb,var(--paper) 96%,transparent)}
+.shell.app[data-fs] .lesson{background:color-mix(in srgb,var(--paper) 96%,transparent);box-shadow:0 8px 28px rgba(15,23,42,.16)}
 /* the lesson panel's first tier is class "ltier main": keep the editor-area .main rules off it */
 .lesson .ltier.main{background:none;overflow:visible;grid-area:auto;min-height:auto}
+
+/* full screen: floating parts stack from measured heights (set by fsMeasure in ui.js), so a toolbar that wraps
+   onto two lines pushes the panels below it instead of overlapping them */
+.shell[data-fs] .stackbar{top:calc(var(--fs-gap) + var(--fs-tools-h,44px) + 8px)}
+.shell[data-fs] .gpicker.glib{top:calc(var(--fs-top,112px) + 8px);bottom:calc(var(--fs-sim-h,56px) + 2*var(--fs-gap));max-height:none}
+.shell[data-fs] .pane-code:not([hidden]){top:calc(var(--fs-top,112px) + 8px);bottom:calc(var(--fs-sim-h,56px) + 2*var(--fs-gap))}
+.shell[data-fs] .logp{bottom:calc(var(--fs-sim-h,56px) + 2*var(--fs-gap));height:min(240px,calc(100vh - var(--fs-top,112px) - var(--fs-sim-h,56px) - 4*var(--fs-gap)))}
+.shell[data-fs] .gx-tools{flex-wrap:wrap}
+/* left column width = viewport minus the floating description panel */
+.shell[data-fs]{--fs-left-w:calc(100vw - var(--lesson-w,380px) - 3*var(--fs-gap))}
+.shell[data-fs][data-desc-min]{--fs-left-w:calc(100vw - 260px)}
+.shell[data-fs] .gx-tools,.shell[data-fs] .stackbar,.shell[data-fs] .simbar{max-width:var(--fs-left-w)}
+.shell[data-fs] .gpicker.glib{width:min(272px,var(--fs-left-w))}
+.shell[data-fs] .pane-code:not([hidden]){right:auto;width:var(--fs-left-w)}
+.shell[data-fs] .logp{width:min(720px,var(--fs-left-w))}
+@media (max-width:1100px){.shell.app[data-fs] .lesson{width:min(var(--lesson-w,380px),42vw)}.shell[data-fs]{--fs-left-w:calc(100vw - min(var(--lesson-w,380px),42vw) - 3*var(--fs-gap))}.shell.app[data-fs] .lesson-resize{right:calc(min(var(--lesson-w,380px),42vw) + var(--fs-gap) - 5px)}}
+/* phones: description is a bottom sheet; everything else stacks above it */
+@media (max-width:900px){
+  .shell[data-fs]{--fs-left-w:calc(100vw - 2*var(--fs-gap));--fs-sheet:42vh}
+  .shell.app[data-fs] .lesson{top:auto;left:var(--fs-gap);right:var(--fs-gap);width:auto;height:var(--fs-sheet);bottom:var(--fs-gap)}
+  .shell.app[data-fs][data-desc-min] .lesson{height:auto}
+  .shell[data-fs] .simbar{bottom:calc(var(--fs-sheet) + 2*var(--fs-gap))}
+  .shell[data-fs][data-desc-min] .simbar{bottom:calc(56px + 2*var(--fs-gap))}
+  .shell[data-fs] .gpicker.glib,.shell[data-fs] .pane-code:not([hidden]),.shell[data-fs] .logp{bottom:calc(var(--fs-sheet) + var(--fs-sim-h,56px) + 3*var(--fs-gap))}
+  .shell.app[data-fs] .lesson-resize{display:none}}
+/* minimized description = a compact pill in the corner */
+.shell.app[data-fs][data-desc-min] .lesson{width:auto;left:auto}
+/* phones: panels between the top bars and the sim bar take exactly that space; the sheet can be minimized */
+@media (max-width:900px){
+  .shell[data-fs] .logp,.shell[data-fs] .gpicker.glib,.shell[data-fs] .pane-code:not([hidden]){top:calc(var(--fs-top,112px) + 8px);height:auto}
+  .shell[data-fs] .lbar{display:flex}.shell[data-fs] .lbar [data-act="lessonWide"]{display:none}
+  .shell.app[data-fs][data-desc-min] .lesson{left:auto}
+  .shell[data-fs][data-desc-min] .gpicker.glib,.shell[data-fs][data-desc-min] .pane-code:not([hidden]),.shell[data-fs][data-desc-min] .logp{bottom:calc(56px + var(--fs-sim-h,56px) + 3*var(--fs-gap))}}
+.shell[data-fs] .lbar{position:sticky;top:-12px;z-index:3;background:inherit;padding:4px 0}

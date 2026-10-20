@@ -23,7 +23,7 @@ function tourVisible(el){if(!el)return false;const r=el.getBoundingClientRect();
 function tourStart(){tourEnd(false);const steps=TOUR_STEPS.filter(s=>!s.sel||tourVisible(document.querySelector(s.sel)));
   const spot=document.createElement("div");spot.className="tour-spot";spot.setAttribute("aria-hidden","true");
   const card=document.createElement("div");card.className="tour-card";card.setAttribute("role","dialog");card.setAttribute("aria-modal","false");card.setAttribute("aria-labelledby","tourTitle");card.tabIndex=-1;
-  document.body.append(spot,card);TOUR={i:0,steps,spot,card,ret:document.activeElement};tourShow();TOUR.raf=requestAnimationFrame(tourTrack)}
+  document.body.append(spot,card);TOUR={i:0,steps,spot,card,ret:document.activeElement,until:0,raf:0};tourShow();tourWatch(true);tourPoke()}
 function tourShow(){const T_=TOUR;if(!T_)return;const s=T_.steps[T_.i],el=s.sel&&document.querySelector(s.sel),last=T_.i===T_.steps.length-1;
   T_.card.innerHTML=`<div class="tour-h"><span class="tour-n">${T_.i+1}/${T_.steps.length}</span><button class="tour-x" data-tour="skip" aria-label="Đóng hướng dẫn">×</button></div>
     <h2 id="tourTitle">${esc(s.t)}</h2><p>${esc(s.b)}</p>
@@ -42,11 +42,22 @@ function tourPlace(){const T_=TOUR;if(!T_)return;const s=T_.steps[T_.i],el=s.sel
     if(x<16||x+cw>innerWidth-16){x=Math.min(Math.max(16,r.left+r.width/2-cw/2),innerWidth-cw-16);y=r.bottom+gap+ch>innerHeight-16?r.top-ch-gap:r.bottom+gap}}
   else{x=innerWidth/2-cw/2;y=innerHeight/2-ch/2}
   c.style.left=Math.round(Math.min(Math.max(16,x),innerWidth-cw-16))+"px";c.style.top=Math.round(Math.min(Math.max(16,y),innerHeight-ch-16))+"px";
-  T_.last=el&&tourVisible(el)?JSON.stringify(el.getBoundingClientRect()):"none"}
-/* follow the target while the tour is open (e.g. the user drags the panel edge during the resize step) */
-function tourTrack(){if(!TOUR)return;const s=TOUR.steps[TOUR.i],el=s.sel&&document.querySelector(s.sel),k=el&&tourVisible(el)?JSON.stringify(el.getBoundingClientRect()):"none";
-  if(k!==TOUR.last)tourPlace();TOUR.raf=requestAnimationFrame(tourTrack)}
-function tourEnd(mark){if(TOUR&&TOUR.raf)cancelAnimationFrame(TOUR.raf);if(!TOUR)return;const r=TOUR.ret;TOUR.spot.remove();TOUR.card.remove();TOUR=null;if(mark)tourMark();if(r&&r.focus)try{r.focus({preventScroll:true})}catch(_){}}
+  T_.last=tourKey(el)}
+const tourKey=el=>{if(!el||!tourVisible(el))return"none";const r=el.getBoundingClientRect();return r.left+","+r.top+","+r.width+","+r.height}
+/* follow the target while the tour is open (e.g. the user drags the panel edge during the resize step). Instead of
+   measuring every frame forever, any DOM change, input, scroll or resize opens a short window (~0.5 s, long enough
+   for a CSS transition) during which the target is re-measured each frame; an idle page does no work. */
+function tourTrack(){if(!TOUR)return;TOUR.raf=0;const s=TOUR.steps[TOUR.i],el=s.sel&&document.querySelector(s.sel);
+  if(tourKey(el)!==TOUR.last){tourPlace();TOUR.until=Math.max(TOUR.until,performance.now()+500)}
+  if(performance.now()<TOUR.until)TOUR.raf=requestAnimationFrame(tourTrack)}
+function tourPoke(){if(!TOUR)return;TOUR.until=Math.max(TOUR.until,performance.now()+500);if(!TOUR.raf)TOUR.raf=requestAnimationFrame(tourTrack)}
+const TOUR_EVENTS=["pointerdown","pointermove","pointerup","wheel","keydown","scroll","transitionrun","transitionend","animationend"];
+let TOUR_MO=null;
+function tourWatch(on){const o={capture:true,passive:true};
+  if(on){TOUR_EVENTS.forEach(t=>window.addEventListener(t,tourPoke,o));if(document.fonts&&document.fonts.addEventListener)document.fonts.addEventListener("loadingdone",tourPoke);
+    if(window.MutationObserver){TOUR_MO=new MutationObserver(ms=>{if(TOUR&&ms.some(m=>!TOUR.card.contains(m.target)&&!TOUR.spot.contains(m.target)))tourPoke()});TOUR_MO.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true})}}
+  else{TOUR_EVENTS.forEach(t=>window.removeEventListener(t,tourPoke,o));if(document.fonts&&document.fonts.removeEventListener)document.fonts.removeEventListener("loadingdone",tourPoke);if(TOUR_MO){TOUR_MO.disconnect();TOUR_MO=null}}}
+function tourEnd(mark){if(TOUR&&TOUR.raf)cancelAnimationFrame(TOUR.raf);if(!TOUR)return;tourWatch(false);const r=TOUR.ret;TOUR.spot.remove();TOUR.card.remove();TOUR=null;if(mark)tourMark();if(r&&r.focus)try{r.focus({preventScroll:true})}catch(_){}}
 document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-tour]");if(b&&TOUR){const a=b.dataset.tour;
     if(a==="next"){if(TOUR.i>=TOUR.steps.length-1)tourEnd(true);else{TOUR.i++;tourShow()}}else if(a==="prev"){TOUR.i=Math.max(0,TOUR.i-1);tourShow()}else tourEnd(true);return}
   if(e.target.closest&&e.target.closest("#tourBtn"))tourStart()});

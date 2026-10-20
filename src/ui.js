@@ -1,5 +1,6 @@
 "use strict";
 const LW_DEF=380,LW_MIN=300;   /* right panel width: default and minimum (px) */
+let LW_SNAP=null;              /* lwMax() measured once per render() instead of once per call (avoids layout reads) */
 /* UI: shell (kit layout), palette + templates sidebar, stack bar, canvas / YAML, simulation bar with live cost meter,
    inspector drawer (properties, explanation, runtime), lesson pane, modals, events, boot. */
 const KIT=window.Kit||{layer:{open(){},close(){},isOpen(){return false},top(){return null}},isNarrow(){return false}};
@@ -17,6 +18,9 @@ const parseOne=s=>{s=s.trim();if(s.startsWith("!Ref "))return{Ref:s.slice(5).tri
 const parseList=s=>{const parts=String(s).split(/,(?![^{]*\})/).map(x=>x.trim()).filter(Boolean);return parts.length===1?parseOne(parts[0]):parts.map(parseOne)};
 const optsOf=(types,cur)=>allNodes().filter(n=>types==="*"||types.includes(n.type)).map(n=>`<option value="${n.id}"${cur===n.id?" selected":""}>${esc(n.id)} · ${esc(n.def.label)}</option>`).join("");
 const chip=(t,c)=>`<span class="chip ${c||""}">${esc(t)}</span>`;
+/* write markup into a pane only when it changed: re-parsing an identical pane costs style + layout for nothing,
+   and leaves focus, scroll and open menus where they were */
+function setHtml(el,h){if(el.__h===h)return false;el.innerHTML=h;el.__h=h;return true}
 /* ---------------- shell parts ---------------- */
 /* components the palette shows, filtered by the search box */
 /* search score: name/short/type beats description; 0 = no match */
@@ -31,7 +35,7 @@ function renderSide(){let h=`<p class="side-group">Tự thực hành</p><button 
   let ph="";LESSONS.forEach((l,i)=>{if(l.phase!==ph){ph=l.phase;h+=`<p class="side-group">${l.lab?"FCAJ ":""}${esc(ph)}</p>`}
     h+=`<button class="side-item lsn" data-lesson="${i}" data-cat="learn" title="${esc(l.title)}"${UI.mode==="lesson"&&UI.lesson===i?' aria-current="page"':""}><span class="side-ic" aria-hidden="true">${l.step}</span><span class="side-label">${esc(l.tag)}<small>${l.lab?"lab "+esc(l.lab):esc(l.sub||"")}</small></span>${DONE.has(l.id)?'<span class="side-badge chip ok">✓</span>':""}</button>`});
   h+=`<button class="side-collapse" data-shell-toggle aria-controls="side" title="Thu gọn / mở"><span aria-hidden="true">«</span><span class="side-label">Thu gọn</span></button>`;
-  document.getElementById("side").innerHTML=h}
+  setHtml(document.getElementById("side"),h)}
 /* component library docked beside the canvas (＋ Thành phần, or the / key): search, starter templates, grouped
    components; click to add, drag onto the canvas, Enter adds the highlighted one. Stays open while you build. */
 function pickerHtml(){if(!UI.picker)return"";const q=UI.picker.q||"",groups=palItems(q,true),flat=groups.flatMap(g=>g[2]);UI.picker.flat=flat.map(t=>t.type);const ai=Math.min(UI.picker.active||0,Math.max(0,flat.length-1));let i=-1;
@@ -42,14 +46,19 @@ function pickerHtml(){if(!UI.picker)return"";const q=UI.picker.q||"",groups=palI
     <p class="cap gmf">↑↓ · Enter thêm · Esc đóng</p></aside>`}
 const libPref=()=>{try{return localStorage.getItem("cloudlab:lib")}catch(_){return null}};
 const libSave=open=>{try{localStorage.setItem("cloudlab:lib",open?"open":"closed")}catch(_){}};
-function renderTop(){const cr=document.getElementById("crumb");if(!cr)return;const L=L_();cr.innerHTML=L?`<span class="cc">Bài ${L.step} · ${esc(L.tag)}</span> /<b>${esc(L.title)}</b>`:`<span class="cc">Sandbox</span> /<b>${esc(M.name)}</b>`}
+function renderTop(){const cr=document.getElementById("crumb");if(!cr)return;const L=L_();setHtml(cr,L?`<span class="cc">Bài ${L.step} · ${esc(L.tag)}</span> /<b>${esc(L.title)}</b>`:`<span class="cc">Sandbox</span> /<b>${esc(M.name)}</b>`)}
 const STK={NOT_DEPLOYED:["","chưa deploy"],CREATE_COMPLETE:["ok","CREATE_COMPLETE"],UPDATE_COMPLETE:["ok","UPDATE_COMPLETE"],DELETE_COMPLETE:["","DELETE_COMPLETE"],DELETE_FAILED:["bad","DELETE_FAILED"],ROLLBACK_COMPLETE:["bad","ROLLBACK_COMPLETE"]};
 function renderBar(){const s=STK[RT.stack.status]||["",RT.stack.status],up=stackUp(),v=UI.code?(UI.split?"split":"code"):"graph";
-  document.getElementById("bar").innerHTML=`<span class="stk"><span class="cap">Stack</span><b class="mono">${esc(M.name)}</b>${chip(s[1],s[0])}</span>
+  setHtml(document.getElementById("bar"),`<span class="stk"><span class="cap">Stack</span><b class="mono">${esc(M.name)}</b>${chip(s[1],s[0])}</span>
     ${UI.mode==="sandbox"&&!up&&Object.keys(M.res).length+Object.keys(M.ext).length?`<button class="sm ghost" data-act="askClear" title="Xóa mọi khối khỏi canvas">Xóa canvas</button>`:""}${up?`<button class="sm danger" data-act="askDelete" title="aws cloudformation delete-stack">Xóa stack</button>`:`<button class="sm primary" data-act="deploy" title="aws cloudformation deploy">Deploy</button>`}
     <span class="grow"></span><div class="seg" role="group" aria-label="Chế độ sửa"><button class="${v==="graph"?"on":""}" data-act="vMode" data-arg="graph" aria-pressed="${v==="graph"}">Canvas</button><button class="${v==="split"?"on":""} hide-s" data-act="vMode" data-arg="split" aria-pressed="${v==="split"}">Chia đôi</button><button class="${v==="code"?"on":""}" data-act="vMode" data-arg="code" aria-pressed="${v==="code"}">YAML</button></div>
-    <button class="icon-btn" data-act="undo" ${UNDO.length?"":"disabled"} title="Hoàn tác (Ctrl+Z)" aria-label="Hoàn tác">↶</button><button class="icon-btn" data-act="redo" ${REDO.length?"":"disabled"} title="Làm lại (Ctrl+Y)" aria-label="Làm lại">↷</button><button class="icon-btn" data-act="fullscreen" aria-pressed="${!!UI.fs}" title="${UI.fs?"Thoát toàn màn hình (Esc)":"Toàn màn hình: editor phủ màn hình, công cụ và phần giải thích nổi phía trên (phím F)"}" aria-label="${UI.fs?"Thoát toàn màn hình":"Toàn màn hình"}">${UI.fs?"⤡":"⤢"}</button>`}
-function renderCanvas(){const el=document.getElementById("canvas");if(!el)return;el.hidden=UI.code&&!UI.split;if(!el.hidden)el.innerHTML=canvasHtml()}
+    <button class="icon-btn" data-act="undo" ${UNDO.length?"":"disabled"} title="Hoàn tác (Ctrl+Z)" aria-label="Hoàn tác">↶</button><button class="icon-btn" data-act="redo" ${REDO.length?"":"disabled"} title="Làm lại (Ctrl+Y)" aria-label="Làm lại">↷</button><button class="icon-btn" data-act="fullscreen" aria-pressed="${!!UI.fs}" title="${UI.fs?"Thoát toàn màn hình (Esc)":"Toàn màn hình: editor phủ màn hình, công cụ và phần giải thích nổi phía trên (phím F)"}" aria-label="${UI.fs?"Thoát toàn màn hình":"Toàn màn hình"}">${UI.fs?"⤡":"⤢"}</button>`)}
+function renderCanvas(){const el=document.getElementById("canvas");if(!el)return;el.hidden=UI.code&&!UI.split;if(el.hidden)return;
+  const c=canvasParts(),cv=el.__cv,w=c.world&&document.getElementById("gworld"),ul=c.rows&&el.querySelector(".glist");
+  if(w&&cv&&cv.pre===c.pre&&cv.post===c.post&&el.contains(w)){gSetStyle(w,c.ws);gPatchWorld(w,c.world)}
+  else if(ul&&cv&&cv.lpre===c.lpre&&cv.lpost===c.lpost&&cv.rows&&cv.rows.length===c.rows.length&&ul.children.length===c.rows.length&&cv.rows.every((r,i)=>r.id===c.rows[i].id)){const k=ul.children;c.rows.forEach((r,i)=>{if(cv.rows[i].h!==r.h)k[i].outerHTML=r.h})}
+  else{el.innerHTML=canvasJoin(c);const w2=c.world&&document.getElementById("gworld");if(w2)gSnap(w2,c.world)}
+  el.__cv=c.world?{pre:c.pre,post:c.post}:{lpre:c.lpre,lpost:c.lpost,rows:c.rows}}
 let YAML_ERR=null,YAML_T=0;
 function renderCode(force){const el=document.getElementById("code");if(!el)return;el.hidden=!UI.code;if(el.hidden)return;
   const ta=document.getElementById("yaml");if(ta&&document.activeElement===ta&&!force){const st=document.getElementById("ystat");if(st)st.innerHTML=ystat();return}
@@ -60,23 +69,31 @@ function renderCode(force){const el=document.getElementById("code");if(!el)retur
     <p class="note">${X.edit?`Sửa YAML là sửa canvas, và ngược lại. Phần mô phỏng (client, monitor, traffic) nằm ở <span class="mono">Metadata.CloudLab</span>.`:tab==="tf"?"Provider awscc dùng cùng schema với CloudFormation nên ánh xạ 1-1. Chạy terraform plan để kiểm tra trước khi apply.":tab==="cdk"?"Construct L1 (Cfn*) giữ nguyên logical ID, nên stack CDK tạo đúng template này.":"Đã bỏ Metadata.CloudLab. Nhớ thêm route table cho public subnet khi deploy thật."}</p>`}
 const ystat=()=>YAML_ERR?`<span class="chip bad">Lỗi${YAML_ERR.line?" dòng "+YAML_ERR.line:""}: ${esc(YAML_ERR.err)}</span>`:`<span class="chip ok">Hợp lệ · ${Object.keys(M.res).length} tài nguyên</span>`;
 function clockText(){const t=RT.t,d=Math.floor(t%MONTH/86400),h=Math.floor(t%86400/3600),m=Math.floor(t%3600/60);return`Tháng ${RT.month} · ngày ${d+1} · ${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`}
-function renderSim(){const el=document.getElementById("simbar");if(!el)return;const r=rateNow();
-  el.innerHTML=`<button class="${RT.running?"":"primary "}play" data-act="simToggle" aria-pressed="${!!RT.running}" title="${RT.running?"Tạm dừng":"Chạy mô phỏng"}">${RT.running?"❚❚ Tạm dừng":"▶ Chạy"}</button>
+let SIM_PC="";
+function renderSim(tick){const el=document.getElementById("simbar");if(!el)return;const r=rateNow();
+  /* problems only change with the template (never inside a tick), so a tick reuses the last count */
+  const pc=tick&&el.__s?SIM_PC:(SIM_PC=(()=>{const pr=problems(),e=pr.filter(x=>x.sev==="error").length,w=pr.filter(x=>x.sev==="warn").length;return`<button class="sm${UI.panel==="problems"?" on":""}" data-act="panel" data-arg="problems" aria-expanded="${UI.panel==="problems"}">Vấn đề <span class="chip ${e?"bad":w?"warn":"ok"}">${e||w||0}</span></button>`})());
+  const A=`<button class="${RT.running?"":"primary "}play" data-act="simToggle" aria-pressed="${!!RT.running}" title="${RT.running?"Tạm dừng":"Chạy mô phỏng"}">${RT.running?"❚❚ Tạm dừng":"▶ Chạy"}</button>
     <label class="spd"><span class="cap hide-s">Tốc độ</span><select id="speed" aria-label="Tốc độ mô phỏng">${SPEEDS.map(([l],i)=>`<option value="${i}"${i===UI.speed?" selected":""}>${l}</option>`).join("")}</select></label>
-    <span class="meter" role="status" aria-label="Chi phí tháng này ${money(RT.total)}"><span class="cap">Chi phí · ${clockText()}</span><b class="mono">${money(RT.total)}</b><small class="mono">${r>0?`≈ ${money(r)}/giờ · ${money(r*720)}/tháng`:"không có gì đang tính tiền"}</small></span>
+    `,meter=`<span class="cap">Chi phí · ${clockText()}</span><b class="mono">${money(RT.total)}</b><small class="mono">${r>0?`≈ ${money(r)}/giờ · ${money(r*720)}/tháng`:"không có gì đang tính tiền"}</small>`,label=`Chi phí tháng này ${money(RT.total)}`,C=`
     <span class="grow"></span><button class="sm" data-act="simReset" title="Đặt lại thời gian, chi phí và dữ liệu mô phỏng">⟲<span class="hide-s"> Đặt lại</span></button>
-    ${(()=>{const pr=problems(),e=pr.filter(x=>x.sev==="error").length,w=pr.filter(x=>x.sev==="warn").length;return`<button class="sm${UI.panel==="problems"?" on":""}" data-act="panel" data-arg="problems" aria-expanded="${UI.panel==="problems"}">Vấn đề <span class="chip ${e?"bad":w?"warn":"ok"}">${e||w||0}</span></button>`})()}
-    <button class="sm${UI.panel==="log"?" on":""}" data-act="panel" data-arg="log" aria-expanded="${UI.panel==="log"}">Event log <span class="chip">${LOG.length}</span></button>`}
+    ${pc}
+    `,D=`<button class="sm${UI.panel==="log"?" on":""}" data-act="panel" data-arg="log" aria-expanded="${UI.panel==="log"}">Event log <span class="chip">${LOG.length}</span></button>`;
+  const S=el.__s;if(S&&S.A===A&&S.C===C&&el.querySelector(".meter")){
+    if(S.meter!==meter||S.label!==label){const m=el.querySelector(".meter");m.setAttribute("aria-label",label);m.innerHTML=meter}
+    if(S.D!==D)el.lastElementChild.outerHTML=D}
+  else el.innerHTML=A+`<span class="meter" role="status" aria-label="${label}">`+meter+`</span>`+C+D;
+  el.__s={A,meter,label,C,D}}
 function renderLog(){const el=document.getElementById("log");if(!el)return;el.hidden=!UI.panel;if(el.hidden)return;
-  if(UI.panel==="problems"){const pr=problems(),ic={error:"✕",warn:"!",info:"i"};el.classList.add("probs");el.innerHTML=pr.length?`<ul class="plist">${pr.map(x=>`<li><button class="prob ${x.sev}" data-act="selNode" data-arg="${esc(x.id)}"><span class="pi" aria-hidden="true">${ic[x.sev]}</span><span class="pm">${esc(x.msg)}</span><span class="pid mono">${esc(x.id)}</span></button></li>`).join("")}</ul>`:`<div class="empty">Không có vấn đề nào. Template chưa có lỗi cấu hình hay rủi ro nào CloudLab nhận ra.</div>`;return}
+  if(UI.panel==="problems"){const pr=problems(),ic={error:"✕",warn:"!",info:"i"};el.classList.add("probs");setHtml(el,pr.length?`<ul class="plist">${pr.map(x=>`<li><button class="prob ${x.sev}" data-act="selNode" data-arg="${esc(x.id)}"><span class="pi" aria-hidden="true">${ic[x.sev]}</span><span class="pm">${esc(x.msg)}</span><span class="pid mono">${esc(x.id)}</span></button></li>`).join("")}</ul>`:`<div class="empty">Không có vấn đề nào. Template chưa có lỗi cấu hình hay rủi ro nào CloudLab nhận ra.</div>`);return}
   el.classList.remove("probs");const sel=LOG.find(l=>l.id===UI.logSel)||LOG.find(l=>l.cli)||LOG[0];
   const kk=l=>l.kind==="API"||l.kind==="CLI"?"api":l.kind==="Sự kiện"?"evt":"les";
-  el.innerHTML=`<div class="logl"><ul class="log">${LOG.slice(0,120).map(l=>`<li class="${l.id===(sel&&sel.id)?"sel":""}" data-log="${l.id}" tabindex="0"><span class="t">${l.t}</span><span class="ev ${l.tone}"><span class="k k-${kk(l)}">${esc(l.kind)}</span> ${esc(l.svc)} · ${esc(l.op)}</span><span class="m">${esc(l.msg)}</span></li>`).join("")}</ul></div>
-    <div class="console"><div class="bar3"><i></i><i></i><i></i><span>aws CLI</span></div>${sel&&sel.cli?`<pre id="clitext"><span class="ps">$ </span>${esc(sel.cli)}</pre>`:`<pre class="dim"># Dòng này không có lệnh aws CLI tương đương</pre>`}</div>`}
+  setHtml(el,`<div class="logl"><ul class="log">${LOG.slice(0,120).map(l=>`<li class="${l.id===(sel&&sel.id)?"sel":""}" data-log="${l.id}" tabindex="0"><span class="t">${l.t}</span><span class="ev ${l.tone}"><span class="k k-${kk(l)}">${esc(l.kind)}</span> ${esc(l.svc)} · ${esc(l.op)}</span><span class="m">${esc(l.msg)}</span></li>`).join("")}</ul></div>
+    <div class="console"><div class="bar3"><i></i><i></i><i></i><span>aws CLI</span></div>${sel&&sel.cli?`<pre id="clitext"><span class="ps">$ </span>${esc(sel.cli)}</pre>`:`<pre class="dim"># Dòng này không có lệnh aws CLI tương đương</pre>`}</div>`)}
 function renderLesson(){const el=document.getElementById("lesson"),L=L_();
-  if(!L){el.innerHTML=lessonBar()+`<div><span class="cap eyebrow">Sandbox</span><h1>Dựng hạ tầng tự do</h1><p class="goal">Kéo thành phần AWS từ thanh bên vào canvas, nối các khối bằng chấm bên phải mỗi khối, hoặc viết CloudFormation YAML. Rồi bấm ▶ Chạy để mô phỏng traffic và xem chi phí.</p></div>
+  if(!L){setHtml(el,lessonBar()+`<div><span class="cap eyebrow">Sandbox</span><h1>Dựng hạ tầng tự do</h1><p class="goal">Kéo thành phần AWS từ thanh bên vào canvas, nối các khối bằng chấm bên phải mỗi khối, hoặc viết CloudFormation YAML. Rồi bấm ▶ Chạy để mô phỏng traffic và xem chi phí.</p></div>
     <div class="sect"><span class="lab">Nguồn tạo tải</span><p class="note">Client (request mỗi giây), Uploader (file mỗi giờ) và EventBridge schedule là nơi sự kiện bắt đầu. Hộp thư và Monitor nhận kết quả.</p></div>
-    <div class="sect"><span class="lab">Bắt đầu từ</span><div class="acts">${Object.entries(STARTERS).map(([k,t])=>`<button class="sm" data-act="loadTpl" data-arg="${k}">${esc(t.title)}</button>`).join("")}<button class="sm" data-act="askClear">Canvas trống</button><button class="sm" data-act="importYaml">Dán template…</button></div>${LESSONS.map((l,i)=>`<button class="tplrow" data-act="copyLesson" data-arg="${i}"><b>${esc(l.tag)}</b><small>${esc(l.title)}</small></button>`).join("")}<p class="note">Mở template của một bài vào sandbox (không chấm điểm).</p></div>`;return}
+    <div class="sect"><span class="lab">Bắt đầu từ</span><div class="acts">${Object.entries(STARTERS).map(([k,t])=>`<button class="sm" data-act="loadTpl" data-arg="${k}">${esc(t.title)}</button>`).join("")}<button class="sm" data-act="askClear">Canvas trống</button><button class="sm" data-act="importYaml">Dán template…</button></div>${LESSONS.map((l,i)=>`<button class="tplrow" data-act="copyLesson" data-arg="${i}"><b>${esc(l.tag)}</b><small>${esc(l.title)}</small></button>`).join("")}<p class="note">Mở template của một bài vào sandbox (không chấm điểm).</p></div>`);return}
   const R=UI.result,hs=L.hints(),passed=R?R.res.filter(Boolean).length:0,nT=L.tasks.length;
   /* three tiers: 1 what to do (goal, tasks, actions) · 2 why it matters (scenario, banking context) · 3 reference, collapsed */
   const lab=L.lab?`Theo FCAJ workshop ${L.lab.split(" · ").map(x=>`<a href="https://${x}.awsstudygroup.com/" target="_blank" rel="noopener">${x} ↗</a>`).join(" · ")}`:"";
@@ -96,7 +113,7 @@ function renderLesson(){const el=document.getElementById("lesson"),L=L_();
   <details class="more"><summary>Khái niệm (${L.concepts.length})</summary><div class="tags">${L.concepts.map(c=>`<span class="tag">${esc(c)}</span>`).join("")}</div></details>`+(L.reading?`<details class="more reading"><summary>Đọc thêm: ${esc(L.reading.title)}</summary><div class="reading-body">${L.reading.html}</div></details>`:"")+
   `${lab||L.ref?`<p class="labref">${lab}${L.ref?(lab?" · ":"")+L.ref:""}</p>`:""}
   <div class="lh"><span class="lab">Lộ trình</span><div class="ldots">${LESSONS.map((x,i)=>`<button class="ldot${DONE.has(x.id)?" done":""}${i===UI.lesson?" cur":""}" data-lesson="${i}" aria-label="Bài ${x.step}: ${esc(x.title)}${DONE.has(x.id)?" (đã đạt)":""}"><span>${x.step}</span></button>`).join("")}</div></div></section>`;
-  el.innerHTML=h}
+  setHtml(el,h)}
 /* ---------------- inspector: fields ---------------- */
 function fieldHtml(n,f){const id=n.id,p=n.props,k=f.k;if(f.when&&!f.when(p))return"";
   const val=k.startsWith("@@")?n.raw[k.slice(2)]:k.startsWith("@")?getP(n.raw,"Metadata.CloudLab."+k.slice(1)):getP(p,k);
@@ -210,7 +227,7 @@ function renderDrawer(){const el=document.getElementById("drawer");if(!el)return
   if(!DRAWER_KEY){el.hidden=false;KIT.layer.open(el,{modal:KIT.isNarrow(),returnFocus:UI.selRet,onClose:()=>{UI.sel=null;render()},initialFocus:"#dt"})}
   else if(inside){const x=el.querySelector(inside);if(x)try{x.focus({preventScroll:true})}catch(_){}}else if(DRAWER_KEY!==c.key){const t=document.getElementById("dt");if(t)t.focus({preventScroll:true})}
   DRAWER_KEY=c.key}
-function refreshRt(){const rt=document.getElementById("rt");if(!rt||!UI.sel||!UI.sel.node)return;const ae=document.activeElement;if(ae&&rt.contains(ae)&&ae.tagName==="INPUT")return;rt.innerHTML=rtHtml(UI.sel.node)}
+function refreshRt(){const rt=document.getElementById("rt");if(!rt||!UI.sel||!UI.sel.node)return;const ae=document.activeElement;if(ae&&rt.contains(ae)&&ae.tagName==="INPUT")return;setHtml(rt,rtHtml(UI.sel.node))}
 /* ---------------- modal ---------------- */
 let MODAL_SHOWN=null;
 function renderModal(){const el=document.getElementById("modal"),Md=UI.modal;
@@ -225,7 +242,8 @@ function renderModal(){const el=document.getElementById("modal"),Md=UI.modal;
 function modalValues(){const Md=UI.modal,v={...(Md?Md.init:{})};if(!Md)return v;for(const f of Md.fields||[]){if(f.type==="checks")f.items.forEach(([k])=>{const e=document.getElementById("m-"+k);if(e)v[k]=e.checked?1:0});else{const e=document.getElementById("m-"+f.id);if(e)v[f.id]=e.value}}return v}
 function confirmModal(title,body,label,fn,danger){UI.modal={title,body:`<p>${body}</p>`,submitLabel:label,danger,cancel:danger?"Giữ nguyên":undefined,init:{},fields:[],submit:()=>{const r=fn();return r&&r.ok===false?r:{ok:true}}}}
 /* ---------------- render ---------------- */
-function render(){syncHash();const ae=document.activeElement,keep=ae&&ae!==document.body&&!(ae.closest&&ae.closest("#modal"))?selOf(ae):null;
+function render(){LW_SNAP=null;LW_SNAP=lwMax();try{renderAll()}finally{LW_SNAP=null}if(UI.fs)fsMeasure()}
+function renderAll(){syncHash();const ae=document.activeElement,keep=ae&&ae!==document.body&&!(ae.closest&&ae.closest("#modal"))?selOf(ae):null;
   document.querySelector("[data-shell]").classList.toggle("no-lesson",false);
   renderSide();renderTop();renderBar();renderCanvas();renderCode();renderSim();renderLog();renderLesson();renderDrawer();renderModal();
   const now=document.activeElement;if(keep&&(!now||now===document.body)){const n=document.querySelector(keep);if(n)try{n.focus({preventScroll:true})}catch(_){}}
@@ -238,7 +256,7 @@ function keepVisible(){const id=UI.sel&&UI.sel.node;if(!id||id===SEEN||KIT.isNar
   if(over>0){gFreeze();GCUR.pan=[GCUR.pan[0]-over,GCUR.pan[1]];gs().pan=[...GCUR.pan];gApply()}}
 function onModelChanged(label,cli){if(stackUp()&&!QUIET){RT.stack.status="UPDATE_COMPLETE";syncRuntime();log("CLI","cloudformation","deploy",`${M.name} · UPDATE_COMPLETE${label?" · "+label:""}`,"ok",cli||`aws cloudformation deploy \\\n  --stack-name ${M.name} \\\n  --template-file template.yaml`)}
   YAML_ERR=null;saveSandbox();render()}
-function onSimTick(){gRefresh();renderSim();refreshRt();if(UI.panel==="log"&&LOG.length&&LOG[0].id!==onSimTick.last){onSimTick.last=LOG[0].id;renderLog()}}
+function onSimTick(){gRefresh();renderSim(true);refreshRt();if(UI.panel==="log"&&LOG.length&&LOG[0].id!==onSimTick.last){onSimTick.last=LOG[0].id;renderLog()}}
 function saveSandbox(){if(UI.mode!=="sandbox")return;store.set("sandbox",{yaml:toYaml(),pos:M.pos,manual:M.manual,name:M.name})}
 /* ---------------- simulation clock ---------------- */
 let TIMER=null;
@@ -339,11 +357,11 @@ document.addEventListener("pointermove",e=>{if(!PD||e.pointerId!==PD.pid)return;
     try{PD.el.releasePointerCapture&&PD.el.releasePointerCapture(e.pointerId)}catch(_){}}
   e.preventDefault();PD.ghost.style.transform=`translate(${e.clientX+12}px,${e.clientY+12}px)`;
   const el=document.elementFromPoint(e.clientX,e.clientY),gx=el&&el.closest&&el.closest(".gx");PD.ghost.classList.toggle("ok",!!gx);
-  document.querySelectorAll(".gx").forEach(x=>x.classList.toggle("pal-over",x===gx));
+  gDirty();document.querySelectorAll(".gx").forEach(x=>x.classList.toggle("pal-over",x===gx));
   /* show which VPC/subnet the drop would land in */
   let hb=null;if(gx&&GLAST){const[wx,wy]=toWorld(e.clientX,e.clientY);const b=boxAt(GLAST.boxes,wx,wy,"subnet")||boxAt(GLAST.boxes,wx,wy,"vpc");hb=b?b.id:null}
   document.querySelectorAll(".gbox").forEach(x=>x.classList.toggle("drop",x.dataset.gid===hb))},{passive:false});
-function palEnd(e,cancel){if(!PD)return;const d=PD;PD=null;document.body.classList.remove("pal-dragging");document.querySelectorAll(".gx.pal-over").forEach(x=>x.classList.remove("pal-over"));document.querySelectorAll(".gbox.drop").forEach(x=>x.classList.remove("drop"));
+function palEnd(e,cancel){if(!PD)return;const d=PD;PD=null;gDirty();document.body.classList.remove("pal-dragging");document.querySelectorAll(".gx.pal-over").forEach(x=>x.classList.remove("pal-over"));document.querySelectorAll(".gbox.drop").forEach(x=>x.classList.remove("drop"));
   if(!d.ghost)return;d.ghost.remove();PD_SUPPRESS=Date.now();setTimeout(()=>{PD_SUPPRESS=0},0);if(cancel)return;
   const el=document.elementFromPoint(e.clientX,e.clientY);if(el&&el.closest&&el.closest(".gx"))dropComponent(d.type,e.clientX,e.clientY);
   if(KIT.isNarrow()){const sh=document.querySelector("[data-shell]");if(sh&&sh.hasAttribute("data-side-open"))sh.removeAttribute("data-side-open")}}
@@ -379,7 +397,7 @@ document.addEventListener("pointermove",e=>{if(!GD||GD.kind==="edge")return;cons
     if(n&&n.type==="AWS::Organizations::Account"){const c=[M.pos[GD.id][0]+GW/2,M.pos[GD.id][1]+40],b=boxAt(GD.boxes,c[0],c[1],"ou");UI.gdropBox=b?b.id:null}
     if(n&&PLACEABLE.includes(n.type)){const c=[M.pos[GD.id][0]+GW/2,M.pos[GD.id][1]+40],b=boxAt(GD.boxes.filter(x=>!x.members.includes(GD.id)||x.box==="subnet"),c[0],c[1],"subnet");UI.gdropBox=b?b.id:null}gRefresh()}
   else if(GD.kind==="box"){for(const k of Object.keys(GD.pos0))M.pos[k]=[Math.round(GD.pos0[k][0]+dx/z),Math.round(GD.pos0[k][1]+dy/z)];gRefresh()}
-  else{const el=document.elementFromPoint&&document.elementFromPoint(e.clientX,e.clientY),on=el&&el.closest&&el.closest(".gnode");UI.gdrag.at=toWorld(e.clientX,e.clientY);UI.gdrag.over=on?on.dataset.gid:null;gRefresh();GD.gx.classList.add("connecting")}});
+  else{const el=document.elementFromPoint&&document.elementFromPoint(e.clientX,e.clientY),on=el&&el.closest&&el.closest(".gnode");UI.gdrag.at=toWorld(e.clientX,e.clientY);UI.gdrag.over=on?on.dataset.gid:null;gRefresh();GD.gx.classList.add("connecting");gDirty()}});
 function gEnd(cancel){if(!GD)return;const d=GD;GD=null;if(!d.moved)return;GSUP=Date.now();
   if(d.kind==="node"){const n=nodeOf(d.id);if(n&&n.type==="AWS::Organizations::Account"){const c=[M.pos[d.id][0]+GW/2,M.pos[d.id][1]+40],ob=boxAt(d.boxes,c[0],c[1],"ou");if(ob)moveAcctTo(d.id,ob.id)}
     if(n&&PLACEABLE.includes(n.type)){const c=[M.pos[d.id][0]+GW/2,M.pos[d.id][1]+40],sb=boxAt(d.boxes,c[0],c[1],"subnet"),cur=subnetsOf(n)[0]||null;
@@ -427,7 +445,7 @@ window.addEventListener("hashchange",()=>{const r=routeFromHash();if(!r)return;i
 window.CloudLab={STARTERS,get M(){return M},set M(v){M=v},get RT(){return RT},LESSONS,UI,T,step,deploy,deleteStack,startLesson,startSandbox,check,render,toYaml,fromYaml,edges,connectRule,doConnect,addNode,removeNode,evalRole,evalS3,inject,simPlay,probe,confirmSub,nodeOf,allNodes,edit,problems,EXPORTS,toTerraform,toCdk,cfnForAws};
 
 /* ---------------- resizable right panel: lessons and context can take most of the screen, the canvas becomes the reference ---------------- */
-function lwMax(){const side=(document.querySelector("#side")||{}).offsetWidth||0;return Math.max(LW_MIN,window.innerWidth-side-360)}
+function lwMax(){if(LW_SNAP!=null)return LW_SNAP;const side=(document.querySelector("#side")||{}).offsetWidth||0;return Math.max(LW_MIN,window.innerWidth-side-360)}
 function lessonW(){let w=LW_DEF;try{const v=+localStorage.getItem("cloudlab:lessonW");if(v)w=v}catch(_){}return Math.min(Math.max(w,LW_MIN),lwMax())}
 function setLessonW(w,save){w=Math.round(Math.min(Math.max(w,LW_MIN),lwMax()));document.documentElement.style.setProperty("--lesson-w",w+"px");
   const h=document.getElementById("lessonResize");if(h){h.setAttribute("aria-valuenow",w);h.setAttribute("aria-valuemin",LW_MIN);h.setAttribute("aria-valuemax",lwMax())}
@@ -459,6 +477,12 @@ if(/^#\/import/.test(location.hash))setTimeout(openImport,0);
 
 /* ---------------- full screen: the editor covers the screen; toolbars, library, simulation bar and the description
    panel float above it. Uses the browser Fullscreen API when available (Esc exits), else just the layout. ---------------- */
+/* full screen: measure the floating bars so the panels below them start where they end (bars wrap on narrow screens) */
+let FS_RO=null;
+function fsMeasure(){const sh=document.querySelector("[data-shell]");if(!sh||!UI.fs)return;const q=s=>document.querySelector(s),h=e=>e&&!e.hidden?Math.ceil(e.getBoundingClientRect().height):0;
+  const tools=h(q(".gx-tools")),stack=h(q("#bar")),sim=h(q("#simbar")),top=12+tools+8+stack;
+  const set=(k,v)=>{if(sh.style.getPropertyValue(k)!==v)sh.style.setProperty(k,v)};set("--fs-tools-h",tools+"px");set("--fs-top",top+"px");set("--fs-sim-h",sim+"px");
+  if(!FS_RO&&window.ResizeObserver){FS_RO=new ResizeObserver(()=>{if(UI.fs)fsMeasure()});["#bar","#simbar"].forEach(s=>{const e=q(s);if(e)FS_RO.observe(e)})}}
 function applyFs(){const sh=document.querySelector("[data-shell]");if(!sh)return;sh.toggleAttribute("data-fs",!!UI.fs);sh.toggleAttribute("data-desc-min",!!(UI.fs&&UI.descMin));gs().zoom=null;render()}
 function setFullscreen(on){UI.fs=!!on;if(!on)UI.descMin=false;const sh=document.querySelector("[data-shell]");
   /* the whole document goes full screen, so the inspector drawer and dialogs (outside the shell) stay visible */
