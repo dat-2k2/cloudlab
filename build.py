@@ -7,7 +7,7 @@ import sys, pathlib
 root = pathlib.Path(__file__).parent
 html = (root / "index.html").read_text()
 css = (root / "style.css").read_text()
-SCRIPTS = ["vendor/js-yaml.min.js","src/core.js","src/catalog.js","src/model.js","src/infra.js","src/org.js","src/iam.js","src/sim.js","src/lessons.js","src/lessons-org.js","src/editor.js","src/iac.js","src/lint.js","src/ui.js"]
+SCRIPTS = ["vendor/js-yaml.min.js","src/core.js","src/catalog.js","src/model.js","src/infra.js","src/org.js","src/eli5.js","src/iam.js","src/sim.js","src/lessons.js","src/lessons-org.js","src/editor.js","src/iac.js","src/lint.js","src/ui.js"]
 import os
 kit = pathlib.Path(os.environ.get("KIT_DIR", root.parent / "dat-2k2.github.io" / "kit"))  # served at ../kit/ on GitHub Pages
 kit_css = (kit / "layout.css").read_text()
@@ -32,3 +32,8 @@ body = body.replace('<script src="../kit/layout.js"></script>', "<script>\n" + k
 out = "<title>CloudLab</title>\n" + head_links + "<style>\n" + kit_css + "\n" + css + "\n</style>\n" + body
 pathlib.Path(sys.argv[1]).write_text(out)
 print("wrote", sys.argv[1], len(out), "bytes")
+
+# plain-text / static HTML versions of the lessons for LLM readers and search engines (needs node; skipped if missing)
+import shutil, subprocess, os as _os
+if shutil.which("node"):
+    subprocess.run(["node", _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "tools", "export-text.js")], check=False)

@@ -1,0 +1,687 @@
+# CloudLab: toàn bộ nội dung
+
+CloudLab là IDE hạ tầng AWS chạy trong trình duyệt, dành cho người học (kể cả người không chuyên kỹ thuật, ví dụ nhân viên ngân hàng). Người học kéo thả thành phần AWS hoặc viết CloudFormation YAML, chạy mô phỏng để thử kết nối, security group, quyền IAM và chi phí, rồi xuất ra CloudFormation, Terraform hoặc CDK. Bài học là template có lỗi cài sẵn; người học sửa rồi bấm Check. Mô phỏng chạy hoàn toàn trong trình duyệt, không gọi AWS thật; giá là giá tham khảo.
+
+Ứng dụng: https://dat-2k2.github.io/cloudlab/
+
+## Bài 0: Cảnh báo tiền trước khi tiêu tiền
+
+Nhóm: Phase 1 · Explore · Chủ đề: Budgets + SNS · Theo FCAJ workshop 000007 (https://000007.awsstudygroup.com/)
+
+**Mục tiêu:** Chi tiêu vượt 80% và 100% của $20 → email về hộp thư của bạn (như lab 000007).
+
+**Tình huống:** API đặt hàng đang chạy thật, mỗi ngày tốn chút ít. Em đặt budget $20 cho account, báo về email ở 50, 80 và 100% nhé. Lỡ có gì chạy quá tay thì ít nhất có email.
+
+**Nhiệm vụ:**
+1. Budget $20 · ngưỡng 80% và 100% (BudgetLimit 20 USD, notification 80 + 100)
+2. Email đã xác nhận (subscription Confirmed)
+3. Chạy cả tháng: cảnh báo 80% và 100% về hộp thư (budget → SNS → email đã xác nhận)
+
+**Các khối trong template:**
+- Customers: Khách đặt hàng qua app, khoảng 2 request mỗi giây. Đây là thứ làm hóa đơn tăng dần trong tháng — bấm ▶ để xem đồng hồ chi phí chạy.
+- OrdersApi: Mỗi request vào API Gateway tính một ít tiền rồi chuyển cho Lambda orders.
+- OrdersFn: 512 MB × khoảng 0,9 giây mỗi lần. Phần lớn chi phí của hệ thống nằm ở GB-giây của function này.
+- OrdersRole: Quyền của orders: chỉ ghi log. Không liên quan tới cảnh báo, nhưng mọi Lambda đều cần một role.
+- MonthlyBudget: Budget nhìn tổng chi tiêu cả account trong tháng, không gắn với tài nguyên nào. Hiện chỉ có ngưỡng 50%.
+- BillingAlerts: Budget không gửi email trực tiếp ở đây mà publish vào topic; topic chuyển tới mọi subscription.
+- MyInbox: Hộp thư của bạn. SNS đã gửi một thư “Subscription Confirmation”. Chưa bấm Confirm thì SNS không gửi gì tới địa chỉ này.
+
+**Khái niệm:** AWS Budgets, SNS topic, subscription email, xác nhận subscription, GB-giây của Lambda
+
+**Gợi ý:** Budget chỉ báo ở ngưỡng có trong NotificationsWithSubscribers, và SNS chỉ gửi tới email đã xác nhận. MonthlyBudget → thêm ngưỡng 80 và 100. MyInbox → thư xác nhận → Confirm. Rồi ▶ chạy ở tốc độ 1 ngày/giây.
+
+**Sau khi đạt:** Budget theo dõi cả account → publish vào SNS → chỉ email đã xác nhận mới nhận. Đồng hồ chi phí cho thấy tiền đến từ đâu: phần lớn là GB-giây của Lambda.
+
+## Bài 1: AccessDenied không còn ngẫu nhiên
+
+Nhóm: Phase 1 · Explore · Chủ đề: IAM role + switch role · Theo FCAJ workshop 000002 (https://000002.awsstudygroup.com/)
+
+**Mục tiêu:** Lan (qua role) đọc được report.csv, nhưng vẫn không ghi hay xóa được.
+
+**Tình huống:** Anh Minh tạo role chỉ-đọc cho mình. Mình assume role rồi mà đọc report.csv vẫn AccessDenied. Bạn xem giúp? Nhớ là mình không được ghi hay xóa gì trong bucket đó.
+
+**Nhiệm vụ:**
+1. Lan đọc được report.csv (s3:GetObject qua role → Allow)
+2. Lan không ghi được (s3:PutObject → Deny)
+3. Lan không xóa được (s3:DeleteObject → Deny)
+
+**Các khối trong template:**
+- LanReads: Lan đọc report.csv. Lan không có quyền gì trực tiếp: Lan assume role lab-readonly-s3 (STS cấp credential tạm), rồi gọi S3 bằng quyền của role.
+- LanWrites: Lan thử ghi notes.txt. Ta MUỐN lệnh này bị chặn — role chỉ được đọc. Cạnh ✕ xanh lá nghĩa là chặn đúng ý.
+- ReadOnlyRole: Trust policy cho người trong account assume. Hai policy: lab-s3-read cho phép đọc, lab-guardrail cấm thay đổi object. Deny luôn thắng Allow.
+- DataBucket: Bucket private. Không có bucket policy, nên quyền hoàn toàn nằm ở identity policy của role.
+
+**Khái niệm:** IAM role, trust policy, STS AssumeRole, explicit deny, least privilege
+
+**Gợi ý:** Explicit Deny luôn thắng Allow. s3:*Object khớp cả GetObject. ReadOnlyRole → lab-guardrail → đổi Action thành s3:PutObject, s3:DeleteObject.
+
+**Sau khi đạt:** Deny khớp → chặn ngay. Không thì cần một Allow. Không có Allow → chặn ngầm. Wildcard như s3:*Object dễ chặn quá tay.
+
+## Bài 2: VPC: public, private và tường lửa
+
+Nhóm: Phase 1 · Explore · Chủ đề: VPC + Security group · Theo FCAJ workshop 000003 (https://000003.awsstudygroup.com/)
+
+**Mục tiêu:** Web public vào được; SSH chỉ từ IP của bạn; private subnet chỉ nhận SSH từ public SG.
+
+**Tình huống:** Theo lab 000003: VPC ASG 10.10.0.0/16, 2 public + 2 private subnet. Web ở public phải vào được từ Internet, còn SSH chỉ từ IP của em. Hiện web không vào được, còn bot thì SSH vào được.
+
+**Nhiệm vụ:**
+1. Khách vào được web (IGW gắn VPC → public subnet có đường Internet)
+2. SSH chỉ từ IP của bạn (You vào được, ScanBot bị chặn)
+3. Private chỉ nhận SSH từ public SG (không có 0.0.0.0/0 trên PrivateSg)
+
+**Các khối trong template:**
+- Vpc: VPC “ASG” 10.10.0.0/16 như lab. Lab 000003 còn thêm NAT gateway mỗi AZ để EC2 private ra được Internet (ping amazon.com); CloudLab chưa mô phỏng traffic đi ra.
+- Igw: Internet gateway đã tạo nhưng CHƯA gắn vào VPC — nên public subnet chưa thật sự public.
+- PublicA: Public subnet: MapPublicIpOnLaunch = true, cần IGW gắn vào VPC.
+- PrivateB: Private subnet: không có IP public, Internet không vào thẳng được.
+- PublicSg: Mở 80 cho mọi người là đúng (web). Nhưng 22 (SSH) cũng mở 0.0.0.0/0 — bot quét cổng sẽ thử đăng nhập.
+- PrivateSg: Lab: SSH vào private chỉ được từ public SG (máy public làm bastion), không phải từ Internet.
+- Visitors: Khách vào web trên PublicEc2, cổng 80.
+- You: Bạn SSH từ IP 203.0.113.10 — rule SSH nên chỉ mở cho /32 này.
+- ScanBot: Bot từ IP lạ thử SSH. Ta muốn bị chặn (✕ xanh).
+- PublicEc2: Web server + bastion.
+- PrivateEc2: App server, chỉ vào được qua bastion.
+
+**Khái niệm:** VPC CIDR, public vs private subnet, Internet gateway, security group, bastion, NAT gateway (lab)
+
+**Gợi ý:** Subnet chỉ public khi VPC có internet gateway gắn vào. Security group: mở đúng cổng cho đúng nguồn. Nối Igw → Vpc. PublicSg: rule 22 nguồn 203.0.113.10/32. PrivateSg: rule 22 nguồn SG PublicSg.
+
+**Sau khi đạt:** Public subnet = có IGW. Security group là tường lửa theo nguồn: Internet cho web, /32 cho SSH, và SG-tới-SG cho máy bên trong. Lab thật còn có NAT gateway để private đi ra.
+
+## Bài 3: EC2 dùng IAM role, không dùng access key
+
+Nhóm: Phase 1 · Explore · Chủ đề: EC2 + IAM role · Theo FCAJ workshop 000048 (https://000048.awsstudygroup.com/)
+
+**Mục tiêu:** App ghi được vào bucket bằng instance role; role chỉ có quyền cần thiết.
+
+**Tình huống:** App trên EC2 cần ghi file vào bucket uploads. Lab 000048 cho thấy dán access key vào máy là sai. Role đã có nhưng chưa gắn vào máy, và quyền thì quá rộng.
+
+**Nhiệm vụ:**
+1. EC2 có instance role (IamInstanceProfile → AppRole)
+2. App ghi được vào bucket (request → PutObject 200)
+3. Role chỉ có quyền cần thiết (không xóa bucket, không ghi bucket khác)
+
+**Các khối trong template:**
+- AppEc2: App ghi file vào UploadsBucket mỗi request. Không có instance profile → không có credential → AccessDenied.
+- AppRole: Role có sẵn nhưng chưa gắn vào EC2, và s3:* trên * là quá rộng (xóa được mọi bucket).
+- UploadsBucket: Bucket private, chỉ cần PutObject từ app.
+- Users: Người dùng upload qua app.
+- AppSg: Mở cổng 80 cho web.
+
+**Khái niệm:** instance profile, IAM role cho EC2, credential tạm, least privilege
+
+**Gợi ý:** EC2 nhận credential tạm từ instance profile, không cần access key nằm trên máy. Nối AppEc2 → AppRole. Trong AppRole, thay statement s3:* bằng s3:PutObject trên !Sub ${UploadsBucket.Arn}/*.
+
+**Sau khi đạt:** Instance profile đưa credential tạm, tự xoay vòng vào máy — không có key nào để lộ. Quyền chỉ vừa đủ: PutObject đúng một bucket.
+
+## Bài 4: Website S3 qua CloudFront
+
+Nhóm: Phase 1 · Explore · Chủ đề: S3 + CloudFront · Theo FCAJ workshop 000057 · 000094 (https://000057.awsstudygroup.com/)
+
+**Mục tiêu:** Khách đọc web qua CloudFront; bucket không còn public.
+
+**Tình huống:** Lab 000057 dựng web tĩnh bằng cách mở public bucket. Giờ chặn public lại và cho khách đi qua CloudFront (lab 000094) để nhanh hơn và an toàn hơn.
+
+**Nhiệm vụ:**
+1. Khách đi qua CloudFront (Visitors → CloudFront → SiteBucket, không lỗi)
+2. Bucket không còn đọc công khai (GET ẩn danh index.html → 403)
+3. Block Public Access bật cả 4 (4 tùy chọn = true)
+
+**Các khối trong template:**
+- Visitors: Khách đang đọc thẳng từ S3. Sau khi sửa, nối Visitors → CloudFront.
+- SiteBucket: Bucket đang public để làm website. Sau khi có CloudFront thì bật lại Block Public Access.
+- SitePolicy: Principal "*" cho cả Internet đọc. Khi đi qua CloudFront thì không cần policy này nữa.
+
+**Khái niệm:** S3 static website, Block Public Access, CloudFront origin, cache hit ratio
+
+**Gợi ý:** CloudFront đọc bucket bằng quyền riêng (OAC), nên bucket không cần public. + Thêm → CloudFront. Nối CloudFront → SiteBucket, Visitors → CloudFront. Xóa SitePolicy, bật 4 ô Block Public Access.
+
+**Sau khi đạt:** CloudFront cache ở edge nên 90% request không chạm tới S3, và bucket quay về private. Public bucket chỉ hợp cho demo.
+
+## Bài 5: RDS ở private subnet, chỉ app vào được
+
+Nhóm: Phase 1 · Explore · Chủ đề: RDS + VPC · Theo FCAJ workshop 000005 (https://000005.awsstudygroup.com/)
+
+**Mục tiêu:** App vẫn chạy; DB không public, rds-sg chỉ cho EC2; DB subnet group 2 AZ private + Multi-AZ.
+
+**Tình huống:** Lab 000005: MySQL Multi-AZ, database fcaj, security group rds-sg. Bản này chạy được nhưng DB đang public, mở 3306 cho cả Internet, chỉ một AZ.
+
+**Nhiệm vụ:**
+1. App vẫn chạy (request → EC2 → RDS không lỗi)
+2. DB không public (PubliclyAccessible false, rds-sg chỉ nhận từ Ec2Sg)
+3. 2 AZ private + Multi-AZ (DB subnet group gồm 2 private subnet khác AZ, MultiAZ true)
+
+**Các khối trong template:**
+- Db: MySQL database fcaj. PubliclyAccessible = true và nằm ở public subnet: có địa chỉ Internet. Lab dùng db.m5.large Multi-AZ; ở đây db.t3.micro cho rẻ.
+- RdsSg: rds-sg mở 3306 cho 0.0.0.0/0 — ai cũng thử đăng nhập được. Đúng ra chỉ cho Ec2Sg.
+- AppEc2: App đọc ghi DB mỗi request.
+- Ec2Sg: Cổng 80 cho khách vào app.
+- PrivateA: Nơi DB nên nằm (cùng PrivateB, 2 AZ).
+- Users: Khách dùng app.
+
+**Khái niệm:** DB subnet group, security group tham chiếu SG, PubliclyAccessible, Multi-AZ
+
+**Gợi ý:** Database nên ở private subnet, không public, và security group chỉ nhận từ security group của app. Db: Public = Không, Multi-AZ = Có, subnet group = PrivateA + PrivateB. rds-sg: 3306 từ SG Ec2Sg.
+
+**Sau khi đạt:** Ba lớp: private subnet (không có đường Internet), PubliclyAccessible = false, và rds-sg chỉ tin Ec2Sg. Multi-AZ gấp đôi giá — xem đồng hồ chi phí — đổi lại DB sống khi một AZ hỏng.
+
+## Bài 6: Load balancer chia tải qua 2 AZ
+
+Nhóm: Phase 1 · Explore · Chủ đề: ALB + Auto Scaling · Theo FCAJ workshop 000006 (https://000006.awsstudygroup.com/)
+
+**Mục tiêu:** ALB ở 2 AZ, ≥ 2 target ở 2 AZ, chịu được 60 req/s mà gần như không lỗi.
+
+**Tình huống:** Lab 000006 dựng launch template + target group + ALB + Auto Scaling group. Bản đang chạy chỉ có một t3.micro sau ALB, ALB lại chỉ ở một subnet, và giờ cao điểm có 60 request/giây.
+
+**Nhiệm vụ:**
+1. ALB ở 2 AZ (≥ 2 subnet, khác Availability Zone)
+2. Chịu 60 req/s (lỗi < 1% trong 10 phút)
+3. Target ở 2 AZ (target group có instance ở 2 AZ)
+
+**Các khối trong template:**
+- Alb: Chỉ ở PublicA. AWS bắt buộc ALB có ≥ 2 subnet ở 2 AZ (xem tab Vấn đề).
+- Web1: Một t3.micro chịu ~40 req/s trong CloudLab. 60 req/s → quá tải, trả 5xx.
+- WebTargets: Health check: target nào security group không cho ALB vào thì bị loại.
+- Users: Cao điểm 60 request/giây.
+- Dashboard: Xem request và lỗi theo thời gian.
+- WebSg: Chỉ nhận cổng 80 từ alb-sg — đúng.
+- PrivateB: AZ thứ hai, đang trống. Lab dùng Auto Scaling group trải đều 2 AZ; CloudLab dùng instance cố định.
+
+**Khái niệm:** Application Load Balancer, target group, health check, high availability, capacity
+
+**Gợi ý:** Load balancer chia tải và loại target hỏng; nhiều instance ở nhiều AZ thì vừa chịu tải vừa sống khi một AZ hỏng. Nối Alb → PublicB. + Thêm EC2 vào PrivateB, gắn WebSg, nối Alb → EC2 mới (tự vào target group).
+
+**Sau khi đạt:** ALB trải 2 AZ, target ở 2 AZ: thêm máy là thêm sức chịu tải, mất một AZ vẫn chạy. Lab thật dùng Auto Scaling group để tự thêm/bớt máy theo CPU.
+
+## Bài 7: Function lỗi mà không thấy log
+
+Nhóm: Phase 1 · Explore · Chủ đề: CloudWatch · Theo FCAJ workshop 000008 (https://000008.awsstudygroup.com/)
+
+**Mục tiêu:** Request qua API thành công, có log trong CloudWatch, role không thừa quyền.
+
+**Tình huống:** API extract báo lỗi 502 liên tục. Dashboard thấy lỗi tăng, alarm đã gửi email, mà vào CloudWatch lại không có dòng log nào để biết vì sao.
+
+**Nhiệm vụ:**
+1. Request qua API thành công (Lambda chạy xong trong timeout → 200)
+2. Có log trong CloudWatch (/aws/lambda/extract có dòng REPORT)
+3. Role không thừa quyền (không xóa được object, không động được IAM)
+
+**Các khối trong template:**
+- Tester: Gửi request thử mỗi 5 giây, như health check.
+- ExtractApi: Trả 502 khi Lambda lỗi.
+- ExtractFn: Code cần khoảng 4,2 giây ở 128 MB, nhưng Timeout là 3 giây (mặc định). Thêm memory thì thêm CPU nên chạy nhanh hơn.
+- ExtractRole: Lambda ghi log bằng chính role này. Role chỉ có quyền đọc S3, thiếu logs:CreateLogGroup / CreateLogStream / PutLogEvents → log mất mà không báo lỗi.
+- OpsDashboard: Monitor nhận số liệu từ extract: lần chạy, lỗi, thời gian. Nhìn đây để thấy lỗi tăng theo thời gian.
+- ErrorsAlarm: Errors > 0 trong 1 phút → ALARM → publish tới ops-alerts. Monitor tự động, không cần ai ngồi nhìn.
+- OpsAlerts: Subscription email đã xác nhận sẵn, nên alarm về tới hộp thư.
+- MyInbox: Email ALARM sẽ về đây khi function lỗi.
+
+**Khái niệm:** execution role, CloudWatch Logs, timeout, memory = CPU, CloudWatch alarm, least privilege
+
+**Gợi ý:** Lambda ghi log bằng chính execution role. Thiếu quyền logs:* thì log biến mất, không báo lỗi. ExtractRole → thêm managed policy AWSLambdaBasicExecutionRole. ExtractFn → Timeout 10 (hoặc Memory 256).
+
+**Sau khi đạt:** Execution role quyết định Lambda làm được gì, kể cả ghi log. Monitor + alarm cho bạn biết có lỗi; log cho bạn biết vì sao.
+
+## Bài 8: Upload một ảnh, gọi một lần
+
+Nhóm: Serverless · Chủ đề: S3 → Lambda · Theo FCAJ workshop 000078 (https://000078.awsstudygroup.com/)
+
+**Mục tiêu:** Mỗi ảnh vào incoming/ chạy Lambda đúng một lần, kết quả ra processed/.
+
+**Tình huống:** Mình upload ảnh vào incoming/ mà Lambda chạy liên tục, bucket đầy file .json lạ. Đồng hồ chi phí cứ nhảy. Hóa đơn tháng này có sao không?
+
+**Nhiệm vụ:**
+1. 1 upload → 1 lần chạy (upload incoming/x.jpg → đúng 1 invocation)
+2. Kết quả nằm ở processed/ (output .json bắt đầu bằng processed/)
+3. Dọn file rác trong incoming/ (incoming/ không còn .json)
+
+**Các khối trong template:**
+- PhoneApp: App điện thoại upload ảnh vào incoming/, khoảng 30 ảnh mỗi giờ.
+- ImagesBucket: Event notification gọi extract cho MỌI object mới — không có prefix hay suffix filter, nên cả file kết quả .json cũng kích hoạt.
+- ExtractFn: Đọc ảnh, ghi kết quả <tên>.json vào OUTPUT_BUCKET/OUTPUT_PREFIX. OUTPUT_PREFIX đang là incoming/ — đúng chỗ đang bắn sự kiện.
+- ExtractRole: Đủ quyền đọc và ghi bucket, nên vòng lặp không bị gì chặn lại.
+- OpsDashboard: Nhìn số lần chạy so với số ảnh upload: lẽ ra 1:1.
+
+**Khái niệm:** S3 event notification, prefix / suffix filter, vòng lặp đệ quy, biến môi trường
+
+**Gợi ý:** Trigger bắt mọi ObjectCreated, kể cả file Lambda vừa ghi. Ghi ra prefix khác và lọc trigger. ImagesBucket: filter prefix incoming/, suffix .jpg. ExtractFn: OUTPUT_PREFIX = processed/. Rồi xóa .json rác.
+
+**Sau khi đạt:** Lambda ghi vào chính chỗ đang kích hoạt nó là vòng lặp tốn tiền nhất — đồng hồ chi phí cho thấy nó tăng không dừng. Luôn tách prefix vào/ra và lọc trigger.
+
+## Bài 9: API → Lambda → DynamoDB
+
+Nhóm: Serverless · Chủ đề: API Gateway + DynamoDB · Theo FCAJ workshop 000079 (https://000079.awsstudygroup.com/)
+
+**Mục tiêu:** Request qua API thành công, sách được ghi vào bảng, role chỉ ghi đúng bảng đó.
+
+**Tình huống:** Book Store lab 000079: frontend gọi API Gateway → Lambda → DynamoDB. API trả 502, bảng books vẫn trống.
+
+**Nhiệm vụ:**
+1. API trả 200 (Frontend → API → Lambda không lỗi)
+2. Sách vào bảng (DynamoDB có item mới)
+3. Role chỉ ghi đúng bảng (PutItem bảng books; không xóa bảng, không ghi bảng khác)
+
+**Các khối trong template:**
+- BooksFn: Ghi mỗi request thành một item vào bảng trong biến TABLE_NAME.
+- BooksRole: Chỉ có quyền ghi log. Thiếu dynamodb:PutItem → AccessDenied → API trả 502.
+- BooksTable: On-demand: trả tiền theo mỗi lần ghi.
+- BooksApi: HTTP API chuyển request cho Lambda.
+- Frontend: Trang web Book Store gọi API.
+
+**Khái niệm:** API Gateway HTTP API, Lambda integration, DynamoDB PutItem, execution role
+
+**Gợi ý:** Lambda chạy bằng role của nó; gọi DynamoDB cần quyền đúng action trên đúng bảng. Nối BooksRole → BooksTable (cho phép GetItem, PutItem) hoặc thêm statement dynamodb:PutItem trên !GetAtt BooksTable.Arn.
+
+**Sau khi đạt:** API Gateway → Lambda → DynamoDB là xương sống serverless: không máy nào chạy khi không có request, và quyền gói trong role của từng function.
+
+## Bài 10: Xóa stack mà vẫn bị tính tiền
+
+Nhóm: Hạ tầng dưới dạng code · Chủ đề: CloudFormation / CDK · Theo FCAJ workshop 000037 · 000038 (https://000037.awsstudygroup.com/)
+
+**Mục tiêu:** Xóa stack sạch: không tài nguyên nào bị giữ lại, không còn gì tính tiền.
+
+**Tình huống:** Pipeline xong việc rồi, em xóa stack đi cho đỡ tốn. Nhớ kiểm tra: sau khi xóa, đồng hồ chi phí phải về 0 — kể cả cái bucket lab-scratch hôm trước em tạo tay.
+
+**Nhiệm vụ:**
+1. Stack xóa xong, không bỏ sót (DELETE_COMPLETE, không gì bị Retain)
+2. Không còn tài nguyên ngoài stack (lab-scratch đã xóa)
+3. Đồng hồ chi phí về 0 (không còn GB nào đang lưu)
+
+**Các khối trong template:**
+- ImagesBucket: DeletionPolicy: Retain → khi xóa stack, CloudFormation bỏ qua bucket này: nó còn đó và vẫn tính tiền 200 GB. Kể cả đổi thành Delete, CloudFormation không xóa được bucket còn object.
+- ExtractFn: Function và role sẽ bị xóa cùng stack.
+- ExtractRole: Role không tốn tiền, nhưng nên đi cùng stack.
+- ScratchBucket: Bucket tạo tay trên console, không thuộc stack nào. Xóa stack không đụng tới nó — 50 GB vẫn bị tính.
+
+**Khái niệm:** CloudFormation stack, DeletionPolicy, bucket phải rỗng mới xóa được, tài nguyên ngoài stack
+
+**Gợi ý:** Stack chỉ xóa thứ nó tạo. DeletionPolicy: Retain giữ bucket lại; bucket còn object thì CloudFormation không xóa được. ImagesBucket: DeletionPolicy Delete + Empty. Xóa stack. Rồi lab-scratch: Empty → Xóa bucket.
+
+**Sau khi đạt:** Stack xóa sạch bằng một lệnh, nhưng chỉ thứ nó tạo, và tôn trọng DeletionPolicy. Thứ tạo tay phải tự dọn — đồng hồ chi phí là nơi kiểm tra cuối cùng.
+
+## Bài 11: Chuẩn bị org cũ trước khi bật Control Tower
+
+Nhóm: Landing zone · brownfield · Chủ đề: Organizations + precheck
+
+**Mục tiêu:** Organization bật All features; không SCP nào chặn baseline; cả 4 account qua precheck.
+
+**Tình huống:** Org đã chạy 3 năm, 4 account, chưa có governance chung. Sếp muốn bật Control Tower mà không làm gián đoạn app. Template này là bản inventory của org (bước Quét hiện trạng). Trước khi set up landing zone, phải dọn mọi thứ sẽ làm enroll fail.
+
+**Nhiệm vụ:**
+1. Organization bật All features (FeatureSet: ALL)
+2. Không SCP nào chặn baseline (không OU nào có SCP deny config:*)
+3. Cả 4 account qua precheck (có execution role, không còn Config recorder cũ)
+
+**Các khối trong template:**
+- Org: Organization o-7f3k2pq9xd. Management account 1111-2222-3333 được dùng lại (đường in-place), org ID không đổi.
+- LegacyBilling: legacy-billing: tạo từ Organizations, có execution role, nhưng còn Config recorder cũ.
+- AcquiredStartup: acquired-startup: công ty mua lại, được mời vào org. Account mời vào thường không có role AWSControlTowerExecution, và còn trail riêng.
+- AppDev: app-dev: sạch, đi đợt đầu được.
+- AppProd: app-prod: còn recorder cũ và trail riêng. Prod đi sau non-prod.
+- DenyConfigChanges: SCP cũ trên OU Legacy, chặn config:* để không ai tắt recorder. Nó chặn luôn cả role của Control Tower.
+- Legacy: OU cũ. Landing zone không đụng tới cho tới khi bạn register.
+- Workloads: OU cũ của các app.
+- Security: OU do landing zone dùng cho account log archive và audit.
+- LogArchive: log-archive: nhận org trail của mọi account đã enroll.
+- Audit: audit: Config aggregator và quyền đọc cho đội security.
+- LandingZone: Control Tower chạy trong management account. Mỗi đường register xuống OU nghĩa là OU đó đã được quản lý.
+
+**Khái niệm:** AWS Organizations, All features vs consolidated billing, SCP, AWSControlTowerExecution, Config recorder, inventory dạng code
+
+**Gợi ý:** Enroll fail vì ba lý do: thiếu role AWSControlTowerExecution, Config recorder cũ (mỗi region chỉ một recorder), SCP chặn config:*. Org phải bật All features. Org: All features. Gỡ DenyConfigChanges khỏi Legacy. acquired-startup: tạo execution role. legacy-billing và app-prod: xóa recorder cũ.
+
+**Sau khi đạt:** Inventory trước, dọn phụ thuộc trước khi chuyển: giờ register OU nào cũng không còn ô đỏ. Trail riêng chưa cần xóa, nó còn là đường log duy nhất cho tới khi org trail chạy.
+
+**Đọc thêm (nguyên tắc chuẩn bị và hai con đường):**
+Inventory trước mọi thứ
+Chụp lại account, OU, SCP, trail, Config recorder, RAM share và mọi policy dựa vào org ID. Lưu dạng code để diff trước và sau. Template của bài này chính là bản inventory đó.
+Quan sát trước, cưỡng chế sau
+Chạy detective controls (Config rules, conformance packs) để đo vi phạm. Enroll xong mới bật preventive controls, từng cái một, để thấy tác động của mỗi cái.
+Dọn phụ thuộc trước khi chuyển
+Gỡ những thứ làm enroll fail: Config recorder cũ, role thiếu, SCP chặn baseline. Với đường tạo org mới thì thêm RAM share và policy dựa vào org ID.
+Hai con đường brownfield
+In-place New org 
+Cách làm Bật Control Tower trên org hiện tại Dựng org mới rồi chuyển account sang 
+Org ID Không đổi: RAM share, aws:PrincipalOrgID không vỡ Đổi: share cấp org vỡ, policy dùng org ID phải sửa 
+Rủi ro Thấp, nhanh hơn, nhưng mang theo nợ cũ Sạch, thiết kế lại OU và SCP; RI/Savings Plans ở lại account đã mua, CUR cũ mất nếu không backup 
+Bài này đi đường in-place.
+Nguồn
+AWS Architecture Blog: Field Notes, enroll existing AWS accounts into AWS Control Tower 
+AWS docs: Prerequisites for enrollment
+
+## Bài 12: Set up landing zone, enroll theo đợt
+
+Nhóm: Landing zone · brownfield · Chủ đề: Control Tower + register OU
+
+**Mục tiêu:** Landing zone chạy; OU Workloads enroll 100% trước; rồi coverage 100% cả org.
+
+**Tình huống:** Org đã sạch phần lớn chướng ngại, landing zone đã khai báo nhưng setup lỗi. OU Workloads sẽ là đợt thí điểm, Legacy đi sau. Cẩn thận: inventory bỏ sót app-prod, và SCP cũ trên Legacy đã bị gắn lại.
+
+**Nhiệm vụ:**
+1. Landing zone chạy (manifest có log archive + audit, org All features)
+2. Đợt thí điểm: Workloads enroll 100% (OU Workloads đã register, mọi account enrolled)
+3. Coverage 100% (mọi account trong org enrolled)
+
+**Các khối trong template:**
+- Org: Organization o-7f3k2pq9xd. Management account 1111-2222-3333 được dùng lại (đường in-place), org ID không đổi.
+- LegacyBilling: legacy-billing: tạo từ Organizations, có execution role, nhưng còn Config recorder cũ.
+- AcquiredStartup: acquired-startup: công ty mua lại, được mời vào org. Account mời vào thường không có role AWSControlTowerExecution, và còn trail riêng.
+- AppDev: app-dev: sạch, đi đợt đầu được.
+- AppProd: Inventory bỏ sót: app-prod vẫn còn recorder cũ.
+- DenyConfigChanges: Ai đó gắn lại SCP này lên Legacy.
+- Legacy: OU cũ. Landing zone không đụng tới cho tới khi bạn register.
+- Workloads: OU cũ của các app.
+- Security: OU do landing zone dùng cho account log archive và audit.
+- LogArchive: log-archive: nhận org trail của mọi account đã enroll.
+- Audit: audit: Config aggregator và quyền đọc cho đội security.
+- LandingZone: Manifest đã có log archive nhưng chưa chỉ định account audit, nên setup lỗi.
+
+**Khái niệm:** landing zone manifest, log archive / audit, register OU (EnableBaseline), enroll, blast radius, đợt thí điểm
+
+**Gợi ý:** Register OU = Control Tower enroll từng account trong OU. Account fail riêng, account khác vẫn vào. Đi đợt ít rủi ro trước. Nối LandingZone → Audit. Nối LandingZone → Workloads; xóa recorder cũ của app-prod. Gỡ DenyConfigChanges khỏi Legacy rồi register Legacy.
+
+**Sau khi đạt:** Expand rồi backfill: landing zone thêm OU Security, org trail, aggregator mà không đụng OU cũ; rồi register từng OU, đợt ít rủi ro trước. Hai account còn trail riêng đang ghi log hai nơi, đó là việc của pha contract.
+
+**Đọc thêm (chia đợt, bắc cầu và case thực tế):**
+Chia đợt theo blast radius
+Sandbox, rồi non-prod, rồi prod, rồi shared services (network, security). Management account luôn đi cuối. Mỗi đợt phải qua gate rồi mới mở đợt sau (go/no-go).
+Bắc cầu trong lúc chuyển
+Giữ cả đường cũ lẫn mới cùng chạy. Trail cũ và org trail ghi song song cho tới khi SIEM đọc từ org trail.
+Diễn tập và đóng băng thay đổi
+Chạy thử trên account giả để đo thời gian và tìm lỗi. Trong lúc account đang chuyển: không deploy, không scale; ghim Auto Scaling group (Min = Max = Desired), backup CUR.
+Case thực tế
+Telco châu Phi · Tech Mahindra (140+ account, 4 đợt, new org): sandbox → non-prod → prod → service account. Bài học: kiểm tra region sớm, lúc bắt đầu Control Tower chưa có ở Cape Town.
+Media Canada · HCLTech (140+ account, ALZ → Control Tower): không downtime, thiết kế lại OU, thay pipeline tạo account bằng Account Factory. Bài học: dọn thành phần ALZ còn sót là một bước riêng.
+Custom landing zone có RAM · AWS (~8 tuần): đổi RAM share cấp org thành cấp account, ghim Auto Scaling, management account đi cuối. Bài học: trong lúc chuyển, instance vẫn chạy nhưng không start/stop được.
+Nguồn
+AWS Architecture Blog: Field Notes, enroll existing AWS accounts into AWS Control Tower 
+AWS APN Blog: Seamless transition from AWS Landing Zone to AWS Control Tower 
+HCLTech: AWS migration from landing zone to Control Tower and CloudOps 
+AWS Cloud Operations Blog: Migrating a custom landing zone with RAM to AWS Control Tower
+
+## Bài 13: Dọn phần cũ và giữ landing zone không drift
+
+Nhóm: Landing zone · brownfield · Chủ đề: Contract + drift
+
+**Mục tiêu:** Hết drift; không còn log ghi hai nơi; bật một preventive control trên Workloads.
+
+**Tình huống:** Mọi account đã enroll, nhưng rollout chưa xong: hai account vẫn ghi log hai nơi và trả phí trùng (xem đồng hồ chi phí). Sáng nay có người gỡ SCP của Control Tower bằng console, landing zone báo drift.
+
+**Nhiệm vụ:**
+1. Hết drift (landing zone đã repair)
+2. Không còn log ghi hai nơi (account đã enroll không còn trail riêng)
+3. Bật preventive control trên Workloads (sau khi enroll xong mới cưỡng chế)
+
+**Các khối trong template:**
+- Org: Organization o-7f3k2pq9xd. Management account 1111-2222-3333 được dùng lại (đường in-place), org ID không đổi.
+- LegacyBilling: legacy-billing: tạo từ Organizations, có execution role, nhưng còn Config recorder cũ.
+- AcquiredStartup: Đã enroll nhưng trail riêng vẫn chạy: log ghi hai nơi, bản sao thứ hai bị tính phí.
+- AppDev: app-dev: sạch, đi đợt đầu được.
+- AppProd: Cũng còn trail riêng.
+- DenyConfigChanges: SCP cũ trên OU Legacy, chặn config:* để không ai tắt recorder. Nó chặn luôn cả role của Control Tower.
+- Legacy: OU cũ. Landing zone không đụng tới cho tới khi bạn register.
+- Workloads: OU cũ của các app.
+- Security: OU do landing zone dùng cho account log archive và audit.
+- LogArchive: log-archive: nhận org trail của mọi account đã enroll.
+- Audit: audit: Config aggregator và quyền đọc cho đội security.
+- LandingZone: Drift: SCP của Control Tower bị gỡ tay. Lúc drift, không register hay enroll thêm được. Sửa bằng Repair (ResetLandingZone), không sửa tay thêm.
+
+**Khái niệm:** contract, dual-write, drift, ResetLandingZone, preventive vs detective control, một cửa thay đổi
+
+**Gợi ý:** Contract là bước có chủ đích: xóa trail riêng, recorder cũ, SCP thừa sau khi đường mới đã chạy. Mọi thay đổi sau rollout đi qua Control Tower. LandingZone: Repair. acquired-startup và app-prod: Xóa trail riêng. Nối LandingZone → Workloads (đã register) để bật control.
+
+**Sau khi đạt:** Rollout đạt: 0 drift, 0 log trùng, controls bật sau khi enroll xong. Từ giờ một cửa: mọi thay đổi qua Control Tower hoặc pipeline (Account Factory, AFT, CfCT). Sửa tay là drift, và drift khóa enroll.
+
+**Đọc thêm (expand–contract, drift và thế nào là xong):**
+Expand–contract áp vào landing zone
+Bước Migration database Landing zone brownfield 
+Expand Thêm bảng, cột mới Set up landing zone: OU Security, org trail, aggregator. OU cũ giữ nguyên. 
+Dual-write Ghi cả cũ lẫn mới Trail cũ và org trail cùng ghi. Controls ở chế độ detective. 
+Backfill Chép dữ liệu cũ Register OU, enroll account theo đợt. 
+Switch Đọc từ chỗ mới Bật preventive controls; SIEM và alert chuyển sang org trail. 
+Contract Xóa cột, bảng cũ Xóa trail riêng, recorder cũ, SCP thừa, thành phần landing zone cũ. 
+Thế nào là rollout thành công
+“Account đã enroll” chưa phải là xong. Đóng rollout khi qua đủ gate, mỗi gate đo bằng số và chốt ngưỡng trước: inventory không còn ô chưa biết, precheck 0 chướng ngại, workload trong SLO, coverage 100%, log đầy đủ ở log archive, không quyền nào bị nới, 0 drift, contract xong (0 trail riêng, 0 recorder cũ, 0 SCP mồ côi, không còn chi phí trùng sau một chu kỳ billing).
+Case: drift do default VPC thêm tay · Scale Factory
+Default VPC được tạo tay sau khi set up làm account không update được qua Control Tower. Drift chặn cả enroll account mới, nên xử lý như incident. Bài học: không sửa tài nguyên Control Tower từ ngoài; thêm Config rule hoặc EventBridge để bắt thay đổi lạ.
+Nguồn
+AWS docs: Guidance for creating and modifying AWS Control Tower resources 
+HCLTech: AWS migration from landing zone to Control Tower and CloudOps 
+Scale Factory: When Control Tower drifts
+
+## Thành phần AWS (giải thích bằng ví dụ ngân hàng)
+
+### Client / người dùng (CloudLab::Client)
+
+Khách hàng đến quầy. Mỗi giây có bao nhiêu người gửi yêu cầu (mở app, chuyển khoản) thì khối này bắn bấy nhiêu request vào hệ thống.
+
+Người hoặc chương trình gọi vào hệ thống từ Internet: gửi request tới API, hoặc đọc object trong S3. Đặt tần suất để tạo tải khi mô phỏng.
+
+### Uploader (CloudLab::Uploader)
+
+Người nộp hồ sơ: cứ vài phút lại có một file được gửi lên, như ảnh CCCD khi mở tài khoản eKYC.
+
+Một nguồn đẩy file vào bucket theo lịch, như app di động hay máy quét tài liệu. Mỗi file là một s3:PutObject.
+
+### Hộp thư email (CloudLab::Inbox)
+
+Hộp thư của bạn. Cảnh báo chi phí, alarm sự cố gửi qua email sẽ rơi vào đây.
+
+Hộp thư của bạn. Nhận email từ SNS (thư xác nhận subscription, cảnh báo budget, alarm). Email chỉ tới khi subscription đã được xác nhận.
+
+### Monitor / dashboard (CloudLab::Monitor)
+
+Màn hình giám sát ở phòng vận hành: vẽ số request, lỗi, chi phí của các khối nối vào nó.
+
+Bảng theo dõi nhận số liệu từ các tài nguyên được nối vào: request, lỗi, thời gian chạy, chi phí. Giống một CloudWatch dashboard đặt trên màn hình.
+
+### API Gateway (HTTP API) (AWS::ApiGatewayV2::Api)
+
+Quầy giao dịch có số thứ tự: nhận mọi yêu cầu từ bên ngoài, kiểm tra, rồi chuyển vào đúng phòng xử lý phía sau. Ứng dụng ngân hàng, open banking API đều đi qua một cửa như vậy.
+
+Cửa vào HTTPS cho client. Nhận request, chuyển tới integration (thường là Lambda) rồi trả kết quả. Tính tiền theo số request.
+
+### Lambda function (AWS::Lambda::Function)
+
+Một nhân viên thời vụ chỉ được gọi khi có việc: có yêu cầu thì làm, xong thì về, trả tiền theo từng mili-giây làm việc. Không có việc thì không tốn đồng nào.
+
+Đoạn code chạy khi có sự kiện, không cần quản lý server. Chạy bằng quyền của execution role. Tính tiền theo số lần gọi và GB-giây (memory × thời gian).
+
+### IAM role (AWS::IAM::Role)
+
+Thẻ nhân viên kèm danh sách quyền: được vào phòng nào, được làm nghiệp vụ gì. Ai cầm thẻ thì có đúng những quyền đó, không hơn. Deny luôn thắng Allow, giống quy định cấm thì không ai ký vượt được.
+
+Một bộ quyền mà dịch vụ (Lambda) hoặc người (qua STS AssumeRole) mượn để gọi AWS API. Trust policy nói ai được mượn; các policy nói được làm gì. Deny luôn thắng Allow.
+
+### S3 bucket (AWS::S3::Bucket)
+
+Kho lưu hồ sơ không giới hạn: sao kê, chứng từ, ảnh eKYC. Mặc định là kho khóa kín; một cấu hình sai có thể biến nó thành tủ hồ sơ để ngoài đường.
+
+Kho object (file) gần như không giới hạn. Tính tiền theo GB lưu mỗi tháng và theo số request PUT/GET. Có thể bắn sự kiện (event notification) khi có object mới.
+
+### Bucket policy (AWS::S3::BucketPolicy)
+
+Bảng nội quy dán ở cửa kho: ai được vào, được lấy hồ sơ nào. Ghi “*” là cho cả thiên hạ.
+
+Policy gắn vào bucket (resource-based): nói AI được làm gì với bucket, kể cả người ngoài account. Principal "*" nghĩa là bất kỳ ai trên Internet.
+
+### DynamoDB table (AWS::DynamoDB::Table)
+
+Sổ cái điện tử tra cứu cực nhanh theo mã (mã khách hàng, mã giao dịch). Trả tiền theo số lần ghi, đọc.
+
+Bảng NoSQL key-value, đọc ghi vài mili-giây. Chế độ on-demand tính tiền theo mỗi lần ghi (WRU) và đọc (RRU), cộng GB lưu.
+
+### SNS topic (AWS::SNS::Topic)
+
+Loa thông báo nội bộ: một tin phát ra, mọi người đăng ký (email, hệ thống khác) đều nhận được. Email phải bấm xác nhận thì mới nhận.
+
+Trạm phát tin: một tin publish vào topic được đẩy tới mọi subscription (email, Lambda, SQS…). Email phải được xác nhận mới nhận tin.
+
+### SQS queue (AWS::SQS::Queue)
+
+Khay hồ sơ chờ xử lý: việc đến thì xếp hàng, bộ phận phía sau rảnh lúc nào lấy ra làm lúc đó, không mất hồ sơ khi cao điểm.
+
+Hàng đợi message: bên gửi và bên xử lý không cần chạy cùng lúc. Lambda đọc queue theo lô (event source mapping).
+
+### Event source mapping (AWS::Lambda::EventSourceMapping)
+
+Người chuyển hồ sơ từ khay chờ sang nhân viên xử lý.
+
+Lambda tự đọc message từ queue theo lô rồi gọi function. Là một tài nguyên trong template nhưng hiện như một cạnh.
+
+### EventBridge schedule (AWS::Events::Rule)
+
+Lịch làm việc định kỳ: cứ 1 giờ, cứ cuối ngày thì tự kích hoạt một việc, như chạy đối soát cuối ngày.
+
+Lịch hẹn giờ (cron / rate) gọi target định kỳ, ví dụ chạy báo cáo mỗi 5 phút. Rule theo lịch không tính phí.
+
+### CloudWatch log group (AWS::Logs::LogGroup)
+
+Sổ nhật ký giao dịch: mọi việc chương trình làm đều được ghi lại để tra soát và kiểm toán.
+
+Nơi lưu log. Lambda ghi vào /aws/lambda/<tên function>, nhưng chỉ khi execution role có quyền logs:*. Tính tiền theo GB log ghi vào.
+
+### CloudWatch alarm (AWS::CloudWatch::Alarm)
+
+Chuông báo động: chỉ số vượt ngưỡng (lỗi tăng, chậm bất thường) thì reo và gửi thông báo cho người trực.
+
+Theo dõi một metric (vd Errors của Lambda). Vượt ngưỡng trong một khoảng thời gian thì chuyển ALARM và báo tới SNS topic.
+
+### AWS Budget (AWS::Budgets::Budget)
+
+Hạn mức chi tiêu cho tài khoản cloud: chạm 80%, 100% hạn mức thì báo cho người phụ trách, như cảnh báo hạn mức thẻ.
+
+Theo dõi chi tiêu cả account trong tháng. Khi chi tiêu thực tế vượt một % của hạn mức, budget gửi thông báo tới SNS topic hoặc email.
+
+### VPC (AWS::EC2::VPC)
+
+Khuôn viên chi nhánh có tường rào riêng: mọi máy chủ, database nằm bên trong; bên ngoài chỉ vào được qua cổng bạn mở.
+
+Mạng riêng của bạn trong AWS, có dải IP (CIDR) riêng. Mọi EC2, RDS, load balancer nằm trong một VPC, chia nhỏ thành subnet theo Availability Zone.
+
+### Subnet (AWS::EC2::Subnet)
+
+Một khu trong chi nhánh. Khu public giống sảnh giao dịch, khách vào được; khu private giống kho tiền, chỉ người bên trong đi tới.
+
+Một dải IP con của VPC, nằm trong đúng một Availability Zone. Public subnet có đường ra Internet qua internet gateway; private subnet thì không — nơi đặt database và app server.
+
+### Internet gateway (AWS::EC2::InternetGateway)
+
+Cổng chính của chi nhánh ra đường lớn (Internet). Không gắn cổng thì sảnh cũng không đón được khách.
+
+Cửa ra vào Internet của VPC. Gắn vào VPC (VPCGatewayAttachment) thì các public subnet mới nhận và gửi được traffic Internet. Miễn phí.
+
+### Gateway attachment (AWS::EC2::VPCGatewayAttachment)
+
+Việc lắp cổng chính vào tường rào chi nhánh.
+
+Gắn internet gateway vào VPC.
+
+### Security group (AWS::EC2::SecurityGroup)
+
+Bảo vệ đứng ở cửa từng phòng với danh sách được vào: cổng nào, từ đâu. Không có trong danh sách thì không qua.
+
+Tường lửa gắn vào từng tài nguyên (EC2, load balancer, RDS). Mặc định chặn mọi traffic vào; mỗi inbound rule mở một cổng cho một nguồn: dải IP (0.0.0.0/0 = cả Internet) hoặc một security group khác.
+
+### EC2 instance (AWS::EC2::Instance)
+
+Một máy chủ thuê theo giờ, như một bàn làm việc có nhân viên ngồi cả ngày: có khách hay không vẫn tính tiền, và mỗi bàn chỉ phục vụ được một số khách mỗi giây.
+
+Một máy ảo chạy liên tục, tính tiền theo giờ dù có request hay không. Mỗi loại (t3.micro, m5.large…) chịu được một lượng request nhất định; quá tải thì trả lỗi.
+
+### Instance profile (AWS::IAM::InstanceProfile)
+
+Việc cấp thẻ nhân viên cho máy chủ, để nó không phải giữ mật khẩu trong ngăn kéo.
+
+Gói một IAM role để gắn vào EC2.
+
+### Application Load Balancer (AWS::ElasticLoadBalancingV2::LoadBalancer)
+
+Nhân viên điều phối ở sảnh: chia khách đều cho các quầy, quầy nào nghỉ thì không xếp khách vào. Đặt ở hai khu khác nhau để một khu mất điện vẫn phục vụ.
+
+Nhận request HTTP(S) từ Internet và chia đều cho các target khỏe (EC2, Lambda). Cần ít nhất 2 subnet ở 2 Availability Zone khác nhau. Tính tiền theo giờ + LCU.
+
+### Target group (AWS::ElasticLoadBalancingV2::TargetGroup)
+
+Danh sách các quầy đang mở mà người điều phối được phép xếp khách vào, kèm cách kiểm tra quầy còn hoạt động.
+
+Nhóm target mà load balancer chuyển request tới, kèm health check. Target không vượt health check (vd security group chặn load balancer) sẽ không nhận request.
+
+### Listener (AWS::ElasticLoadBalancingV2::Listener)
+
+Quy tắc của người điều phối: khách vào cổng nào thì chuyển tới nhóm quầy nào.
+
+Cổng load balancer lắng nghe và nơi chuyển tiếp.
+
+### CloudFront (AWS::CloudFront::Distribution)
+
+Mạng lưới phòng giao dịch vệ tinh gần khách: tài liệu hay được hỏi để sẵn ở đó, khách không phải chạy về hội sở.
+
+CDN: cache nội dung ở edge gần người dùng. Request trúng cache trả ngay; request trượt mới đi về origin (S3, load balancer, API). Tính tiền theo request và GB truyền ra.
+
+### Route 53 record (AWS::Route53::RecordSet)
+
+Danh bạ địa chỉ: khách gõ tên (app.bank.vn) thì được chỉ đường tới đúng nơi.
+
+Tên miền trỏ tới tài nguyên. Alias record tới load balancer / CloudFront được truy vấn miễn phí; hosted zone tính $0,50 mỗi tháng.
+
+### RDS database (AWS::RDS::DBInstance)
+
+Hệ thống sổ sách chính (như core banking) do AWS bảo trì: sao lưu, vá lỗi. Multi-AZ là có bản sao ở tòa nhà khác, tòa này sự cố thì chuyển sang ngay.
+
+Database quan hệ (PostgreSQL, MySQL) do AWS quản lý: backup, patch, failover. Chạy theo giờ như EC2. Nên đặt ở private subnet, chỉ mở cổng cho security group của app.
+
+### DB subnet group (AWS::RDS::DBSubnetGroup)
+
+Danh sách các khu được phép đặt hệ thống sổ sách, nên là các khu private ở ít nhất hai tòa nhà.
+
+Các subnet mà RDS được đặt vào.
+
+### ElastiCache (Redis) (AWS::ElastiCache::CacheCluster)
+
+Bảng tra cứu nhanh để trên bàn: thông tin hay hỏi (tỷ giá, hạn mức) không cần mở sổ cái mỗi lần.
+
+Cache trong bộ nhớ đặt trước database: request trúng cache không cần hỏi RDS, nên RDS nhẹ hơn và nhanh hơn. Chạy theo giờ.
+
+### Organization (AWS::Organizations::Organization)
+
+Tập đoàn ngân hàng: một hội sở quản lý nhiều đơn vị con (mỗi AWS account là một đơn vị, có sổ sách và chi phí riêng).
+
+Gom nhiều AWS account dưới một management account. Control Tower chỉ dựng được landing zone khi organization bật All features (không phải chỉ consolidated billing).
+
+### Organizational unit (OU) (AWS::Organizations::OrganizationalUnit)
+
+Khối nghiệp vụ trong tập đoàn (Khối vận hành, Khối kinh doanh). Quy định ban hành cho khối thì áp cho mọi đơn vị bên trong.
+
+Nhóm account trong organization. SCP và controls áp lên OU sẽ áp cho mọi account bên trong. Register OU với Control Tower thì mọi account trong đó được enroll.
+
+### AWS account (AWS::Organizations::Account)
+
+Một đơn vị con có tài khoản AWS riêng, như một công ty con hoặc một môi trường (dev, prod) tách bạch rủi ro và chi phí.
+
+Một AWS account thành viên. Trong bài brownfield, account đã tồn tại từ trước; những gì nó đang có (role, recorder, trail) nằm ở Metadata.CloudLab vì không do template này tạo.
+
+### Service control policy (SCP) (AWS::Organizations::Policy)
+
+Quy định cấm cấp tập đoàn (SCP): áp lên khối thì không ai trong khối làm được việc bị cấm, kể cả quản trị viên. Nó chỉ cấm, không cấp quyền.
+
+Giới hạn quyền tối đa của mọi principal trong các account dưới OU, kể cả role của Control Tower. SCP không cấp quyền, chỉ chặn.
+
+### Control Tower landing zone (AWS::ControlTower::LandingZone)
+
+Bộ khung quản trị chung của tập đoàn: phòng kiểm toán (audit), kho lưu nhật ký tập trung (log archive), và bộ quy định áp tự động cho mọi đơn vị được đưa vào.
+
+Dựng governance cho cả organization: OU Security với account log archive và audit, org trail ghi log mọi account về log archive, Config aggregator, controls. Trên org có sẵn (brownfield), nó chỉ thêm mới, không sửa OU cũ cho tới khi bạn register.
+
+### Register OU (baseline) (AWS::ControlTower::EnabledBaseline)
+
+Đưa một khối vào khung quản trị chung: từng đơn vị trong khối được kiểm tra điều kiện rồi gắn bộ chuẩn (ghi log, recorder, quyền kiểm toán).
+
+Register một OU: Control Tower bật baseline AWSControlTowerBaseline trên OU và enroll từng account trong đó. Account không qua precheck thì fail riêng, account khác vẫn vào.
+
+### Control (AWS::ControlTower::EnabledControl)
+
+Một quy định cụ thể áp lên khối: loại phát hiện (báo cáo vi phạm) hoặc loại ngăn chặn (chặn hẳn).
+
+Một control (guardrail) bật trên OU. Detective chỉ báo vi phạm; preventive chặn hẳn bằng SCP. Bật preventive sau khi đã enroll xong và đo tác động của từng cái.

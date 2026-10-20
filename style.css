@@ -268,7 +268,7 @@ th{white-space:nowrap}
 /* aliases: kit token names → CloudLab tokens */
 :root{--surface-2:var(--sunk);--border:var(--line);--border-strong:var(--line-strong);--text:var(--ink);--text-muted:var(--muted);--text-subtle:var(--subtle);--font-sans:var(--font-body);
   --s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:20px;--s-6:24px;--s-8:32px;--s-12:48px;--r-full:999px;--ease:cubic-bezier(.2,.65,.25,1)}
-.shell.app{grid-template-columns:var(--side-w) minmax(0,1fr) 352px;grid-template-areas:"top top top" "side main lesson" "foot foot foot"}
+.shell.app{grid-template-columns:var(--side-w) minmax(0,1fr) var(--lesson-w,380px);grid-template-areas:"top top top" "side main lesson" "foot foot foot"}
 .shell.app .lesson{grid-area:lesson}
 .main{grid-area:main;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg);overflow:hidden}
 .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 20px;background:var(--surface);border-bottom:1px solid var(--line)}
@@ -569,3 +569,20 @@ body.pal-dragging,body.pal-dragging *{cursor:grabbing!important;user-select:none
   .shell[data-collapsed] .side-item .side-badge{display:none}
 }
 @media (min-width:901px){.shell[data-collapsed] .side-item.tpl .side-label{display:none}}
+/* lesson pane tiers: main task first, context second, reference last */
+.ltier{display:flex;flex-direction:column;gap:12px}
+.ltier+.ltier{border-top:1px solid var(--line);padding-top:14px;margin-top:4px}
+.ltier.ref{gap:6px}.ltier.ref>.lab,.ltier.why>.lab{font:500 11px/16px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--subtle)}
+.ltier.ref .more{margin:0}.ltier.ref .lh{margin-top:6px}
+.scn2{display:flex;gap:10px;align-items:flex-start}.scn2 p{margin:0 0 2px;font-size:14px;line-height:21px}.scn2 .av{flex:none}
+.callout.bank p{margin:4px 0 0}.callout.bank ul{margin:6px 0 0;padding-left:18px}.callout.bank li{margin:0 0 4px}.callout.bank .q{margin-top:8px}.callout.bank a{color:var(--accent)}
+/* right panel resize handle sits on the panel's left border */
+.lesson-resize{grid-area:lesson;justify-self:start;align-self:stretch;width:10px;margin-left:-5px;z-index:6;cursor:col-resize;touch-action:none;position:relative}
+.lesson-resize::after{content:"";position:absolute;left:4px;top:0;bottom:0;width:2px;background:transparent;transition:background .15s}
+.lesson-resize:hover::after,.lesson-resize:focus-visible::after,body.lw-dragging .lesson-resize::after{background:var(--accent)}
+.lesson-resize:focus-visible{outline:none}
+body.lw-dragging,body.lw-dragging *{cursor:col-resize!important;user-select:none!important}
+.lbar{display:flex;justify-content:flex-end;margin:-8px -6px -6px 0}
+.drawer{width:min(var(--lesson-w,420px),100vw)}
+@media (max-width:900px){.lesson-resize,.lbar{display:none}}
+.callout.eli5{background:color-mix(in srgb,var(--accent) 6%,var(--surface));border-color:color-mix(in srgb,var(--accent) 25%,var(--line))}

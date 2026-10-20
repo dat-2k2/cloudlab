@@ -10,8 +10,11 @@
 <script>try{var t=localStorage.getItem("cloudlab:theme");if(t)document.documentElement.dataset.theme=JSON.parse(t)}catch(_){}</script>
 <link rel="stylesheet" href="../kit/layout.css">
 <link rel="stylesheet" href="style.css">
+<link rel="alternate" type="text/markdown" href="llms-full.txt" title="Toàn bộ nội dung CloudLab dạng văn bản">
+<link rel="alternate" type="text/html" href="learn.html" title="Nội dung bài học (HTML tĩnh)">
 </head>
 <body>
+<noscript><p>CloudLab cần JavaScript để chạy editor và mô phỏng. Nội dung bài học dạng văn bản: <a href="learn.html">learn.html</a> · <a href="llms-full.txt">llms-full.txt</a>.</p></noscript>
 <div class="shell app" data-shell>
   <header class="shell-top">
     <button class="icon-btn" data-shell-toggle aria-controls="side" aria-label="Thu gọn / mở thanh thành phần">☰</button>
@@ -33,9 +36,10 @@
     <section class="simbar" id="simbar" aria-label="Mô phỏng"></section>
     <section class="logp" id="log" aria-label="Event log" hidden></section>
   </main>
+  <div class="lesson-resize" id="lessonResize" role="separator" aria-orientation="vertical" aria-controls="lesson" aria-label="Kéo để đổi độ rộng khung bài học (phím ← →)" tabindex="0"></div>
   <aside class="lesson" id="lesson" aria-label="Bài học" aria-live="polite"></aside>
   <footer class="shell-foot">
-    <span>Part of <a href="https://dat-2k2.github.io/">dat-2k2.github.io</a> · <a href="https://dat-2k2.github.io/">← Back to home</a></span>
+    <span>Part of <a href="https://dat-2k2.github.io/">dat-2k2.github.io</a> · <a href="https://dat-2k2.github.io/">← Back to home</a> · <a href="learn.html">Bản văn bản</a></span>
     <span class="hide-s">Mô phỏng trong trình duyệt, không gọi AWS thật · giá tham khảo</span>
   </footer>
 </div>
@@ -43,7 +47,7 @@
 <div id="modal"></div>
 <script src="../kit/layout.js"></script>
 <script src="vendor/js-yaml.min.js"></script>
-<script src="src/core.js"></script><script src="src/catalog.js"></script><script src="src/model.js"></script><script src="src/infra.js"></script><script src="src/org.js"></script><script src="src/iam.js"></script>
+<script src="src/core.js"></script><script src="src/catalog.js"></script><script src="src/model.js"></script><script src="src/infra.js"></script><script src="src/org.js"></script><script src="src/eli5.js"></script><script src="src/iam.js"></script>
 <script src="src/sim.js"></script><script src="src/lessons.js"></script><script src="src/lessons-org.js"></script><script src="src/editor.js"></script><script src="src/iac.js"></script><script src="src/lint.js"></script><script src="src/ui.js"></script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 "use strict";
+const LW_DEF=380,LW_MIN=300;   /* right panel width: default and minimum (px) */
 /* UI: shell (kit layout), palette + templates sidebar, stack bar, canvas / YAML, simulation bar with live cost meter,
    inspector drawer (properties, explanation, runtime), lesson pane, modals, events, boot. */
 const KIT=window.Kit||{layer:{open(){},close(){},isOpen(){return false},top(){return null}},isNarrow(){return false}};
@@ -70,21 +71,28 @@ function renderLog(){const el=document.getElementById("log");if(!el)return;el.hi
   el.innerHTML=`<div class="logl"><ul class="log">${LOG.slice(0,120).map(l=>`<li class="${l.id===(sel&&sel.id)?"sel":""}" data-log="${l.id}" tabindex="0"><span class="t">${l.t}</span><span class="ev ${l.tone}"><span class="k k-${kk(l)}">${esc(l.kind)}</span> ${esc(l.svc)} · ${esc(l.op)}</span><span class="m">${esc(l.msg)}</span></li>`).join("")}</ul></div>
     <div class="console"><div class="bar3"><i></i><i></i><i></i><span>aws CLI</span></div>${sel&&sel.cli?`<pre id="clitext"><span class="ps">$ </span>${esc(sel.cli)}</pre>`:`<pre class="dim"># không có lệnh tương đương</pre>`}</div>`}
 function renderLesson(){const el=document.getElementById("lesson"),L=L_();
-  if(!L){el.innerHTML=`<div><span class="cap eyebrow">Sandbox</span><h1>Dựng hạ tầng tự do</h1><p class="goal">Kéo thành phần AWS từ thanh bên vào canvas, nối chúng bằng chấm bên phải mỗi khối, hoặc viết CloudFormation YAML. Rồi bấm ▶ để mô phỏng traffic và xem chi phí chạy.</p></div>
+  if(!L){el.innerHTML=lessonBar()+`<div><span class="cap eyebrow">Sandbox</span><h1>Dựng hạ tầng tự do</h1><p class="goal">Kéo thành phần AWS từ thanh bên vào canvas, nối chúng bằng chấm bên phải mỗi khối, hoặc viết CloudFormation YAML. Rồi bấm ▶ để mô phỏng traffic và xem chi phí chạy.</p></div>
     <div class="sect"><span class="lab">Nguồn tạo tải</span><p class="note">Client (request/giây), Uploader (file/giờ) và EventBridge schedule là nơi sự kiện bắt đầu. Hộp thư và Monitor nhận kết quả.</p></div>
     <div class="sect"><span class="lab">Bắt đầu từ</span><div class="acts">${Object.entries(STARTERS).map(([k,t])=>`<button class="sm" data-act="loadTpl" data-arg="${k}">${esc(t.title)}</button>`).join("")}<button class="sm" data-act="askClear">Canvas trống</button></div>${LESSONS.map((l,i)=>`<button class="tplrow" data-act="copyLesson" data-arg="${i}"><b>${esc(l.tag)}</b><small>${esc(l.title)}</small></button>`).join("")}<p class="note">Mở template của một bài vào sandbox (không chấm điểm).</p></div>`;return}
   const R=UI.result,hs=L.hints(),passed=R?R.res.filter(Boolean).length:0,nT=L.tasks.length;
-  let h=`<div class="lh"><span class="lab">${esc(L.phase||"FCAJ")}</span><div class="ldots">${LESSONS.map((x,i)=>`<button class="ldot${DONE.has(x.id)?" done":""}${i===UI.lesson?" cur":""}" data-lesson="${i}" aria-label="Bài ${x.step}: ${esc(x.title)}${DONE.has(x.id)?" (đã đạt)":""}"><span>${x.step}</span></button>`).join("")}</div></div>
-  <div><span class="cap eyebrow">Bài ${L.step} · ${esc(L.tag)}</span><h1>${esc(L.title)}</h1><p class="goal">${esc(L.goal)}</p>${L.ref?`<p class="labref">${L.ref}</p>`:""}${L.lab?`<p class="labref">Theo FCAJ workshop ${L.lab.split(" · ").map(x=>`<a href="https://${x}.awsstudygroup.com/" target="_blank" rel="noopener">${x} ↗</a>`).join(" · ")}</p>`:""}</div>
-  <details class="scn"><summary><span class="av">${L.who[0]}</span><span class="q">${esc(L.who[1].split(" · ")[0])}: “${esc(L.scenario)}”</span></summary><p>“${esc(L.scenario)}”</p><small class="muted">${esc(L.who[1])}</small></details>
-  <div class="sect"><div class="th"><span class="lab">Trong template này</span><button class="link" data-act="tour">${UI.tour>=0?"Dừng giới thiệu":"Giới thiệu từng khối →"}</button></div><div class="comps">${Object.keys(L.explain||{}).filter(id=>nodeOf(id)).map(id=>{const n=nodeOf(id);return`<button class="comp${UI.sel&&UI.sel.node===id?" on":""}" data-act="selNode" data-arg="${id}" title="${esc(L.explain[id])}"><span class="side-ic" style="--cat:var(--c-${n.def.cat})" aria-hidden="true">${esc(n.def.short)}</span>${esc(id)}</button>`}).join("")}</div></div>
+  /* three tiers: 1 what to do (goal, tasks, actions) · 2 why it matters (scenario, banking context) · 3 reference, collapsed */
+  const lab=L.lab?`Theo FCAJ workshop ${L.lab.split(" · ").map(x=>`<a href="https://${x}.awsstudygroup.com/" target="_blank" rel="noopener">${x} ↗</a>`).join(" · ")}`:"";
+  let h=lessonBar()+`<section class="ltier main" aria-label="Việc cần làm"><div><span class="cap eyebrow">${esc(L.phase||"FCAJ")} · Bài ${L.step}</span><h1>${esc(L.title)}</h1><p class="goal">${esc(L.goal)}</p></div>
   <div class="sect"><div class="th"><span class="lab">Nhiệm vụ</span><span class="cnt">${passed}/${nT}</span><span class="pbar"><i style="width:${passed/nT*100}%"></i></span></div>${L.tasks.map((t,i)=>{const c=R?(R.res[i]?"pass":"fail"):"";return`<div class="task ${c}"><span class="tm2">${R?(R.res[i]?"✓":"✕"):i+1}</span><div><b>${esc(t.t)}</b>${R&&R.res[i]?`<small>${esc(t.c)}</small>`:""}</div></div>`}).join("")}
   ${R&&UI.dirty?`<span class="chip warn dirty">Đã sửa · Check lại</span>`:""}</div>`;
   if(R)h+=`<div class="callout ${R.ok?"ok":R.skipped?"ctx":""}"><b>${R.ok?"Đạt":R.skipped?"Đã làm hộ":`Chưa đạt · lần ${UI.attempt}`}</b>${esc(R.msg)}</div>`;
   if(UI.hints)h+=hs.slice(0,UI.hints).map((x,i)=>`<div class="callout warn"><b>Gợi ý ${i+1}/${hs.length}</b>${esc(x)}</div>`).join("");
   if(R&&R.ok&&!R.skipped){const nx=UI.lesson+1<LESSONS.length;h+=`<div class="lacts">${nx?`<button class="primary" data-lesson="${UI.lesson+1}">Bài tiếp: ${esc(LESSONS[UI.lesson+1].tag)} →</button>`:`<button class="primary" data-act="openSandbox">Ra sandbox tự do →</button>`}</div>`}
   else h+=`<div class="lacts"><button class="primary" data-act="check">Check</button><button data-act="hint" ${UI.hints>=hs.length?"disabled":""}>Gợi ý ${UI.hints}/${hs.length}</button><button class="ghost" data-act="askSkip">Làm hộ</button><button class="ghost" data-act="askReset">Reset</button></div>`;
-  h+=`<details class="more"><summary>Khái niệm (${L.concepts.length})</summary><div class="tags">${L.concepts.map(c=>`<span class="tag">${esc(c)}</span>`).join("")}</div></details>`+(L.reading?`<details class="more reading"><summary>Đọc thêm: ${esc(L.reading.title)}</summary><div class="reading-body">${L.reading.html}</div></details>`:"");
+  h+=`</section><section class="ltier why" aria-label="Bối cảnh"><span class="lab">Bối cảnh</span>
+  <div class="scn2"><span class="av" aria-hidden="true">${L.who[0]}</span><div><p>“${esc(L.scenario)}”</p><small class="muted">${esc(L.who[1])}</small></div></div>
+  ${L.bank?`<div class="callout ctx bank"><b>Trong ngân hàng</b>${L.bank.why?`<p>${esc(L.bank.why)}</p>`:""}${(L.bank.cases||[]).length?`<ul>${L.bank.cases.map(c=>`<li>${esc(c.t)}${c.url?` <a href="${esc(c.url)}" target="_blank" rel="noopener">nguồn ↗</a>`:""}</li>`).join("")}</ul>`:""}${L.bank.rule?`<p class="rule">${esc(L.bank.rule.t)}${L.bank.rule.url?` <a href="${esc(L.bank.rule.url)}" target="_blank" rel="noopener">nguồn ↗</a>`:""}</p>`:""}${L.bank.q?`<p class="q"><b>Câu hỏi thảo luận:</b> ${esc(L.bank.q)}</p>`:""}</div>`:""}
+  </section>
+  <section class="ltier ref" aria-label="Tham khảo"><span class="lab">Tham khảo</span>
+  <details class="more"><summary>Trong template này (${Object.keys(L.explain||{}).filter(id=>nodeOf(id)).length} khối)</summary><div class="comps">${Object.keys(L.explain||{}).filter(id=>nodeOf(id)).map(id=>{const n=nodeOf(id);return`<button class="comp${UI.sel&&UI.sel.node===id?" on":""}" data-act="selNode" data-arg="${id}" title="${esc(L.explain[id])}"><span class="side-ic" style="--cat:var(--c-${n.def.cat})" aria-hidden="true">${esc(n.def.short)}</span>${esc(id)}</button>`}).join("")}</div><button class="link" data-act="tour">${UI.tour>=0?"Dừng giới thiệu":"Giới thiệu từng khối →"}</button></details>
+  <details class="more"><summary>Khái niệm (${L.concepts.length})</summary><div class="tags">${L.concepts.map(c=>`<span class="tag">${esc(c)}</span>`).join("")}</div></details>`+(L.reading?`<details class="more reading"><summary>Đọc thêm: ${esc(L.reading.title)}</summary><div class="reading-body">${L.reading.html}</div></details>`:"")+
+  `${lab||L.ref?`<p class="labref">${lab}${L.ref?(lab?" · ":"")+L.ref:""}</p>`:""}
+  <div class="lh"><span class="lab">Lộ trình</span><div class="ldots">${LESSONS.map((x,i)=>`<button class="ldot${DONE.has(x.id)?" done":""}${i===UI.lesson?" cur":""}" data-lesson="${i}" aria-label="Bài ${x.step}: ${esc(x.title)}${DONE.has(x.id)?" (đã đạt)":""}"><span>${x.step}</span></button>`).join("")}</div></div></section>`;
   el.innerHTML=h}
 /* ---------------- inspector: fields ---------------- */
 function fieldHtml(n,f){const id=n.id,p=n.props,k=f.k;if(f.when&&!f.when(p))return"";
@@ -185,7 +193,7 @@ let DRAWER_KEY=null;
 function renderDrawer(){const el=document.getElementById("drawer");if(!el)return;const S=UI.sel;let c=null;
   if(S&&S.node&&nodeOf(S.node)){const n=nodeOf(S.node),L=L_(),ex=L&&L.explain&&L.explain[n.id],v=nodeView(n);
     c={key:"n:"+n.id,cat:n.def.cat,icon:n.def.short,eyebrow:n.def.label+(n.scope==="manual"?" · ngoài stack":n.ext?" · ngoài AWS":""),title:n.id,status:v.st?chip(v.st[1],v.st[0]):"",
-      body:(ex?`<div class="callout ctx"><b>Trong bài này</b>${esc(ex)}</div>`:"")+`<details class="doc"${ex?"":" open"}><summary>${esc(n.def.label)} là gì?</summary><p>${esc(n.def.doc||"")}</p></details>`+
+      body:(typeof eli5Of==="function"&&eli5Of(n.type)?`<div class="callout eli5"><b>Hiểu nhanh</b>${esc(eli5Of(n.type))}</div>`:"")+(ex?`<div class="callout ctx"><b>Trong bài này</b>${esc(ex)}</div>`:"")+`<details class="doc"${ex||eli5Of(n.type)?"":" open"}><summary>${esc(n.def.label)} là gì?</summary><p>${esc(n.def.doc||"")}</p></details>`+
         `<p class="lab">Cấu hình</p><label class="fld"><span class="fl">Logical ID</span><input data-act="rename" id="f-lid" data-fid="${n.id}" value="${esc(n.id)}"></label>`+n.def.fields.map(f=>fieldHtml(n,f)).join("")+
         `<p class="lab">Đang chạy</p><div class="rt" id="rt">${rtHtml(n.id)}</div>`,foot:nodeActs(n)}}
   else if(S&&S.edge){const e=(GLAST?GLAST.edges:edges()).find(x=>x.id===S.edge);if(e){const v=edgeView(e),f=RT.flow[e.id]||{ok:0,err:0};
@@ -214,7 +222,7 @@ function renderModal(){const el=document.getElementById("modal"),Md=UI.modal;
 function modalValues(){const Md=UI.modal,v={...(Md?Md.init:{})};if(!Md)return v;for(const f of Md.fields||[]){if(f.type==="checks")f.items.forEach(([k])=>{const e=document.getElementById("m-"+k);if(e)v[k]=e.checked?1:0});else{const e=document.getElementById("m-"+f.id);if(e)v[f.id]=e.value}}return v}
 function confirmModal(title,body,label,fn,danger){UI.modal={title,body:`<p>${body}</p>`,submitLabel:label,danger,init:{},fields:[],submit:()=>{const r=fn();return r&&r.ok===false?r:{ok:true}}}}
 /* ---------------- render ---------------- */
-function render(){const ae=document.activeElement,keep=ae&&ae!==document.body&&!(ae.closest&&ae.closest("#modal"))?selOf(ae):null;
+function render(){syncHash();const ae=document.activeElement,keep=ae&&ae!==document.body&&!(ae.closest&&ae.closest("#modal"))?selOf(ae):null;
   document.querySelector("[data-shell]").classList.toggle("no-lesson",false);
   renderSide();renderTop();renderBar();renderCanvas();renderCode();renderSim();renderLog();renderLesson();renderDrawer();renderModal();
   const now=document.activeElement;if(keep&&(!now||now===document.body)){const n=document.querySelector(keep);if(n)try{n.focus({preventScroll:true})}catch(_){}}
@@ -269,7 +277,7 @@ document.addEventListener("click",e=>{
     simToggle(){simPlay(!RT.running);return true},simReset(){const was=RT.running;simPlay(false);if(UI.mode==="lesson")startLesson(UI.lesson,true);else{RT=freshRuntime();if(Object.keys(M.res).length){QUIET++;deploy();QUIET--;RT.stack.status="CREATE_COMPLETE";syncRuntime()}}log("CloudLab","sim","reset","đặt lại thời gian, chi phí và dữ liệu mô phỏng","");if(was)simPlay(true)},
     logToggle(){UI.panel=UI.panel?null:"log";UI.logOpen=!!UI.panel},sideTab(){const sh=document.querySelector("[data-shell]");if(sh&&sh.hasAttribute("data-collapsed")&&(UI.sideTab||(UI.mode==="lesson"?"learn":"comp"))===arg){const tg=document.querySelector("header [data-shell-toggle]");if(tg)tg.click()}UI.sideTab=arg},picker(){UI.picker=UI.picker?null:{q:"",active:0};UI.gfocus=UI.picker?"#pkq":null},
     loadTpl(){const t=STARTERS[arg];confirmModal(`Mở mẫu “${t.title}”?`,`${esc(t.desc)}<br><br>Canvas sandbox hiện tại sẽ được thay.`,"Mở mẫu",()=>{startSandbox(loadTemplate(t.yaml,t.layout,"sandbox"));UI.sideTab="comp";gs().zoom=null})},
-    gFit(){const G=gs();G.zoom=null},gNoteClose(){UI.gnote=null},orgAct(){const k=arg.indexOf(":");ORG_ACTS[arg.slice(0,k)](arg.slice(k+1))},gZoom(){gZoomAt(GCUR.z*(arg==="1"?1.2:1/1.2));return true},gTrace(){gs().trace=!gs().trace},gView(){gs().view=arg;UI.gmenu=null},
+    gFit(){const G=gs();G.zoom=null},gNoteClose(){UI.gnote=null},lessonWide(){const wide=lessonW()>=Math.min(lwMax(),window.innerWidth*0.5);setLessonW(wide?LW_DEF:Math.round(window.innerWidth*0.55),true);gs().zoom=null},orgAct(){const k=arg.indexOf(":");ORG_ACTS[arg.slice(0,k)](arg.slice(k+1))},gZoom(){gZoomAt(GCUR.z*(arg==="1"?1.2:1/1.2));return true},gTrace(){gs().trace=!gs().trace},gView(){gs().view=arg;UI.gmenu=null},
     gMenu(){UI.gmenu=UI.gmenu&&UI.gmenu.from===arg?null:{from:arg,active:0};UI.gfocus=UI.gmenu?"#glist":`[data-gconnect="${arg}"]`},
     connectFrom(){UI.sel=null;UI.code=false;UI.gmenu={from:arg,active:0};UI.gfocus="#glist"},
     gPick(){if(!UI.gmenu||!connectRule(UI.gmenu.from,arg))return true;doConnect(UI.gmenu.from,arg);UI.gmenu=null},
@@ -402,7 +410,30 @@ let RZ=0;window.addEventListener("resize",()=>{clearTimeout(RZ);RZ=setTimeout(()
 /* the tour moves through the lesson's components when the drawer closes or "tiếp" is used */
 document.addEventListener("click",e=>{const L=L_();if(!L||UI.tour<0)return;const nx=e.target.closest&&e.target.closest('[data-act="closeDrawer"]');if(!nx)return;const ids=Object.keys(L.explain||{}).filter(id=>nodeOf(id));UI.tour++;if(UI.tour>=ids.length){UI.tour=-1;return}setTimeout(()=>{UI.sel={node:ids[UI.tour]};render()},0)},true);
 /* ---------------- boot ---------------- */
-(function boot(){const s=store.get("mode",{mode:"lesson",i:0});try{if(s.mode==="sandbox")startSandbox();else startLesson(Math.min(s.i||0,LESSONS.length-1))}catch(err){console.error(err);startLesson(0)}render();
+/* URL routes: #/lesson/<id> and #/sandbox, so a lesson can be linked, shared, and opened from learn.html */
+function routeFromHash(){const m=/^#\/(lesson)\/([\w-]+)|^#\/(sandbox)/.exec(location.hash||"");if(!m)return null;if(m[3])return{mode:"sandbox"};const i=LESSONS.findIndex(l=>l.id===m[2]);return i<0?null:{mode:"lesson",i}}
+function syncHash(){const h=UI.mode==="sandbox"?"#/sandbox":L_()?"#/lesson/"+L_().id:"";if(h&&location.hash!==h)try{history.replaceState(null,"",h)}catch(_){}}
+window.addEventListener("hashchange",()=>{const r=routeFromHash();if(!r)return;if(r.mode==="sandbox"&&UI.mode!=="sandbox")startSandbox();else if(r.mode==="lesson"&&(UI.mode!=="lesson"||UI.lesson!==r.i))startLesson(r.i);render()});
+(function boot(){const s=routeFromHash()||store.get("mode",{mode:"lesson",i:0});try{if(s.mode==="sandbox")startSandbox();else startLesson(Math.min(s.i||0,LESSONS.length-1))}catch(err){console.error(err);startLesson(0)}render();
   const btn=document.getElementById("theme");if(btn){const root=document.documentElement,cur=()=>root.dataset.theme||(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");
     const paint=()=>{btn.textContent=cur()==="dark"?"☀":"☾"};paint();btn.addEventListener("click",()=>{root.dataset.theme=cur()==="dark"?"light":"dark";store.set("theme",root.dataset.theme);paint()})}})();
 window.CloudLab={STARTERS,get M(){return M},set M(v){M=v},get RT(){return RT},LESSONS,UI,T,step,deploy,deleteStack,startLesson,startSandbox,check,render,toYaml,fromYaml,edges,connectRule,doConnect,addNode,removeNode,evalRole,evalS3,inject,simPlay,probe,confirmSub,nodeOf,allNodes,edit,problems,EXPORTS,toTerraform,toCdk,cfnForAws};
+
+/* ---------------- resizable right panel: lessons and context can take most of the screen, the canvas becomes the reference ---------------- */
+function lwMax(){const side=(document.querySelector("#side")||{}).offsetWidth||0;return Math.max(LW_MIN,window.innerWidth-side-360)}
+function lessonW(){let w=LW_DEF;try{const v=+localStorage.getItem("cloudlab:lessonW");if(v)w=v}catch(_){}return Math.min(Math.max(w,LW_MIN),lwMax())}
+function setLessonW(w,save){w=Math.round(Math.min(Math.max(w,LW_MIN),lwMax()));document.documentElement.style.setProperty("--lesson-w",w+"px");
+  const h=document.getElementById("lessonResize");if(h){h.setAttribute("aria-valuenow",w);h.setAttribute("aria-valuemin",LW_MIN);h.setAttribute("aria-valuemax",lwMax())}
+  if(save)try{localStorage.setItem("cloudlab:lessonW",w)}catch(_){}return w}
+function lessonBar(){const wide=lessonW()>=Math.min(lwMax(),window.innerWidth*0.5);
+  return`<div class="lbar"><button class="sm ghost" data-act="lessonWide" aria-pressed="${wide}" title="${wide?"Thu hẹp khung này, mở rộng canvas":"Mở rộng khung này để đọc, canvas thành phần tham khảo"}">${wide?"⇥ Thu hẹp":"⇤ Mở rộng"}</button></div>`}
+function lessonRelayout(){if(!gs().zoom)renderCanvas();renderLesson()}
+setLessonW(lessonW(),false);
+(function(){const h=document.getElementById("lessonResize");if(!h)return;let drag=null;
+  h.addEventListener("pointerdown",e=>{if(e.button!==0)return;e.preventDefault();h.setPointerCapture(e.pointerId);drag={x0:e.clientX,w0:lessonW()};document.body.classList.add("lw-dragging")});
+  h.addEventListener("pointermove",e=>{if(!drag)return;setLessonW(drag.w0+(drag.x0-e.clientX),false)});
+  const end=()=>{if(!drag)return;drag=null;document.body.classList.remove("lw-dragging");setLessonW(parseInt(getComputedStyle(document.documentElement).getPropertyValue("--lesson-w"))||LW_DEF,true);lessonRelayout()};
+  h.addEventListener("pointerup",end);h.addEventListener("pointercancel",end);
+  h.addEventListener("dblclick",()=>{setLessonW(LW_DEF,true);lessonRelayout()});
+  h.addEventListener("keydown",e=>{const k={ArrowLeft:32,ArrowRight:-32,Home:9999,End:-9999}[e.key];if(k===undefined)return;e.preventDefault();setLessonW(lessonW()+k,true);lessonRelayout()});
+  window.addEventListener("resize",()=>setLessonW(lessonW(),false))})();

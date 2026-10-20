@@ -1,0 +1,36 @@
+# CloudLab
+
+> CloudLab là IDE hạ tầng AWS chạy trong trình duyệt, dành cho người học (kể cả người không chuyên kỹ thuật, ví dụ nhân viên ngân hàng). Người học kéo thả thành phần AWS hoặc viết CloudFormation YAML, chạy mô phỏng để thử kết nối, security group, quyền IAM và chi phí, rồi xuất ra CloudFormation, Terraform hoặc CDK. Bài học là template có lỗi cài sẵn; người học sửa rồi bấm Check. Mô phỏng chạy hoàn toàn trong trình duyệt, không gọi AWS thật; giá là giá tham khảo.
+
+Ứng dụng: https://dat-2k2.github.io/cloudlab/
+Toàn bộ nội dung dạng văn bản: https://dat-2k2.github.io/cloudlab/llms-full.txt · bản HTML tĩnh: https://dat-2k2.github.io/cloudlab/learn.html
+
+## Phase 1 · Explore
+
+- [Bài 0: Cảnh báo tiền trước khi tiêu tiền](https://dat-2k2.github.io/cloudlab/learn.html#guardrails): Chi tiêu vượt 80% và 100% của $20 → email về hộp thư của bạn (như lab 000007).
+- [Bài 1: AccessDenied không còn ngẫu nhiên](https://dat-2k2.github.io/cloudlab/learn.html#iam): Lan (qua role) đọc được report.csv, nhưng vẫn không ghi hay xóa được.
+- [Bài 2: VPC: public, private và tường lửa](https://dat-2k2.github.io/cloudlab/learn.html#vpc): Web public vào được; SSH chỉ từ IP của bạn; private subnet chỉ nhận SSH từ public SG.
+- [Bài 3: EC2 dùng IAM role, không dùng access key](https://dat-2k2.github.io/cloudlab/learn.html#ec2role): App ghi được vào bucket bằng instance role; role chỉ có quyền cần thiết.
+- [Bài 4: Website S3 qua CloudFront](https://dat-2k2.github.io/cloudlab/learn.html#s3cf): Khách đọc web qua CloudFront; bucket không còn public.
+- [Bài 5: RDS ở private subnet, chỉ app vào được](https://dat-2k2.github.io/cloudlab/learn.html#rds): App vẫn chạy; DB không public, rds-sg chỉ cho EC2; DB subnet group 2 AZ private + Multi-AZ.
+- [Bài 6: Load balancer chia tải qua 2 AZ](https://dat-2k2.github.io/cloudlab/learn.html#alb): ALB ở 2 AZ, ≥ 2 target ở 2 AZ, chịu được 60 req/s mà gần như không lỗi.
+- [Bài 7: Function lỗi mà không thấy log](https://dat-2k2.github.io/cloudlab/learn.html#lambda): Request qua API thành công, có log trong CloudWatch, role không thừa quyền.
+
+## Serverless
+
+- [Bài 8: Upload một ảnh, gọi một lần](https://dat-2k2.github.io/cloudlab/learn.html#events): Mỗi ảnh vào incoming/ chạy Lambda đúng một lần, kết quả ra processed/.
+- [Bài 9: API → Lambda → DynamoDB](https://dat-2k2.github.io/cloudlab/learn.html#apiddb): Request qua API thành công, sách được ghi vào bảng, role chỉ ghi đúng bảng đó.
+
+## Hạ tầng dưới dạng code
+
+- [Bài 10: Xóa stack mà vẫn bị tính tiền](https://dat-2k2.github.io/cloudlab/learn.html#stack): Xóa stack sạch: không tài nguyên nào bị giữ lại, không còn gì tính tiền.
+
+## Landing zone · brownfield
+
+- [Bài 11: Chuẩn bị org cũ trước khi bật Control Tower](https://dat-2k2.github.io/cloudlab/learn.html#lz-prep): Organization bật All features; không SCP nào chặn baseline; cả 4 account qua precheck.
+- [Bài 12: Set up landing zone, enroll theo đợt](https://dat-2k2.github.io/cloudlab/learn.html#lz-enroll): Landing zone chạy; OU Workloads enroll 100% trước; rồi coverage 100% cả org.
+- [Bài 13: Dọn phần cũ và giữ landing zone không drift](https://dat-2k2.github.io/cloudlab/learn.html#lz-contract): Hết drift; không còn log ghi hai nơi; bật một preventive control trên Workloads.
+
+## Thành phần
+
+- [Giải thích từng thành phần AWS bằng ví dụ ngân hàng](https://dat-2k2.github.io/cloudlab/learn.html#components)
