@@ -25,20 +25,23 @@ function palScore(t,q){if(!q)return 1;q=q.toLowerCase().trim();const L=t.label.t
 function palItems(q,flat){const all=Object.values(T).filter(t=>!t.edge),grp=g=>GROUPS.find(x=>x[0]===g)||[g,g];
   if(q&&flat){const r=all.map(t=>[t,palScore(t,q)]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);return r.length?[["","Kết quả",r]]:[]}
   return GROUPS.map(([g,name])=>[g,name,all.filter(t=>t.cat===g&&palScore(t,q)>0)]).filter(x=>x[2].length)}
-function renderSide(){const tab=UI.sideTab||(UI.mode==="lesson"?"learn":"comp"),q=UI.psearch||"";let h=`<div class="stabs" role="tablist" aria-label="Thanh bên"><button role="tab" class="${tab==="comp"?"on":""}" aria-selected="${tab==="comp"}" data-act="sideTab" data-arg="comp" title="Thành phần"><span class="st-ic" aria-hidden="true">⊞</span><span class="st-tx">Thành phần</span></button><button role="tab" class="${tab==="learn"?"on":""}" aria-selected="${tab==="learn"}" data-act="sideTab" data-arg="learn" title="Bài học"><span class="st-ic" aria-hidden="true">◎</span><span class="st-tx">Bài học</span></button></div>`;
-  if(tab==="learn"){h+=`<p class="side-group">Tự thực hành</p><button class="side-item" data-act="openSandbox" data-cat="learn"${UI.mode==="sandbox"?' aria-current="page"':""}><span class="side-ic" aria-hidden="true">✎</span><span class="side-label">Sandbox tự do</span></button>`;
-    let ph="";LESSONS.forEach((l,i)=>{if(l.phase!==ph){ph=l.phase;h+=`<p class="side-group">${l.lab?"FCAJ ":""}${esc(ph)}</p>`}
-      h+=`<button class="side-item lsn" data-lesson="${i}" data-cat="learn" title="${esc(l.title)}"${UI.mode==="lesson"&&UI.lesson===i?' aria-current="page"':""}><span class="side-ic" aria-hidden="true">${l.step}</span><span class="side-label">${esc(l.tag)}<small>${l.lab?"lab "+esc(l.lab):esc(l.sub||"")}</small></span>${DONE.has(l.id)?'<span class="side-badge chip ok">✓</span>':""}</button>`})}
-  else{h+=`<label class="psearch"><span class="sr">Tìm thành phần</span><input id="psearch" type="search" placeholder="Tìm: ec2, vpc, s3, lambda…" value="${esc(q)}" autocomplete="off"></label>`;
-    if(!q)h+=`<p class="side-group">Bắt đầu từ mẫu</p>`+Object.entries(STARTERS).map(([k,t])=>`<button class="side-item tpl" data-act="loadTpl" data-arg="${k}" data-cat="learn" title="${esc(t.desc)}"><span class="side-ic" aria-hidden="true">▦</span><span class="side-label">${esc(t.title)}<small>${esc(t.tag)}</small></span></button>`).join("");
-    const groups=palItems(q);
-    for(const[g,name,items]of groups)h+=`<p class="side-group">${esc(name)}</p>`+items.map(t=>`<button class="side-item pal" data-ptype="${t.type}" data-cat="${t.cat}" title="${esc(t.label)}: kéo vào canvas, hoặc bấm để thêm"><span class="side-ic" style="--cat:var(--c-${t.cat})" aria-hidden="true">${esc(t.short)}</span><span class="side-label">${esc(t.label)}</span></button>`).join("");
-    if(!groups.length)h+=`<p class="note pnone">Không có thành phần nào khớp “${esc(q)}”. Thử tên dịch vụ, ví dụ ec2 hoặc s3.</p>`}
+/* left sidebar = navigation only: the free sandbox and the lesson path. Components live in the editor's own library
+   panel next to the canvas (the pattern n8n, Miro, Retool, Webflow use), not at the same level as the lessons. */
+function renderSide(){let h=`<p class="side-group">Tự thực hành</p><button class="side-item" data-act="openSandbox" data-cat="learn"${UI.mode==="sandbox"?' aria-current="page"':""}><span class="side-ic" aria-hidden="true">✎</span><span class="side-label">Sandbox tự do</span></button>`;
+  let ph="";LESSONS.forEach((l,i)=>{if(l.phase!==ph){ph=l.phase;h+=`<p class="side-group">${l.lab?"FCAJ ":""}${esc(ph)}</p>`}
+    h+=`<button class="side-item lsn" data-lesson="${i}" data-cat="learn" title="${esc(l.title)}"${UI.mode==="lesson"&&UI.lesson===i?' aria-current="page"':""}><span class="side-ic" aria-hidden="true">${l.step}</span><span class="side-label">${esc(l.tag)}<small>${l.lab?"lab "+esc(l.lab):esc(l.sub||"")}</small></span>${DONE.has(l.id)?'<span class="side-badge chip ok">✓</span>':""}</button>`});
   h+=`<button class="side-collapse" data-shell-toggle aria-controls="side" title="Thu gọn / mở"><span aria-hidden="true">«</span><span class="side-label">Thu gọn</span></button>`;
   document.getElementById("side").innerHTML=h}
-/* quick-add picker over the canvas ( + Thêm, or the / key ) */
+/* component library docked beside the canvas (＋ Thành phần, or the / key): search, starter templates, grouped
+   components; click to add, drag onto the canvas, Enter adds the highlighted one. Stays open while you build. */
 function pickerHtml(){if(!UI.picker)return"";const q=UI.picker.q||"",groups=palItems(q,true),flat=groups.flatMap(g=>g[2]);UI.picker.flat=flat.map(t=>t.type);const ai=Math.min(UI.picker.active||0,Math.max(0,flat.length-1));let i=-1;
-  return`<div class="gpicker" role="dialog" aria-label="Thêm thành phần"><input id="pkq" type="search" placeholder="Thêm thành phần… (ec2, rds, s3)" value="${esc(q)}" autocomplete="off" aria-controls="pklist" aria-activedescendant="pk-${ai}"><ul id="pklist" role="listbox">${groups.map(([g,name,items])=>`<li class="pkg" role="presentation">${esc(name)}</li>`+items.map(t=>{i++;return`<li id="pk-${i}" role="option" aria-selected="${i===ai}" class="gopt${i===ai?" on":""}" data-ptype="${t.type}"><span class="side-ic" style="--cat:var(--c-${t.cat})" aria-hidden="true">${esc(t.short)}</span><span class="gtt"><b>${esc(t.label)}</b><small>${esc((t.doc||"").split(". ")[0])}</small></span></li>`}).join("")).join("")||`<li class="gopt bad">Không có thành phần nào khớp</li>`}</ul><p class="cap gmf">↑↓ chọn · Enter thêm · Esc đóng</p></div>`}
+  const tpl=q?"":`<li class="pkg" role="presentation">Bắt đầu từ mẫu</li>`+Object.entries(STARTERS).map(([k,t])=>`<li role="presentation"><button class="gopt tplopt" data-act="loadTpl" data-arg="${k}" title="${esc(t.desc)}"><span class="side-ic" aria-hidden="true">▦</span><span class="gtt"><b>${esc(t.title)}</b><small>${esc(t.tag)}</small></span></button></li>`).join("");
+  return`<aside class="gpicker glib" aria-label="Thư viện thành phần"><div class="glib-h"><div><b>Thành phần</b><small>Kéo vào canvas, hoặc bấm để thêm</small></div><button class="sm ghost" data-act="picker" aria-label="Đóng thư viện thành phần" title="Đóng (Esc)">×</button></div>
+    <input id="pkq" type="search" placeholder="Tìm: ec2, rds, s3, lambda…" value="${esc(q)}" autocomplete="off" aria-label="Tìm thành phần" aria-controls="pklist" aria-activedescendant="pk-${ai}">
+    <ul id="pklist" role="listbox" aria-label="Thành phần">${tpl}${groups.map(([g,name,items])=>`<li class="pkg" role="presentation">${esc(name)}</li>`+items.map(t=>{i++;return`<li id="pk-${i}" role="option" aria-selected="${i===ai}" class="gopt${i===ai?" on":""}" data-ptype="${t.type}" title="${esc(t.label)}"><span class="side-ic" style="--cat:var(--c-${t.cat})" aria-hidden="true">${esc(t.short)}</span><span class="gtt"><b>${esc(t.label)}</b><small>${esc((t.doc||"").split(". ")[0])}</small></span></li>`}).join("")).join("")||`<li class="gopt bad">Không có thành phần nào khớp “${esc(q)}”. Thử tên dịch vụ, ví dụ ec2 hoặc s3.</li>`}</ul>
+    <p class="cap gmf">↑↓ · Enter thêm · Esc đóng</p></aside>`}
+const libPref=()=>{try{return localStorage.getItem("cloudlab:lib")}catch(_){return null}};
+const libSave=open=>{try{localStorage.setItem("cloudlab:lib",open?"open":"closed")}catch(_){}};
 function renderTop(){const cr=document.getElementById("crumb");if(!cr)return;const L=L_();cr.innerHTML=L?`<span class="cc">Bài ${L.step} · ${esc(L.tag)}</span> /<b>${esc(L.title)}</b>`:`<span class="cc">Sandbox</span> /<b>${esc(M.name)}</b>`}
 const STK={NOT_DEPLOYED:["","chưa deploy"],CREATE_COMPLETE:["ok","CREATE_COMPLETE"],UPDATE_COMPLETE:["ok","UPDATE_COMPLETE"],DELETE_COMPLETE:["","DELETE_COMPLETE"],DELETE_FAILED:["bad","DELETE_FAILED"],ROLLBACK_COMPLETE:["bad","ROLLBACK_COMPLETE"]};
 function renderBar(){const s=STK[RT.stack.status]||["",RT.stack.status],up=stackUp(),v=UI.code?(UI.split?"split":"code"):"graph";
@@ -243,10 +246,10 @@ function simPlay(on){RT.running=!!on;if(on){if(!stackUp()&&Object.keys(M.res).le
   else if(TIMER){clearInterval(TIMER);TIMER=null}renderSim();gRefresh()}
 /* ---------------- modes ---------------- */
 function resetUi(){if(TIMER){clearInterval(TIMER);TIMER=null}if(RT)RT.running=false;UI.sel=null;UI.result=null;UI.hints=0;UI.attempt=0;UI.dirty=false;UI.gmenu=null;UI.gdrag=null;UI.tour=-1;UI.mailOpen=null;if(UI.g){UI.g.zoom=null;UI.g.trace=false}UNDO=[];REDO=[]}
-function startLesson(i,quiet){const L=LESSONS[i];resetUi();UI.mode="lesson";UI.lesson=i;UI.speed=L.speed??2;
+function startLesson(i,quiet){const L=LESSONS[i];resetUi();UI.mode="lesson";UI.picker=null;UI.lesson=i;UI.speed=L.speed??2;
   M=loadTemplate(L.yaml,L.layout,"lab-"+L.id,L.manual);RT=freshRuntime();QUIET++;deploy();QUIET--;RT.stack.status="CREATE_COMPLETE";syncRuntime();
   store.set("mode",{mode:"lesson",i});if(!quiet)log("Bài học","lesson","setup",`Bài ${L.step}: ${L.title} · stack ${M.name} đã deploy`,"")}
-function startSandbox(m){resetUi();UI.mode="sandbox";UI.lesson=-1;UI.speed=2;
+function startSandbox(m){resetUi();UI.mode="sandbox";UI.picker=libPref()==="closed"?null:{q:"",active:0};UI.lesson=-1;UI.speed=2;
   if(m)M=m;else{const s=store.get("sandbox",null);let ok=false;if(s&&s.yaml){const r=fromYaml(s.yaml,{name:s.name||"sandbox",pos:s.pos,manual:s.manual});if(r.ok){M=r.model;ok=true}}if(!ok)M=loadTemplate(STARTER.yaml,STARTER.layout,"sandbox")}
   RT=freshRuntime();if(Object.keys(M.res).length){QUIET++;deploy();QUIET--;RT.stack.status="CREATE_COMPLETE";syncRuntime()}store.set("mode",{mode:"sandbox"});saveSandbox();
   log("CloudLab","sandbox","open",`Sandbox · ${Object.keys(M.res).length} resource`,"")}
@@ -259,7 +262,7 @@ document.addEventListener("click",e=>{
   const t=e.target.closest("[data-act],[data-lesson],[data-log],[data-node],[data-edge],[data-ptype]");if(!t||t.closest("[inert]"))return;
   if((t.dataset.node||t.dataset.gconnect||t.dataset.edge)&&Date.now()-GSUP<350)return;
   UI.lastOpener=selOf(t);
-  if(t.dataset.ptype){UI.picker=null;const[x,y]=freeSpot(...viewCenter());let id;edit("add "+t.dataset.ptype,()=>{id=addNode(t.dataset.ptype,x,y)});log("CloudLab","editor","add",`${id} (${T[t.dataset.ptype].label})`,"ok");UI.sel={node:id};UI.selRet=`[data-node="${id}"]`;if(KIT.isNarrow()&&document.querySelector("[data-shell]").hasAttribute("data-side-open"))document.querySelector("[data-shell]").removeAttribute("data-side-open");render();return}
+  if(t.dataset.ptype){const[x,y]=freeSpot(...viewCenter());let id;edit("add "+t.dataset.ptype,()=>{id=addNode(t.dataset.ptype,x,y)});log("CloudLab","editor","add",`${id} (${T[t.dataset.ptype].label})`,"ok");UI.sel={node:id};UI.selRet=`[data-node="${id}"]`;if(KIT.isNarrow()&&document.querySelector("[data-shell]").hasAttribute("data-side-open"))document.querySelector("[data-shell]").removeAttribute("data-side-open");render();return}
   if(t.dataset.node){UI.gmenu=null;UI.sel={node:t.dataset.node};UI.selRet=`[data-node="${t.dataset.node}"]`;render();return}
   if(t.dataset.edge){UI.sel={edge:t.dataset.edge};UI.selRet=null;render();return}
   if(t.dataset.lesson!==undefined&&t.dataset.act===undefined){const i=+t.dataset.lesson;if(UI.mode==="lesson"&&i===UI.lesson)return;
@@ -275,7 +278,7 @@ document.addEventListener("click",e=>{
       submit:v=>{simPlay(false);deleteStack();if(sb&&+v.wipe&&RT.stack.status==="DELETE_COMPLETE"){edit("xóa canvas",()=>{M.res={};M.ext={}});RT.stack.status="NOT_DEPLOYED";log("CloudLab","editor","clear","Template trống · tài nguyên tạo tay và bucket Retain vẫn còn","ok")}return{ok:true}}}},
     vMode(){UI.code=arg!=="graph";UI.split=arg==="split";YAML_ERR=null},
     simToggle(){simPlay(!RT.running);return true},simReset(){const was=RT.running;simPlay(false);if(UI.mode==="lesson")startLesson(UI.lesson,true);else{RT=freshRuntime();if(Object.keys(M.res).length){QUIET++;deploy();QUIET--;RT.stack.status="CREATE_COMPLETE";syncRuntime()}}log("CloudLab","sim","reset","đặt lại thời gian, chi phí và dữ liệu mô phỏng","");if(was)simPlay(true)},
-    logToggle(){UI.panel=UI.panel?null:"log";UI.logOpen=!!UI.panel},sideTab(){const sh=document.querySelector("[data-shell]");if(sh&&sh.hasAttribute("data-collapsed")&&(UI.sideTab||(UI.mode==="lesson"?"learn":"comp"))===arg){const tg=document.querySelector("header [data-shell-toggle]");if(tg)tg.click()}UI.sideTab=arg},picker(){UI.picker=UI.picker?null:{q:"",active:0};UI.gfocus=UI.picker?"#pkq":null},
+    logToggle(){UI.panel=UI.panel?null:"log";UI.logOpen=!!UI.panel},picker(){UI.picker=UI.picker?null:{q:"",active:0};libSave(!!UI.picker);UI.gfocus=UI.picker?"#pkq":null;gs().zoom=null},
     loadTpl(){const t=STARTERS[arg];confirmModal(`Mở mẫu “${t.title}”?`,`${esc(t.desc)}<br><br>Mẫu này sẽ thay toàn bộ canvas sandbox hiện tại.`,"Mở mẫu",()=>{startSandbox(loadTemplate(t.yaml,t.layout,"sandbox"));UI.sideTab="comp";gs().zoom=null})},
     gFit(){const G=gs();G.zoom=null},gNoteClose(){UI.gnote=null},lessonWide(){const wide=lessonW()>=Math.min(lwMax(),window.innerWidth*0.5);setLessonW(wide?LW_DEF:Math.round(window.innerWidth*0.55),true);gs().zoom=null},orgAct(){const k=arg.indexOf(":");ORG_ACTS[arg.slice(0,k)](arg.slice(k+1))},gZoom(){gZoomAt(GCUR.z*(arg==="1"?1.2:1/1.2));return true},gTrace(){gs().trace=!gs().trace},gView(){gs().view=arg;UI.gmenu=null},
     gMenu(){UI.gmenu=UI.gmenu&&UI.gmenu.from===arg?null:{from:arg,active:0};UI.gfocus=UI.gmenu?"#glist":`[data-gconnect="${arg}"]`},
@@ -327,7 +330,7 @@ document.addEventListener("input",e=>{if(e.target.id==="psearch"){UI.psearch=e.t
 function dropComponent(type,cx,cy){const[x,y]=toWorld(cx,cy);let id;gFreeze();edit("add "+type,()=>{id=addNode(type,x-GW/2,y-30)});log("CloudLab","editor","add",`${id} (${T[type].label})`,"ok");
   const ob=GLAST&&boxAt(GLAST.boxes,x,y,"ou");if(ob&&type==="AWS::Organizations::Account")moveAcctTo(id,ob.id);const sb=GLAST&&boxAt(GLAST.boxes,x,y,"subnet"),vb=GLAST&&boxAt(GLAST.boxes,x,y,"vpc");if(sb)placeIn(id,sb.id);else if(vb&&PLACEABLE.includes(type))autoSubnet(id,vb.id);
   else if(vb&&["AWS::EC2::Subnet","AWS::EC2::SecurityGroup","AWS::ElasticLoadBalancingV2::TargetGroup"].includes(type))edit("vpc",()=>{nodeOf(id).props.VpcId={Ref:vb.id}});
-  UI.picker=null;UI.sel={node:id};UI.selRet=`[data-node="${id}"]`;saveSandbox();render();return id}
+  UI.sel={node:id};UI.selRet=`[data-node="${id}"]`;saveSandbox();render();return id}
 let PD=null,PD_SUPPRESS=0;
 document.addEventListener("pointerdown",e=>{if(e.button!==0||!e.target.closest)return;const it=e.target.closest("[data-ptype]");if(!it)return;PD={type:it.dataset.ptype,x0:e.clientX,y0:e.clientY,el:it,ghost:null,pid:e.pointerId}});
 document.addEventListener("pointermove",e=>{if(!PD||e.pointerId!==PD.pid)return;
@@ -388,7 +391,7 @@ document.addEventListener("pointerup",()=>gEnd(false));document.addEventListener
 document.addEventListener("wheel",e=>{const gx=e.target.closest&&e.target.closest(".gx");if(!gx||!(e.ctrlKey||e.metaKey))return;e.preventDefault();const r=gx.getBoundingClientRect();gZoomAt(GCUR.z*Math.exp(-e.deltaY*.0025),e.clientX-r.left,e.clientY-r.top)},{passive:false});
 window.addEventListener("keydown",e=>{const tag=(e.target.tagName||"").toLowerCase(),typing=tag==="input"||tag==="textarea"||tag==="select";
   if(UI.picker&&e.target.id==="pkq"){const P=UI.picker,n=(P.flat||[]).length;
-    if(e.key==="Escape"){e.preventDefault();e.stopPropagation();UI.picker=null;renderCanvas();return}
+    if(e.key==="Escape"){e.preventDefault();e.stopPropagation();UI.picker=null;libSave(false);gs().zoom=null;renderCanvas();return}
     if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();P.active=((P.active||0)+(e.key==="ArrowDown"?1:-1)+n)%Math.max(1,n);renderCanvas();const f=document.getElementById("pkq");if(f){f.focus();f.setSelectionRange(f.value.length,f.value.length)}return}
     if(e.key==="Enter"){e.preventDefault();const ty=P.flat&&P.flat[P.active||0];if(ty){const b=document.createElement("button");b.dataset.ptype=ty;document.body.appendChild(b);b.click();b.remove()}return}return}
   if(!typing&&e.key==="/"&&UI.page!=="x"&&document.querySelector(".gx")){e.preventDefault();UI.picker={q:"",active:0};renderCanvas();const f=document.getElementById("pkq");if(f)f.focus();return}
