@@ -7,7 +7,7 @@ import sys, pathlib
 root = pathlib.Path(__file__).parent
 html = (root / "index.html").read_text()
 css = (root / "style.css").read_text()
-SCRIPTS = ["vendor/js-yaml.min.js","src/core.js","src/catalog.js","src/model.js","src/infra.js","src/org.js","src/eli5.js","src/iam.js","src/sim.js","src/lessons.js","src/lessons-org.js","src/bank.js","src/editor.js","src/iac.js","src/lint.js","src/ui.js","src/webmcp.js","src/changelog.js","src/tour.js"]
+SCRIPTS = ["vendor/js-yaml.min.js", "src/shell/core.js", "src/shell/model.js", "src/shell/sim.js", "src/aws/catalog.js", "src/aws/cfn.js", "src/aws/infra.js", "src/aws/org.js", "src/aws/eli5.js", "src/aws/iam.js", "src/aws/sim.js", "src/aws/lessons.js", "src/aws/lessons-org.js", "src/aws/bank.js", "src/aws/iac.js", "src/aws/lint.js", "src/aws/views.js", "src/shell/editor.js", "src/shell/ui.js", "src/aws/webmcp.js", "src/aws/changelog.js", "src/shell/tour.js"]
 import os
 kit = pathlib.Path(os.environ.get("KIT_DIR", root.parent / "dat-2k2.github.io" / "kit"))  # served at ../kit/ on GitHub Pages
 kit_css = (kit / "layout.css").read_text()

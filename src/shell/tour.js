@@ -2,19 +2,19 @@
 /* Product tour: a short walkthrough of the screen, shown once on the first visit. The "seen" flag lives in
    localStorage (cloudlab:tour = TOUR_VERSION); bump TOUR_VERSION when the tour changes enough to show again.
    The "?" button in the top bar replays it. The spotlight never blocks the page: only the card takes clicks. */
-const TOUR_VERSION="v1",TOUR_KEY="cloudlab:tour";
+const TOUR_VERSION="v1",TOUR_KEY=STORE_NS+"tour";
 const TOUR_STEPS=[
-  {t:"Chào mừng đến CloudLab",b:"Ở đây bạn học AWS bằng cách sửa một hệ thống mẫu có lỗi, rồi chạy thử xem nó hoạt động thế nào. Không gọi AWS thật, không tốn tiền. Xem qua màn hình mất khoảng 1 phút."},
+  {t:"Chào mừng đến "+TX("appName"),b:TX("tourWelcome")},
   {sel:"#lesson",place:"left",t:"Bắt đầu từ khung này",b:"Mục tiêu và nhiệm vụ của bài nằm trên cùng. Bên dưới là bối cảnh: tình huống và ví dụ trong ngân hàng. Phần Tham khảo thu gọn sẵn, khi cần mới mở."},
   {sel:"#lessonResize",place:"left",t:"Kéo để mở rộng khung đọc",b:"Kéo mép này sang trái (hoặc bấm ⇤ Mở rộng) để đọc thoải mái. Canvas bên cạnh thu nhỏ lại để tham khảo."},
-  {sel:".gx",place:"right",t:"Canvas: sơ đồ hệ thống",b:"Mỗi khối là một thành phần AWS, mũi tên cho biết khối nào gọi khối nào. Bấm một khối để mở khung chi tiết, có phần Hiểu nhanh giải thích bằng ví dụ ngân hàng."},
+  {sel:".gx",place:"right",t:"Canvas: sơ đồ hệ thống",b:"Mỗi khối là một "+TX("unit")+", mũi tên cho biết khối nào gọi khối nào. Bấm một khối để mở khung chi tiết, có phần Hiểu nhanh giải thích bằng ví dụ ngân hàng."},
   {sel:"#side",place:"right",t:"Lộ trình bài học",b:"Thanh bên trái là lộ trình: Sandbox tự do và các bài theo từng chặng. Nút « ở dưới cùng thu gọn thanh này."},
-  {sel:'[data-act="picker"]',place:"bottom",t:"Thư viện thành phần",b:"Mở ＋ Thành phần để thấy mọi thành phần AWS và các mẫu dựng sẵn ngay cạnh canvas. Kéo một thành phần vào canvas, hoặc bấm để thêm."},
+  {sel:'[data-act="picker"]',place:"bottom",t:"Thư viện thành phần",b:"Mở ＋ Thành phần để thấy mọi "+TX("unit")+" và các mẫu dựng sẵn ngay cạnh canvas. Kéo một thành phần vào canvas, hoặc bấm để thêm."},
   {sel:'[data-act="simToggle"]',place:"top",t:"Chạy mô phỏng",b:"Bấm ▶ Chạy để giả lập khách hàng gửi request. Mũi tên đổi màu theo kết quả: chạy được, bị chặn hay lỗi, kèm lý do."},
   {sel:".meter",place:"top",t:"Đồng hồ chi phí",b:"Chi phí cộng dồn theo thời gian mô phỏng, tính theo giá tham khảo. Một cấu hình sai có thể làm con số tăng rất nhanh."},
   {sel:'[data-act="panel"][data-arg="problems"]',place:"top",t:"Vấn đề",b:"Danh sách lỗi cấu hình và rủi ro, giống kiểm soát viên rà lại hồ sơ. Bấm một dòng để tới đúng khối."},
   {sel:'[data-act="check"]',place:"left",t:"Sửa xong thì bấm Kiểm tra",b:"Kiểm tra chấm từng nhiệm vụ. Nếu bí, bấm Gợi ý: gợi ý đi dần từ triệu chứng tới nguyên nhân."},
-  {sel:'[data-act="vMode"][data-arg="code"]',place:"bottom",t:"Xem dạng code",b:"Canvas cũng là một file CloudFormation. Chế độ YAML cho xem template và xuất ra Terraform hoặc CDK. Nếu không làm kỹ thuật, bạn có thể bỏ qua."},
+  {sel:'[data-act="vMode"][data-arg="code"]',place:"bottom",t:"Xem dạng code",b:TX("tourCode")},
   {sel:"#tourBtn",place:"bottom",t:"Xem lại lúc nào cũng được",b:"Nút ? mở lại hướng dẫn này. Chúc bạn học vui."}];
 let TOUR=null;
 const tourSeen=()=>{try{return localStorage.getItem(TOUR_KEY)===TOUR_VERSION}catch(_){return true}};

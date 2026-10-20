@@ -92,7 +92,7 @@ App vẽ bằng JavaScript, nên công cụ chỉ tải HTML sẽ thấy trang t
 
 ### WebMCP
 
-`src/webmcp.js` đăng ký 16 công cụ qua `document.modelContext.registerTool()` (thử cả `navigator.modelContext` của bản Chrome cũ) khi trình duyệt hỗ trợ [WebMCP](https://github.com/webmachinelearning/webmcp): get_state, get_template, get_format_guide, list_lessons, get_lesson, explain_component, open_lesson, open_sandbox, load_template, add_component, connect, set_property, remove_component, run_simulation, check_lesson, export_iac. Trình duyệt chưa hỗ trợ thì không có gì xảy ra. Các công cụ cũng có ở `window.CloudLab.tools` để thử.
+`src/aws/webmcp.js` đăng ký 16 công cụ qua `document.modelContext.registerTool()` (thử cả `navigator.modelContext` của bản Chrome cũ) khi trình duyệt hỗ trợ [WebMCP](https://github.com/webmachinelearning/webmcp): get_state, get_template, get_format_guide, list_lessons, get_lesson, explain_component, open_lesson, open_sandbox, load_template, add_component, connect, set_property, remove_component, run_simulation, check_lesson, export_iac. Trình duyệt chưa hỗ trợ thì không có gì xảy ra. Các công cụ cũng có ở `window.CloudLab.tools` để thử.
 
 ## Chạy
 
@@ -100,22 +100,36 @@ Không có build step. Trang tải kit layout từ `../kit/`, nên khi chạy lo
 
 ## Cấu trúc
 
-- `src/core.js`: hằng số, tiện ích, event log, undo
-- `src/catalog.js`: thành phần serverless, IAM, giám sát, bên ngoài AWS
-- `src/model.js`: template model, cạnh suy ra từ tham chiếu, quy tắc nối, YAML
-- `src/org.js`: Organizations, OU, account, SCP, Control Tower (landing zone, register OU, controls), precheck enroll
-- `src/eli5.js`: giải thích từng thành phần bằng ví dụ ngân hàng
-- `src/lessons-org.js`: ba bài landing zone
-- `src/webmcp.js`: công cụ WebMCP cho trợ lý AI của trình duyệt
+CloudLab tách làm hai lớp: **shell** (editor, bố cục, khung bài học, đồng hồ mô phỏng, toàn màn hình, tour) không biết gì về AWS, và **domain pack** cho từng nền tảng. Hợp đồng giữa hai lớp (hàm toàn cục và `DOMAIN`) ghi ở [`src/shell/README.md`](src/shell/README.md).
+
+Shell (`src/shell/`):
+
+- `core.js`: tiện ích, state, event log, undo, `DOMAIN` (texts, field types, actions, hooks)
+- `model.js`: model dùng chung (`M`: res, ext, manual, pos)
+- `sim.js`: đồng hồ, hàng đợi sự kiện, metric, flow, chi phí, probe
+- `editor.js`: canvas (node, khung chứa, cạnh, pan/zoom, kéo nối)
+- `ui.js`: thanh bên, thư viện thành phần, inspector, code, thanh mô phỏng, bài học, toàn màn hình
+- `tour.js`: hướng dẫn lần đầu
+
+AWS pack (`src/aws/`):
+
+- `catalog.js`: thành phần serverless, IAM, giám sát, bên ngoài AWS
+- `cfn.js`: CloudFormation: cạnh suy ra từ tham chiếu, quy tắc nối, YAML
+- `infra.js`: VPC, subnet, IGW, security group, EC2, ALB, CloudFront, Route 53, RDS, ElastiCache
+- `org.js`: Organizations, OU, account, SCP, Control Tower (landing zone, register OU, controls), precheck enroll
+- `iam.js`: đánh giá IAM (identity policy, managed policy, bucket policy, BPA)
+- `sim.js`: deploy / xóa stack, xử lý sự kiện và request, budget, alarm, giá
+- `lessons.js`, `lessons-org.js`, `bank.js`: template mẫu, bài học FCAJ, bài landing zone, bối cảnh ngân hàng
+- `eli5.js`: giải thích từng thành phần bằng ví dụ ngân hàng
+- `iac.js`: xuất CloudFormation, Terraform, CDK
+- `lint.js`: panel Vấn đề
+- `views.js`: phần giao diện riêng của AWS (chữ, field, khối trên canvas, panel runtime, nút, đặt vào VPC/subnet/OU)
+- `webmcp.js`: công cụ WebMCP cho trợ lý AI của trình duyệt
+- `changelog.js`: hộp thoại Có gì mới
+
+Khác:
+
 - `tools/export-text.js`: sinh llms.txt, llms-full.txt, learn.html
-- `src/infra.js`: VPC, subnet, IGW, security group, EC2, ALB, CloudFront, Route 53, RDS, ElastiCache
-- `src/iam.js`: đánh giá IAM (identity policy, managed policy, bucket policy, BPA)
-- `src/sim.js`: deploy / xóa stack, mô phỏng sự kiện và request, metric, chi phí, budget, alarm
-- `src/lessons.js`: template mẫu và bài học FCAJ
-- `src/editor.js`: canvas (node, khung VPC/subnet, cạnh, pan/zoom, kéo nối)
-- `src/iac.js`: xuất CloudFormation, Terraform, CDK
-- `src/lint.js`: panel Vấn đề
-- `src/ui.js`: thanh bên, inspector, code, thanh mô phỏng, bài học
 - `vendor/js-yaml.min.js`: js-yaml 4.1.0 (MIT)
 - `fonts/`: Geist + Geist Mono (SIL OFL)
 - `build.py`: gộp thành một file HTML để xem trước

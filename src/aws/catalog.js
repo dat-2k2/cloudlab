@@ -1,4 +1,5 @@
 "use strict";
+const ACCT="111122223333",REGION="ap-southeast-2",EMAIL="dat@example.com";
 /* Component catalog: AWS resource types (CloudFormation) + external actors (CloudLab::*, kept in Metadata).
    Each type says how it looks, its default properties, how its references become edges, which fields the
    inspector edits, and a short "what is it" text. Simulation behaviour lives in sim.js. */

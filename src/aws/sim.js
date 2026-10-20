@@ -1,10 +1,7 @@
 "use strict";
-/* Simulation: the template deployed as a stack, plus a clock. Sources (clients, uploaders, schedules) emit events;
-   events flow along relations; every hop checks configuration and IAM, updates metrics and charges cost.
-   Batched: an event carries a weight w (how many real requests it stands for), so high traffic stays cheap to simulate. */
-const MONTH=30*86400;
-const SPEEDS=[["Thời gian thật",1],["1 phút mỗi giây",60],["1 giờ mỗi giây",3600],["6 giờ mỗi giây",21600],["1 ngày mỗi giây",86400]];
-/* list prices, USD. Overwritten by the researched Sydney table in pricing below if present. */
+/* AWS pack · simulation: the template deployed as a CloudFormation stack (the clock, queue and counters are in
+   shell/sim.js). Sources (clients, uploaders, schedules) emit events; events flow along relations; every hop checks
+   configuration and IAM, updates metrics and charges cost. */
 /* list prices USD, ap-southeast-2 where a source was found (API Gateway HTTP, S3, DynamoDB: third-party 2026 pages),
    us-east-1 otherwise (Lambda, SNS, SQS, CloudWatch). No free tier. Reference values for learning, not a quote. */
 const PRICE={lambdaReq:0.20/1e6,lambdaGBs:0.0000166667,apiReq:1.29/1e6,s3Put:0.0055/1000,s3Get:0.00044/1000,s3GBmo:0.025,
@@ -12,14 +9,10 @@ const PRICE={lambdaReq:0.20/1e6,lambdaGBs:0.0000166667,apiReq:1.29/1e6,s3Put:0.0
   ec2:{"t3.micro":0.0132,"t3.small":0.0264,"t3.medium":0.0528,"m5.large":0.12,"c5.large":0.111},albH:0.0252,albLCU:0.008,
   rds:{"db.t3.micro":0.028,"db.t3.small":0.056,"db.t3.medium":0.112,"db.m5.large":0.247},rdsGB:0.138,cache:{"cache.t3.micro":0.025,"cache.t3.small":0.05},ipv4H:0.005,
   cfReq:0.0125/1e4,cfGB:0.114,r53Zone:0.50,dtoGB:0.114,note:"Giá tham khảo ap-southeast-2 (một số theo us-east-1), không tính free tier."};
-function freshRuntime(){return{t:0,month:1,running:false,q:[],n:{},obj:{},items:{},logs:{},subs:{},inbox:{},alarms:{},budgets:{},acc:{},flow:{},why:{},total:0,stack:{status:"NOT_DEPLOYED"},seq:0,ops:0,loop:{}}}
-const nrt=id=>RT.n[id]||(RT.n[id]={cost:0,m:{},tk:{},series:[],last:null});
-function bump(id,k,w){const r=nrt(id);r.m[k]=(r.m[k]||0)+w;r.tk[k]=(r.tk[k]||0)+w}
-function charge(id,usd,what){if(!usd)return;const r=nrt(id);r.cost+=usd;r.tk.cost=(r.tk.cost||0)+usd;RT.total+=usd;r.costBy=r.costBy||{};r.costBy[what]=(r.costBy[what]||0)+usd}
-function flow(a,b,kind,w,err){const k=a+">"+b+">"+kind,f=RT.flow[k]||(RT.flow[k]={ok:0,err:0,tot:0,tk:0,tke:0});if(err){f.err+=w;f.tke+=w;RT.why[k]=err}else{f.ok+=w;f.tk+=w}f.tot+=w}
+DOMAIN.runtime=()=>({obj:{},items:{},logs:{},subs:{},inbox:{},alarms:{},budgets:{},loop:{}});
+DOMAIN.onNewMonth=()=>{for(const b of Object.values(RT.budgets))b.fired=[]};
 const stackUp=()=>["CREATE_COMPLETE","UPDATE_COMPLETE","DELETE_FAILED"].includes(RT.stack.status);
 function exists(id){const s=scopeOf(id);if(!s)return false;if(s==="ext"||s==="manual")return true;if(RT.stack.status==="DELETE_FAILED")return!!RT.stack.left&&RT.stack.left.includes(id);return stackUp()}
-function push(ev){RT.q.push(ev)}
 const metaOf=n=>(n.raw.Metadata&&n.raw.Metadata.CloudLab)||{};
 const logName=fnId=>"/aws/lambda/"+physName(nodeOf(fnId));
 function logLine(fnId,lines){const g=logName(fnId),L=RT.logs[g]||(RT.logs[g]=[]);for(const m of lines)L.push({t:stamp(),m});if(L.length>300)L.splice(0,L.length-300)}
@@ -110,7 +103,6 @@ function publish(ev){const id=ev.to,t=nodeOf(id),w=ev.w,d=ev.data||{};
       charge(id,w*PRICE.snsEmail,"email");if(inb)flow(id,inb,"delivers",w);mail(s.Endpoint,{kind:d.kind||"msg",subject:d.subject||"SNS message",body:d.body||"",n:w})}
     else if(s.Protocol==="lambda"){const f=refId(s.Endpoint);if(f)push({at:ev.at+0.1,to:f,from:id,kind:"delivers",w,type:"inv",data:{src:"sns"}})}
     else if(s.Protocol==="sqs"){const q=refId(s.Endpoint);if(q)push({at:ev.at+0.1,to:q,from:id,kind:"delivers",w,type:"sqs"})}})}
-let TICK_DT=1;
 /* an HTTP request arriving at a node: API Gateway, Route 53 alias, CloudFront, load balancer or EC2 directly */
 function request(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,kind=ev.kind||"calls",inet=!!(ev.data&&ev.data.internet);
   const fail=msg=>{if(ev.from)flow(ev.from,id,kind,w,msg);bump(id,"err",w);nrt(id).lastErr=msg;return{ok:false,err:msg}};
@@ -196,18 +188,3 @@ function periodic(t0,dt){const t1=t0+dt,h=dt/3600,zones=new Set();
         const subj=`AWS Budgets: ${getP(n.props,"Budget.BudgetName")} has exceeded your alert threshold (${th}%)`,body=`ACTUAL cost ${money(RT.total)} > ${th}% of ${money(lim)}.`;
         const subs=arr(ns.Subscribers);if(!subs.length)log("Sự kiện","budgets","alert",`${getP(n.props,"Budget.BudgetName")} vượt ${th}% nhưng chưa có nơi nhận cảnh báo (nối budget tới một SNS topic)`,"bad");else log("Sự kiện","budgets","alert",`vượt ${th}% (${money(RT.total)} / ${money(lim)})`,"warn");
         for(const s of subs){const tp=refId(s.Address);if(tp)push({at:t1,to:tp,from:n.id,kind:"notifies",w:1,type:"pub",data:{kind:"alert",subject:subj,body}});else if(s.SubscriptionType==="EMAIL")mail(s.Address,{kind:"alert",subject:subj,body})}}}}}
-/* advance the clock by dt simulated seconds */
-function step(dt,noSources){TICK_DT=dt;const t0=RT.t,t1=t0+dt;for(const k in RT.n)RT.n[k].tk={};for(const k in RT.flow){RT.flow[k].tk=0;RT.flow[k].tke=0}RT.ops=0;
-  if(!noSources)sources(t0,dt);
-  RT.q.sort((a,b)=>a.at-b.at);let guard=0;
-  while(RT.q.length&&RT.q[0].at<=t1&&guard<4000){const ev=RT.q.shift();handle(ev,t1);guard++;if(RT.q.length&&RT.q[RT.q.length-1].at<RT.q[0].at)RT.q.sort((a,b)=>a.at-b.at)}
-  RT.q.sort((a,b)=>a.at-b.at);periodic(t0,dt);RT.t=t1;
-  if(RT.t>=RT.month*MONTH){RT.month++;RT.total=0;for(const id in RT.n)RT.n[id].cost=0;for(const b of Object.values(RT.budgets))b.fired=[];log("CloudLab","billing","new-month",`Sang tháng ${RT.month}: chi tiêu tháng về $0`,"")}
-  for(const k in RT.n){const r=RT.n[k];r.series.push({t:t1,dt,...r.tk});if(r.series.length>40)r.series.shift()}}
-/* run everything queued now (manual actions while paused), without starting sources */
-function drain(){let g=0;const t=RT.t;while(RT.q.length&&g<400){RT.q.sort((a,b)=>a.at-b.at);const ev=RT.q.shift();if(ev.at>t+120)ev.at=t;handle(ev,t+120);g++}}
-function inject(n,c){fire(n,c||1,RT.t);drain()}
-/* the monthly run-rate the meter shows next to the total */
-function rateNow(){let s=0,dt=0;for(const id in RT.n){const L=RT.n[id].series;if(!L.length)continue;const last=L.slice(-8);s+=last.reduce((a,x)=>a+(x.cost||0),0);dt=Math.max(dt,last.reduce((a,x)=>a+x.dt,0))}return dt?s/dt*3600:0}
-/* probe: run a callback against a throw-away copy of the template + runtime (task checks) */
-function probe(fn){const sM=M,sR=RT;M=clone(M);RT=clone(RT);RT.q=[];RT.running=false;QUIET++;try{return fn()}finally{QUIET--;M=sM;RT=sR}}

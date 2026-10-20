@@ -1,18 +1,9 @@
 "use strict";
-/* The template model (one CloudFormation stack + external actors + layout).
-   M = { name, desc, res:{Id:{Type,Properties,DeletionPolicy?,Metadata?}}, ext:{Id:{Type,Properties}},
-         manual:{Id:{...}}  // created by hand outside the stack: on the canvas, not in the YAML
-         pos:{Id:[x,y]} }
+/* AWS pack · the model as one CloudFormation stack (shell/model.js holds M itself).
    Relations are never stored separately: an edge exists because a property references another resource
-   (!Ref / !GetAtt / !Sub "${X}"), exactly like in a real template. */
-function emptyModel(name){return{name:name||"sandbox",desc:"",res:{},ext:{},manual:{},pos:{}}}
+   (!Ref / !GetAtt / !Sub "${X}"), exactly like in a real template. This file: references → edges, adding / removing /
+   renaming resources, connect rules, and the YAML (CloudFormation short-form intrinsics). */
 const ATT={"AWS::S3::Bucket":"Arn","AWS::Lambda::Function":"Arn","AWS::IAM::Role":"Arn","AWS::SNS::Topic":"TopicArn","AWS::SQS::Queue":"Arn","AWS::DynamoDB::Table":"Arn"};
-function scopeOf(id){return M.res[id]?"res":M.ext[id]?"ext":M.manual[id]?"manual":null}
-function rawOf(id){return M.res[id]||M.ext[id]||M.manual[id]||null}
-function nodeOf(id){const r=rawOf(id);if(!r)return null;const d=T[r.Type]||{label:r.Type,short:"?",cat:"infra",fields:[],rel:{},doc:"Loại tài nguyên CloudLab chưa mô phỏng."};
-  return{id,type:r.Type,props:r.Properties||(r.Properties={}),raw:r,def:d,scope:scopeOf(id),ext:!!d.ext}}
-function allNodes(){return[...Object.keys(M.ext),...Object.keys(M.res),...Object.keys(M.manual)].map(nodeOf).filter(n=>n&&!n.def.edge)}
-const physName=n=>{try{return(n.def.name&&n.def.name(n.props))||n.id}catch(_){return n.id}};
 function arnOf(id){const n=nodeOf(id);if(!n)return"";const nm=physName(n);
   return({"AWS::S3::Bucket":`arn:aws:s3:::${nm}`,"AWS::Lambda::Function":`arn:aws:lambda:${REGION}:${ACCT}:function:${nm}`,"AWS::IAM::Role":`arn:aws:iam::${ACCT}:role/${nm}`,
     "AWS::SNS::Topic":`arn:aws:sns:${REGION}:${ACCT}:${nm}`,"AWS::SQS::Queue":`arn:aws:sqs:${REGION}:${ACCT}:${nm}`,"AWS::DynamoDB::Table":`arn:aws:dynamodb:${REGION}:${ACCT}:table/${nm}`,
@@ -53,7 +44,6 @@ function edges(){const out=[],seen=new Set(),add=e=>{const k=e.from+">"+e.to+">"
 const BASE_ID={"AWS::Lambda::Function":"Function","AWS::S3::Bucket":"Bucket","AWS::IAM::Role":"Role","AWS::SNS::Topic":"Topic","AWS::SQS::Queue":"Queue","AWS::DynamoDB::Table":"Table","AWS::ApiGatewayV2::Api":"Api",
   "AWS::Events::Rule":"Schedule","AWS::Logs::LogGroup":"LogGroup","AWS::CloudWatch::Alarm":"Alarm","AWS::Budgets::Budget":"Budget","AWS::S3::BucketPolicy":"BucketPolicy","AWS::Lambda::EventSourceMapping":"Mapping",
   "CloudLab::Client":"Client","CloudLab::Uploader":"Uploader","CloudLab::Inbox":"Inbox","CloudLab::Monitor":"Monitor"};
-function freeId(base){let i=1;while(rawOf(base+i))i++;return base+i}
 function addNode(type,x,y,id){const d=T[type];id=id||freeId(BASE_ID[type]||"Resource");const raw={Type:type,Properties:clone(d.defaults(id))};
   if(d.meta)raw.Metadata={CloudLab:clone(d.meta)};
   (d.ext?M.ext:M.res)[id]=raw;M.pos[id]=[Math.round(x),Math.round(y)];return id}
