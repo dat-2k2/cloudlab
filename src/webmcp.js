@@ -63,10 +63,26 @@
       inputSchema:{type:"object",properties:{format:{type:"string",enum:["cfn","aws","tf","cdk"]}},required:["format"]},
       execute:async({format})=>{const e=EXPORTS[format];if(!e)return fail("format phải là cfn, aws, tf hoặc cdk");return out(e.gen?e.gen():toYaml())}}];
   if(window.CloudLab)window.CloudLab.tools=Object.fromEntries(TOOLS.map(t=>[t.name,t]));
+  /* setup dialog behind the ✦ button in the top bar: status in this browser, how to turn WebMCP on, what the agent can do */
+  const supported=()=>!!((typeof document!=="undefined"&&document.modelContext)||(typeof navigator!=="undefined"&&navigator.modelContext));
+  let registered=false;
+  function mcpDialog(){const on=supported();const copy=(t,label)=>`<span class="mcp-copy">${esc(t)}<button class="sm ghost" data-mcp-copy="${esc(t)}" aria-label="Sao chép ${esc(label||t)}">Sao chép</button></span>`;
+    UI.modal={title:"Trợ lý AI trong trình duyệt (WebMCP)",cancel:"Đóng",init:{},fields:[],
+      body:`<div class="callout ${on?"ok":"ctx"} mcp-status"><div><b>${on?(registered?`Đã bật: CloudLab đã đăng ký ${TOOLS.length} công cụ`:"Trình duyệt hỗ trợ WebMCP, đang đăng ký công cụ…"):"Trình duyệt này chưa bật WebMCP"}</b>${on?"Trợ lý AI của trình duyệt có thể đọc sơ đồ, mở bài, dựng template, chạy mô phỏng và kiểm tra bài bằng các công cụ bên dưới.":"Không sao: mọi thứ khác vẫn chạy bình thường. Làm theo các bước dưới để thử."}</div></div>
+      <p>WebMCP là chuẩn web mới giúp trợ lý AI trong trình duyệt dùng chức năng của trang qua các “công cụ” có cấu trúc, thay vì tự bấm từng nút. CloudLab tự đăng ký công cụ khi trình duyệt hỗ trợ; bạn không cần cài gì vào CloudLab.</p>
+      ${on?"":`<p><b>Cách bật (Chrome trên máy tính):</b></p><ol class="mcp-steps"><li>Dùng Chrome 146 trở lên (bản Canary hoặc Dev). Chrome 149 có thử nghiệm origin trial.</li>
+        <li>Mở địa chỉ ${copy("chrome://flags/#enable-webmcp-testing","địa chỉ flag")} trong thanh địa chỉ (trình duyệt không cho mở bằng link), chọn <b>Enabled</b>, rồi bấm <b>Relaunch</b>.</li>
+        <li>Để thử công cụ: cài tiện ích <a href="https://chromewebstore.google.com/detail/model-context-tool-inspec/gbpdfapgefenggkahomfgkhfehlcenpd" target="_blank" rel="noopener">Model Context Tool Inspector ↗</a>, mở lại CloudLab, bấm biểu tượng tiện ích, chọn công cụ và bấm Execute Tool.</li>
+        <li>Mở lại hộp thoại này: dòng trạng thái phía trên sẽ chuyển sang “Đã bật”.</li></ol>`}
+      <p class="note">Gemini trong Chrome hiện chưa dùng công cụ WebMCP; Google cho biết sẽ hỗ trợ. Trong lúc chờ, bạn có thể nhờ Gemini viết template rồi dán vào CloudLab: xem <a href="learn.html#gemini" target="_blank" rel="noopener">hướng dẫn dùng với Gemini</a>.</p>
+      <details class="more"><summary>${TOOLS.length} công cụ CloudLab cung cấp</summary><ul class="mcp-tools">${TOOLS.map(t=>`<li><code>${esc(t.name)}</code>: ${esc(t.description.split(". ")[0])}</li>`).join("")}</ul></details>`};render()}
+  document.addEventListener("click",e=>{const c=e.target.closest&&e.target.closest("[data-mcp-copy]");if(c){const t=c.dataset.mcpCopy;try{navigator.clipboard.writeText(t).then(()=>{c.textContent="Đã chép"},()=>{c.textContent="Chép tay giúp"})}catch(_){c.textContent="Chép tay giúp"}return}
+    if(e.target.closest&&e.target.closest("#mcpBtn"))mcpDialog()});
+  const markBtn=()=>{const b=document.getElementById("mcpBtn");if(b){b.toggleAttribute("data-on",registered);b.title=registered?`WebMCP đang bật · ${TOOLS.length} công cụ`:"Trợ lý AI trong trình duyệt (WebMCP)"}};markBtn();
   /* register with the browser when WebMCP is available */
   const mc=(typeof document!=="undefined"&&document.modelContext)||(typeof navigator!=="undefined"&&navigator.modelContext);
   if(!mc)return;const ctl=new AbortController();
   (async()=>{try{if(typeof mc.registerTool==="function"){for(const t of TOOLS)await mc.registerTool(t,{signal:ctl.signal})}
     else if(typeof mc.provideContext==="function")await mc.provideContext({tools:TOOLS});
-    log("CloudLab","webmcp","register",`WebMCP: ${TOOLS.length} công cụ cho trợ lý AI của trình duyệt`,"ok")}catch(err){console.warn("WebMCP registration failed",err)}})();
+    registered=true;markBtn();log("CloudLab","webmcp","register",`WebMCP: ${TOOLS.length} công cụ cho trợ lý AI của trình duyệt`,"ok")}catch(err){console.warn("WebMCP registration failed",err)}})();
 })();

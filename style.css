@@ -613,3 +613,35 @@ body.lw-dragging,body.lw-dragging *{cursor:col-resize!important;user-select:none
 @media (max-width:760px){.gx-row{position:relative}.gpicker.glib{position:absolute;inset:0 auto 0 0;width:min(300px,86%);z-index:7;box-shadow:var(--shadow)}}
 .lesson>*{flex-shrink:0}.ltier{overflow:visible}
 .fld textarea{width:100%;min-height:200px;font:400 12.5px/18px var(--font-mono);padding:10px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--sunk);color:var(--ink);resize:vertical}
+/* ---------- full screen editor: canvas edge to edge, tools and description float above ---------- */
+.fs-only{display:none}.shell[data-fs] .fs-only{display:inline-flex}
+.shell[data-fs]{--fs-gap:12px}
+.shell[data-fs] .shell-top,.shell[data-fs] .shell-side,.shell[data-fs] .shell-foot{display:none}
+.shell[data-fs]>.main{position:fixed;inset:0;z-index:30;display:block;background:var(--bg)}
+.shell[data-fs] .work{position:absolute;inset:0;display:block}
+.shell[data-fs] .pane-canvas{position:absolute;inset:0;padding:0}
+.shell[data-fs] .gx-row{position:absolute;inset:0;min-height:0;gap:0}
+.shell[data-fs] .gx{border-radius:0}
+/* floating cards */
+.shell[data-fs] .gx-tools,.shell[data-fs] .stackbar,.shell[data-fs] .simbar,.shell[data-fs] .gpicker.glib,.shell[data-fs] .lesson,.shell[data-fs] .logp{background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:0 8px 28px rgba(15,23,42,.14)}
+.shell[data-fs] .gx-tools{position:absolute;z-index:32;top:var(--fs-gap);left:var(--fs-gap);margin:0;padding:6px 8px;max-width:calc(100% - var(--lesson-w,380px) - 3*var(--fs-gap))}
+.shell[data-fs] .stackbar{position:absolute;z-index:32;top:calc(var(--fs-gap) + 56px);left:var(--fs-gap);right:auto;padding:6px 10px;gap:8px;max-width:calc(100% - var(--lesson-w,380px) - 3*var(--fs-gap))}
+.shell[data-fs] .gpicker.glib{position:absolute;z-index:31;top:calc(var(--fs-gap) + 112px);left:var(--fs-gap);bottom:calc(var(--fs-gap) + 72px);width:272px}
+.shell[data-fs] .simbar{position:absolute;z-index:32;left:var(--fs-gap);bottom:var(--fs-gap);right:auto;padding:8px 12px;max-width:calc(100% - var(--lesson-w,380px) - 3*var(--fs-gap))}
+.shell[data-fs] .logp{position:absolute;z-index:31;left:var(--fs-gap);bottom:calc(var(--fs-gap) + 72px);width:min(720px,calc(100% - var(--lesson-w,380px) - 3*var(--fs-gap)));height:240px}
+.shell[data-fs] .pane-code:not([hidden]){position:absolute;z-index:29;top:calc(var(--fs-gap) + 112px);left:var(--fs-gap);right:calc(var(--lesson-w,380px) + 2*var(--fs-gap));bottom:calc(var(--fs-gap) + 72px)}
+.shell[data-fs] .lesson{position:fixed;z-index:33;top:var(--fs-gap);right:var(--fs-gap);bottom:var(--fs-gap);width:var(--lesson-w,380px);border-left:1px solid var(--line)}
+.shell[data-fs] .lesson-resize{position:fixed;z-index:34;top:var(--fs-gap);bottom:var(--fs-gap);right:calc(var(--lesson-w,380px) + var(--fs-gap) - 5px);margin:0}
+.shell[data-fs][data-desc-min] .lesson{bottom:auto;overflow:hidden;padding:10px 12px}
+.shell[data-fs][data-desc-min] .lesson>*:not(.lbar){display:none}
+.shell[data-fs][data-desc-min] .lbar{margin:0}
+.shell[data-fs][data-desc-min] .lesson-resize{display:none}
+.shell[data-fs][data-desc-min] .gx-tools,.shell[data-fs][data-desc-min] .stackbar,.shell[data-fs][data-desc-min] .simbar{max-width:calc(100% - 260px)}
+body:has(.shell[data-fs]) .drawer{--drawer-top:12px;--drawer-bottom:12px;right:12px;border-radius:var(--r-md);z-index:40}
+@media (max-width:900px){.shell[data-fs] .lesson{top:auto;left:var(--fs-gap);width:auto;height:45vh}.shell[data-fs] .gx-tools,.shell[data-fs] .stackbar,.shell[data-fs] .simbar{max-width:calc(100% - 2*var(--fs-gap))}.shell[data-fs] .simbar{bottom:calc(45vh + 2*var(--fs-gap))}.shell[data-fs] .gpicker.glib{bottom:calc(45vh + 84px)}}
+.lbar{position:relative;z-index:2}
+/* WebMCP button + setup dialog */
+#mcpBtn{position:relative}#mcpBtn[data-on]::after{content:"";position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--ok,#16a34a);box-shadow:0 0 0 2px var(--surface)}
+.mcp-status{display:flex;gap:10px;align-items:flex-start}.mcp-steps{margin:8px 0 0;padding-left:20px}.mcp-steps li{margin:0 0 8px}
+.mcp-copy{display:inline-flex;align-items:center;gap:6px;font:400 12.5px/18px var(--font-mono);background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:2px 4px 2px 8px}
+.mcp-tools{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;max-height:200px;overflow:auto;margin:6px 0 0;padding:0;list-style:none;font-size:13px}.mcp-tools code{font-size:12px}
