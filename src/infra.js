@@ -122,7 +122,9 @@ function addUse(A,b){A.raw.Metadata=A.raw.Metadata||{};A.raw.Metadata.CloudLab=A
 function CONNECT_X(a,b,A,B,say){const ta=A.type,tb=B.type;
   const sub=(path,att)=>()=>{const v=arr(getP(A.props,path));if(!v.some(x=>refId(x)===b))v.push(att?GA(b,att):R(b));setP(A.props,path,v)};
   if(ta==="CloudLab::Client"&&["AWS::ElasticLoadBalancingV2::LoadBalancer","AWS::CloudFront::Distribution","AWS::Route53::RecordSet","AWS::EC2::Instance"].includes(tb))return say("gửi request tới "+B.def.label,()=>{A.props.Target=R(b);delete A.props.Action;delete A.props.Key});
-  if(tb==="AWS::EC2::VPC"&&["AWS::EC2::Subnet","AWS::EC2::SecurityGroup","AWS::ElasticLoadBalancingV2::TargetGroup"].includes(ta))return say("thuộc VPC này",()=>{A.props.VpcId=R(b)});
+  if(tb==="AWS::EC2::VPC"&&["AWS::EC2::Subnet","AWS::EC2::SecurityGroup","AWS::ElasticLoadBalancingV2::TargetGroup"].includes(ta))return say("thuộc VPC này",()=>{A.props.VpcId=R(b);
+    if(ta==="AWS::EC2::Subnet"){const vc=ip4(B.props.CidrBlock),c=ip4(A.props.CidrBlock),clash=allNodes().some(s=>s.id!==a&&s.type==="AWS::EC2::Subnet"&&refId(s.props.VpcId)===b&&cidrOverlap(c,ip4(s.props.CidrBlock)));
+      if(vc&&(!c||!cidrIn(c,vc)||clash)){const tmp=newSubnetIn(b);A.props.CidrBlock=M.res[tmp].Properties.CidrBlock;A.props.AvailabilityZone=M.res[tmp].Properties.AvailabilityZone;delete M.res[tmp]}}});
   if(ta==="AWS::EC2::InternetGateway"&&tb==="AWS::EC2::VPC")return say("gắn vào VPC (VPCGatewayAttachment)",()=>{M.res[freeId(a+"Attach")]={Type:"AWS::EC2::VPCGatewayAttachment",Properties:{VpcId:R(b),InternetGatewayId:R(a)}}});
   if(tb==="AWS::EC2::SecurityGroup"&&SG_PATH[ta])return say("gắn security group",sub(SG_PATH[ta],"GroupId"));
   if(ta==="AWS::EC2::SecurityGroup"&&tb==="AWS::EC2::SecurityGroup")return say(`cho phép ${a} vào ${b} (tcp/80)`,()=>sgRule(b,a,80).apply());
@@ -149,6 +151,11 @@ function CONNECT_X(a,b,A,B,say){const ta=A.type,tb=B.type;
     dc.Origins=dc.Origins.filter(x=>x.Id!==b).concat([o]);if(!dc.DefaultCacheBehavior.TargetOriginId)dc.DefaultCacheBehavior.TargetOriginId=b});
   if(ta==="AWS::Route53::RecordSet"&&["AWS::ElasticLoadBalancingV2::LoadBalancer","AWS::CloudFront::Distribution"].includes(tb))return say("alias record → "+B.def.label,()=>{A.props.AliasTarget={DNSName:GA(b,tb==="AWS::CloudFront::Distribution"?"DomainName":"DNSName"),HostedZoneId:tb==="AWS::CloudFront::Distribution"?"Z2FDTNDATAQYW2":GA(b,"CanonicalHostedZoneID")}});
   return null}
+/* next free /24 inside the VPC, alternating AZs; used when something is dropped into a VPC that has no subnet under the cursor */
+function newSubnetIn(vpc){const v=nodeOf(vpc),vc=ip4(v&&v.props.CidrBlock)||ip4("10.0.0.0/16"),used=allNodes().filter(n=>n.type==="AWS::EC2::Subnet"&&refId(n.props.VpcId)===vpc);
+  let cidr=null;for(let k=1;k<256&&!cidr;k++){const net=vc.net+k*256;if(net+256>vc.net+vc.size)break;const c=`${net>>>24}.${(net>>16)&255}.${(net>>8)&255}.0/24`;if(!used.some(s=>cidrOverlap(ip4(c),ip4(s.props.CidrBlock))))cidr=c}
+  const id=freeId("Subnet"),az=AZS[used.length%2];
+  M.res[id]={Type:"AWS::EC2::Subnet",Properties:{VpcId:{Ref:vpc},CidrBlock:cidr||"10.0.1.0/24",AvailabilityZone:az,MapPublicIpOnLaunch:false,Tags:[{Key:"Name",Value:kebab(id)}]}};return id}
 const WHY_X={"AWS::EC2::VPC":"(nối subnet / security group vào VPC)","AWS::EC2::Subnet":"VPC","AWS::EC2::InternetGateway":"VPC","AWS::EC2::SecurityGroup":"VPC hoặc security group khác",
   "AWS::EC2::Instance":"subnet, security group, role, RDS, ElastiCache, S3, DynamoDB, SNS, SQS","AWS::ElasticLoadBalancingV2::LoadBalancer":"EC2, target group, subnet, security group",
   "AWS::ElasticLoadBalancingV2::TargetGroup":"EC2 hoặc VPC","AWS::RDS::DBInstance":"subnet, security group","AWS::ElastiCache::CacheCluster":"security group","AWS::CloudFront::Distribution":"S3, load balancer hoặc API","AWS::Route53::RecordSet":"load balancer hoặc CloudFront"};

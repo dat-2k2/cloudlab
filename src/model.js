@@ -27,6 +27,8 @@ function resolve(v){if(v==null)return v;if(typeof v!=="object")return v;
   if("Fn::Join" in v){const[sep,list]=v["Fn::Join"];return arr(list).map(resolve).join(sep)}
   const o={};for(const k in v)o[k]=resolve(v[k]);return o}
 function refId(v){if(!v||typeof v!=="object")return null;if("Ref" in v)return v.Ref;if("Fn::GetAtt" in v){const g=v["Fn::GetAtt"];return Array.isArray(g)?g[0]:String(g).split(".")[0]}return null}
+/* where an integration points: a Ref/GetAtt, or the first \${X...} inside a !Sub URL */
+function targetOf(v){const r=refId(v);if(r)return r;const s=v&&typeof v==="object"&&v["Fn::Sub"];const t=Array.isArray(s)?s[0]:s;const m=typeof t==="string"&&/\$\{([A-Za-z0-9]+)[.}]/.exec(t);return m?m[1]:null}
 /* visit every reference inside a value: cb(path, targetId) */
 function walkRefs(v,path,cb){if(v==null||typeof v!=="object")return;
   const id=refId(v);if(id){cb(path,id);return}
@@ -97,7 +99,9 @@ function connectRule(a,b){const A=nodeOf(a),B=nodeOf(b);if(!A||!B||a===b)return 
       if(tb==="AWS::S3::Bucket")return say("đọc object trong bucket",()=>{A.props.Target=R(b);A.props.Action=A.props.Action||"s3:GetObject";A.props.Key=A.props.Key||"report.csv"});
       if(tb==="AWS::IAM::Role")return say("assume role này (STS)",()=>{A.props.As=GA(b)});break;
     case"CloudLab::Uploader":if(tb==="AWS::S3::Bucket")return say("upload file vào bucket",()=>{A.props.Target=R(b)});break;
-    case"AWS::ApiGatewayV2::Api":if(tb==="AWS::Lambda::Function")return say("integration → Lambda",()=>{A.props.Target=GA(b)});break;
+    case"AWS::ApiGatewayV2::Api":if(tb==="AWS::Lambda::Function")return say("integration → Lambda",()=>{A.props.Target=GA(b)});
+      if(tb==="AWS::EC2::Instance")return say("HTTP integration → EC2 (cần public subnet + security group mở cổng app)",()=>{A.props.Target={"Fn::Sub":`http://\${${b}.PublicDnsName}`}});
+      if(tb==="AWS::ElasticLoadBalancingV2::LoadBalancer")return say("HTTP integration → load balancer",()=>{A.props.Target={"Fn::Sub":`http://\${${b}.DNSName}`}});break;
     case"AWS::S3::Bucket":if(tb==="AWS::Lambda::Function")return say("ObjectCreated → gọi Lambda",()=>{setP(A.props,"NotificationConfiguration.LambdaConfigurations",arr(getP(A.props,"NotificationConfiguration.LambdaConfigurations")).concat([{Event:"s3:ObjectCreated:*",Function:GA(b)}]))});break;
     case"AWS::Lambda::Function":{const role=roleOfFn(a);
       if(tb==="AWS::IAM::Role")return say("dùng làm execution role",()=>{A.props.Role=GA(b)});
@@ -120,7 +124,7 @@ function connectRule(a,b){const A=nodeOf(a),B=nodeOf(b);if(!A||!B||a===b)return 
   }
   return null}
 function whyNot(a,b){const A=nodeOf(a),B=nodeOf(b);if(!A||!B)return"";
-  const can={"CloudLab::Client":"API, bucket hoặc role","CloudLab::Uploader":"S3 bucket","AWS::ApiGatewayV2::Api":"Lambda function","AWS::S3::Bucket":"Lambda (event notification)",
+  const can={"CloudLab::Client":"API, bucket hoặc role","CloudLab::Uploader":"S3 bucket","AWS::ApiGatewayV2::Api":"Lambda, EC2 hoặc load balancer","AWS::S3::Bucket":"Lambda (event notification)",
     "AWS::Lambda::Function":"role, bucket, table, topic, queue, log group","AWS::SNS::Topic":"hộp thư, Lambda hoặc SQS","AWS::SQS::Queue":"Lambda","AWS::Events::Rule":"Lambda",
     "AWS::CloudWatch::Alarm":"SNS topic hoặc Lambda","AWS::Budgets::Budget":"SNS topic","AWS::S3::BucketPolicy":"S3 bucket","AWS::IAM::Role":"bucket, table, topic, queue, log group"}[A.type];
   const c2=can||(typeof WHY_X!=="undefined"&&WHY_X[A.type]);return c2?`${A.def.label} chỉ nối tới ${c2}`:`${A.def.label} không có quan hệ đi ra`}

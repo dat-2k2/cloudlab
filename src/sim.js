@@ -116,8 +116,10 @@ function request(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,kind=ev.kind||"calls"
   const fail=msg=>{if(ev.from)flow(ev.from,id,kind,w,msg);bump(id,"err",w);nrt(id).lastErr=msg;return{ok:false,err:msg}};
   if(!n||!exists(id))return fail("chưa deploy");
   switch(n.type){
-    case"AWS::ApiGatewayV2::Api":{bump(id,"req",w);charge(id,w*PRICE.apiReq,"request");if(ev.from)flow(ev.from,id,kind,w);const fn=refId(n.props.Target);
-      if(!fn)return fail("404: API chưa có integration");const r=lambdaRun({...ev,to:fn,from:id,kind:"invokes",data:{src:"api"}},T1);if(!r.ok){bump(id,"err",w);return{ok:false,err:"502 · "+r.err}}return{ok:true}}
+    case"AWS::ApiGatewayV2::Api":{bump(id,"req",w);charge(id,w*PRICE.apiReq,"request");if(ev.from)flow(ev.from,id,kind,w);const fn=targetOf(n.props.Target),tn=nodeOf(fn);
+      if(!fn||!tn)return fail("404: API chưa có integration");
+      if(tn.type!=="AWS::Lambda::Function"){const r=request({...ev,to:fn,from:id,kind:"invokes",data:{internet:true}},T1);if(!r.ok){bump(id,"err",r.errW||w);return{ok:false,err:"502 · "+r.err,errW:r.errW}}return{ok:true}}
+      const r=lambdaRun({...ev,to:fn,from:id,kind:"invokes",data:{src:"api"}},T1);if(!r.ok){bump(id,"err",w);return{ok:false,err:"502 · "+r.err}}return{ok:true}}
     case"AWS::Route53::RecordSet":{bump(id,"req",w);if(ev.from)flow(ev.from,id,kind,w);const t=refId(getP(n.props,"AliasTarget.DNSName"));if(!t)return fail("Record chưa trỏ tới đâu (NXDOMAIN)");
       return request({...ev,to:t,from:id,kind:"alias"},T1)}
     case"AWS::CloudFront::Distribution":{if(getP(n.props,"DistributionConfig.Enabled")===false)return fail("Distribution đang tắt");bump(id,"req",w);charge(id,w*PRICE.cfReq,"request");charge(id,w*20/1048576*PRICE.cfGB,"truyền ra");if(ev.from)flow(ev.from,id,kind,w);

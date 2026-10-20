@@ -11,7 +11,7 @@ function problems(){const out=[],P=(sev,id,msg)=>out.push({sev,id,msg});if(!M)re
       case"AWS::Lambda::Function":if(!refId(p.Role))P("error",n.id,`${n.id}: Lambda bắt buộc có execution role`);else{const need=+(getP(n.raw,"Metadata.CloudLab.WorkMs")||300)*128/(+p.MemorySize||128);if(need>(+p.Timeout||3)*1000)P("warn",n.id,`${n.id}: code cần ~${Math.round(need)} ms nhưng Timeout ${p.Timeout||3}s → sẽ timeout`)}
         {const outB=Object.values(getP(p,"Environment.Variables")||{}).map(refId).find(x=>x&&(nodeOf(x)||{}).type==="AWS::S3::Bucket");if(outB){const nb=nodeOf(outB);const hit=arr(getP(nb.props,"NotificationConfiguration.LambdaConfigurations")).find(c=>refId(c.Function)===n.id);
           if(hit){const rules=arr(getP(hit,"Filter.S3Key.Rules")),pre=(rules.find(r=>/prefix/i.test(r.Name))||{}).Value||"",op=getP(p,"Environment.Variables.OUTPUT_PREFIX")||"";if(!pre||String(op).startsWith(pre))P("error",n.id,`${n.id} ghi vào ${outB} đúng chỗ đang kích hoạt nó → vòng lặp đệ quy`)}}}break;
-      case"AWS::ApiGatewayV2::Api":if(!refId(p.Target))P("warn",n.id,`${n.id}: chưa có integration, mọi request trả 404`);break;
+      case"AWS::ApiGatewayV2::Api":if(!targetOf(p.Target))P("warn",n.id,`${n.id}: chưa có integration, mọi request trả 404`);break;
       case"AWS::ElasticLoadBalancingV2::LoadBalancer":{const ss=subnetsOf(n),azs=new Set(ss.map(s=>(nodeOf(s)||{props:{}}).props.AvailabilityZone));
         if(ss.length<2||azs.size<2)P("error",n.id,`${n.id}: Application Load Balancer cần ít nhất 2 subnet ở 2 Availability Zone khác nhau`);
         if(!sgsOf(n.id).length)P("warn",n.id,`${n.id}: chưa có security group`);

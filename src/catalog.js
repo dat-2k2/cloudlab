@@ -47,7 +47,7 @@ def("AWS::ApiGatewayV2::Api",{label:"API Gateway (HTTP API)",short:"API",cat:"no
   doc:"Cửa vào HTTPS cho client. Nhận request, chuyển tới integration (thường là Lambda) rồi trả kết quả. Tính tiền theo số request.",
   defaults:id=>({Name:kebab(id),ProtocolType:"HTTP",Target:null}),name:p=>p.Name,
   fields:[{k:"Name",label:"Tên API",type:"text"},{k:"Target",label:"Integration (Lambda)",type:"ref",to:["AWS::Lambda::Function"],att:"Arn"}],
-  rel:{Target:{kind:"invokes",label:"invoke"}}});
+  rel:{Target:{kind:"invokes",label:(p,path,to)=>(nodeOf(to)||{}).type==="AWS::Lambda::Function"?"invoke":"HTTP"}}});
 def("AWS::Lambda::Function",{label:"Lambda function",short:"λ",cat:"comp",
   doc:"Đoạn code chạy khi có sự kiện, không cần quản lý server. Chạy bằng quyền của execution role. Tính tiền theo số lần gọi và GB-giây (memory × thời gian).",
   defaults:id=>({FunctionName:kebab(id),Runtime:"python3.12",Handler:"app.handler",MemorySize:128,Timeout:3,Role:null,Environment:{Variables:{}}}),

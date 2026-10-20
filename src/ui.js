@@ -42,7 +42,7 @@ function renderTop(){const cr=document.getElementById("crumb");if(!cr)return;con
 const STK={NOT_DEPLOYED:["","chưa deploy"],CREATE_COMPLETE:["ok","CREATE_COMPLETE"],UPDATE_COMPLETE:["ok","UPDATE_COMPLETE"],DELETE_COMPLETE:["","DELETE_COMPLETE"],DELETE_FAILED:["bad","DELETE_FAILED"],ROLLBACK_COMPLETE:["bad","ROLLBACK_COMPLETE"]};
 function renderBar(){const s=STK[RT.stack.status]||["",RT.stack.status],up=stackUp(),v=UI.code?(UI.split?"split":"code"):"graph";
   document.getElementById("bar").innerHTML=`<span class="stk"><span class="cap">Stack</span><b class="mono">${esc(M.name)}</b>${chip(s[1],s[0])}</span>
-    ${up?`<button class="sm danger" data-act="askDelete" title="aws cloudformation delete-stack">Xóa stack</button>`:`<button class="sm primary" data-act="deploy" title="aws cloudformation deploy">Deploy</button>`}
+    ${UI.mode==="sandbox"&&!up&&Object.keys(M.res).length+Object.keys(M.ext).length?`<button class="sm ghost" data-act="askClear" title="Xóa mọi khối khỏi canvas">Xóa canvas</button>`:""}${up?`<button class="sm danger" data-act="askDelete" title="aws cloudformation delete-stack">Xóa stack</button>`:`<button class="sm primary" data-act="deploy" title="aws cloudformation deploy">Deploy</button>`}
     <span class="grow"></span><div class="seg" role="group" aria-label="Chế độ sửa"><button class="${v==="graph"?"on":""}" data-act="vMode" data-arg="graph" aria-pressed="${v==="graph"}">Canvas</button><button class="${v==="split"?"on":""} hide-s" data-act="vMode" data-arg="split" aria-pressed="${v==="split"}">Chia đôi</button><button class="${v==="code"?"on":""}" data-act="vMode" data-arg="code" aria-pressed="${v==="code"}">YAML</button></div>
     <button class="icon-btn" data-act="undo" ${UNDO.length?"":"disabled"} title="Undo (Ctrl+Z)" aria-label="Undo">↶</button><button class="icon-btn" data-act="redo" ${REDO.length?"":"disabled"} title="Redo" aria-label="Redo">↷</button>`}
 function renderCanvas(){const el=document.getElementById("canvas");if(!el)return;el.hidden=UI.code&&!UI.split;if(!el.hidden)el.innerHTML=canvasHtml()}
@@ -249,7 +249,7 @@ document.addEventListener("click",e=>{
   const t=e.target.closest("[data-act],[data-lesson],[data-log],[data-node],[data-edge],[data-ptype]");if(!t||t.closest("[inert]"))return;
   if((t.dataset.node||t.dataset.gconnect||t.dataset.edge)&&Date.now()-GSUP<350)return;
   UI.lastOpener=selOf(t);
-  if(t.dataset.ptype){UI.picker=null;const[x,y]=viewCenter();let id;edit("add "+t.dataset.ptype,()=>{id=addNode(t.dataset.ptype,x,y)});log("CloudLab","editor","add",`${id} (${T[t.dataset.ptype].label})`,"ok");UI.sel={node:id};UI.selRet=`[data-node="${id}"]`;if(KIT.isNarrow()&&document.querySelector("[data-shell]").hasAttribute("data-side-open"))document.querySelector("[data-shell]").removeAttribute("data-side-open");render();return}
+  if(t.dataset.ptype){UI.picker=null;const[x,y]=freeSpot(...viewCenter());let id;edit("add "+t.dataset.ptype,()=>{id=addNode(t.dataset.ptype,x,y)});log("CloudLab","editor","add",`${id} (${T[t.dataset.ptype].label})`,"ok");UI.sel={node:id};UI.selRet=`[data-node="${id}"]`;if(KIT.isNarrow()&&document.querySelector("[data-shell]").hasAttribute("data-side-open"))document.querySelector("[data-shell]").removeAttribute("data-side-open");render();return}
   if(t.dataset.node){UI.gmenu=null;UI.sel={node:t.dataset.node};UI.selRet=`[data-node="${t.dataset.node}"]`;render();return}
   if(t.dataset.edge){UI.sel={edge:t.dataset.edge};UI.selRet=null;render();return}
   if(t.dataset.lesson!==undefined&&t.dataset.act===undefined){const i=+t.dataset.lesson;if(UI.mode==="lesson"&&i===UI.lesson)return;
@@ -259,12 +259,15 @@ document.addEventListener("click",e=>{
   if(a==="closeModal"){UI.modal=null;render();return}if(a==="scrim"){if(e.target===t){UI.modal=null;render()}return}
   if(a==="rename")return;
   const A={
-    undo,redo,deploy(){deploy();gs().zoom=null},askDelete(){confirmModal("Xóa stack?",`aws cloudformation delete-stack --stack-name ${esc(M.name)}. CloudFormation xóa mọi tài nguyên trong template, trừ thứ có DeletionPolicy: Retain.`,"Xóa stack",()=>{simPlay(false);deleteStack()},true)},
+    undo,redo,deploy(){deploy();gs().zoom=null},askDelete(){const sb=UI.mode==="sandbox";UI.modal={title:"Xóa stack?",submitLabel:"Xóa stack",danger:true,init:{wipe:0},
+      body:`<p><code>aws cloudformation delete-stack --stack-name ${esc(M.name)}</code></p><p>CloudFormation xóa các tài nguyên đang chạy của stack (trừ thứ có <code>DeletionPolicy: Retain</code>) và ngừng tính tiền. Template thì vẫn giữ nguyên, nên các khối còn trên canvas với trạng thái “Đã xóa” để bạn deploy lại khi cần.</p>`,
+      fields:sb?[{type:"checks",label:"Canvas",items:[["wipe","Xóa luôn các khối khỏi canvas (template trống)"]]}]:[],
+      submit:v=>{simPlay(false);deleteStack();if(sb&&+v.wipe&&RT.stack.status==="DELETE_COMPLETE"){edit("xóa canvas",()=>{M.res={};M.ext={}});RT.stack.status="NOT_DEPLOYED";log("CloudLab","editor","clear","Template trống · tài nguyên tạo tay và bucket Retain vẫn còn","ok")}return{ok:true}}}},
     vMode(){UI.code=arg!=="graph";UI.split=arg==="split";YAML_ERR=null},
     simToggle(){simPlay(!RT.running);return true},simReset(){const was=RT.running;simPlay(false);if(UI.mode==="lesson")startLesson(UI.lesson,true);else{RT=freshRuntime();if(Object.keys(M.res).length){QUIET++;deploy();QUIET--;RT.stack.status="CREATE_COMPLETE";syncRuntime()}}log("CloudLab","sim","reset","đặt lại thời gian, chi phí và dữ liệu mô phỏng","");if(was)simPlay(true)},
     logToggle(){UI.panel=UI.panel?null:"log";UI.logOpen=!!UI.panel},sideTab(){UI.sideTab=arg},picker(){UI.picker=UI.picker?null:{q:"",active:0};UI.gfocus=UI.picker?"#pkq":null},
     loadTpl(){const t=STARTERS[arg];confirmModal(`Mở mẫu “${t.title}”?`,`${esc(t.desc)}<br><br>Canvas sandbox hiện tại sẽ được thay.`,"Mở mẫu",()=>{startSandbox(loadTemplate(t.yaml,t.layout,"sandbox"));UI.sideTab="comp";gs().zoom=null})},
-    gFit(){const G=gs();G.zoom=null},gZoom(){gZoomAt(GCUR.z*(arg==="1"?1.2:1/1.2));return true},gTrace(){gs().trace=!gs().trace},gView(){gs().view=arg;UI.gmenu=null},
+    gFit(){const G=gs();G.zoom=null},gNoteClose(){UI.gnote=null},gZoom(){gZoomAt(GCUR.z*(arg==="1"?1.2:1/1.2));return true},gTrace(){gs().trace=!gs().trace},gView(){gs().view=arg;UI.gmenu=null},
     gMenu(){UI.gmenu=UI.gmenu&&UI.gmenu.from===arg?null:{from:arg,active:0};UI.gfocus=UI.gmenu?"#glist":`[data-gconnect="${arg}"]`},
     connectFrom(){UI.sel=null;UI.code=false;UI.gmenu={from:arg,active:0};UI.gfocus="#glist"},
     gPick(){if(!UI.gmenu||!connectRule(UI.gmenu.from,arg))return true;doConnect(UI.gmenu.from,arg);UI.gmenu=null},
@@ -313,7 +316,7 @@ document.addEventListener("dragstart",e=>{const p=e.target.closest&&e.target.clo
 document.addEventListener("dragover",e=>{if(e.target.closest&&e.target.closest(".gx")){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect="copy"}});
 document.addEventListener("drop",e=>{const gx=e.target.closest&&e.target.closest(".gx");if(!gx||!e.dataTransfer)return;const type=e.dataTransfer.getData("text/plain");if(!T[type])return;e.preventDefault();
   const[x,y]=toWorld(e.clientX,e.clientY);let id;gFreeze();edit("add "+type,()=>{id=addNode(type,x-GW/2,y-30)});log("CloudLab","editor","add",`${id} (${T[type].label})`,"ok");
-  const sb=GLAST&&boxAt(GLAST.boxes,x,y,"subnet"),vb=GLAST&&boxAt(GLAST.boxes,x,y,"vpc");if(sb)placeIn(id,sb.id);
+  const sb=GLAST&&boxAt(GLAST.boxes,x,y,"subnet"),vb=GLAST&&boxAt(GLAST.boxes,x,y,"vpc");if(sb)placeIn(id,sb.id);else if(vb&&PLACEABLE.includes(type))autoSubnet(id,vb.id);
   else if(vb&&["AWS::EC2::Subnet","AWS::EC2::SecurityGroup","AWS::ElasticLoadBalancingV2::TargetGroup"].includes(type))edit("vpc",()=>{nodeOf(id).props.VpcId={Ref:vb.id}});
   UI.sel={node:id};render()});
 /* canvas pointer: pan, drag nodes, drag-to-connect */
@@ -326,6 +329,11 @@ document.addEventListener("pointerdown",e=>{if(e.button!==0||!e.target.closest)r
 /* which subnet box contains a world point (smallest first) */
 function boxAt(boxes,x,y,kind){return boxes.filter(b=>(!kind||b.box===kind)&&x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h).sort((a,b)=>a.w*a.h-b.w*b.h)[0]||null}
 const PLACEABLE=["AWS::EC2::Instance","AWS::RDS::DBInstance"];
+/* EC2/RDS can't sit in a VPC directly — they live in a subnet. Dropped on a VPC area with no subnet: create one there. */
+function autoSubnet(id,vpc){let sid;edit(`tạo subnet cho ${id}`,()=>{sid=newSubnetIn(vpc);const p=M.pos[id]||[0,0];M.pos[sid]=[p[0]-20,p[1]-40]});placeIn(id,sid);
+  gNote(`${id} cần nằm trong một subnet, nên CloudLab đã tạo ${sid} (${M.res[sid].Properties.CidrBlock}, private) trong ${vpc}. Đổi sang public trong inspector của ${sid} nếu cần.`,"info")}
+/* short message on the canvas, e.g. why a connection was refused */
+let GNOTE_T=0;function gNote(text,kind){UI.gnote={text,kind:kind||"warn"};clearTimeout(GNOTE_T);GNOTE_T=setTimeout(()=>{UI.gnote=null;render()},7000)}
 function placeIn(id,sid){const n=nodeOf(id);if(!n||!PLACEABLE.includes(n.type))return false;const cur=subnetsOf(n)[0]||null;if(cur===sid)return false;
   edit(sid?`đặt ${id} vào ${sid}`:`đưa ${id} ra khỏi subnet`,()=>{const nn=nodeOf(id);
     if(nn.type==="AWS::EC2::Instance")nn.props.SubnetId=sid?{Ref:sid}:null;
@@ -341,9 +349,10 @@ document.addEventListener("pointermove",e=>{if(!GD||GD.kind==="edge")return;cons
   else{const el=document.elementFromPoint&&document.elementFromPoint(e.clientX,e.clientY),on=el&&el.closest&&el.closest(".gnode");UI.gdrag.at=toWorld(e.clientX,e.clientY);UI.gdrag.over=on?on.dataset.gid:null;gRefresh();GD.gx.classList.add("connecting")}});
 function gEnd(cancel){if(!GD)return;const d=GD;GD=null;if(!d.moved)return;GSUP=Date.now();
   if(d.kind==="node"){const n=nodeOf(d.id);if(n&&PLACEABLE.includes(n.type)){const c=[M.pos[d.id][0]+GW/2,M.pos[d.id][1]+40],sb=boxAt(d.boxes,c[0],c[1],"subnet"),cur=subnetsOf(n)[0]||null;
-      if(sb&&sb.id!==cur)placeIn(d.id,sb.id);else if(!sb&&cur&&!boxAt(d.boxes,c[0],c[1],"vpc"))placeIn(d.id,null)}UI.gdropBox=null;saveSandbox();render()}
+      const vb=!sb&&boxAt(d.boxes,c[0],c[1],"vpc");
+      if(sb&&sb.id!==cur)placeIn(d.id,sb.id);else if(vb&&!cur)autoSubnet(d.id,vb.id);else if(!sb&&cur&&!vb)placeIn(d.id,null)}UI.gdropBox=null;saveSandbox();render()}
   if(d.kind==="box")saveSandbox();
-  if(d.kind==="connect"){const over=!cancel&&UI.gdrag&&UI.gdrag.over;UI.gdrag=null;if(over&&connectRule(d.id,over))doConnect(d.id,over);render()}}
+  if(d.kind==="connect"){const over=!cancel&&UI.gdrag&&UI.gdrag.over;UI.gdrag=null;if(over&&over!==d.id){if(connectRule(d.id,over))doConnect(d.id,over);else{const why=whyNot(d.id,over);gNote(`Không nối được ${d.id} → ${over}. ${why}.`,"warn");log("CloudLab","editor","connect",`${d.id} → ${over}: ${why}`,"warn")}}render()}}
 document.addEventListener("pointerup",()=>gEnd(false));document.addEventListener("pointercancel",()=>gEnd(true));
 document.addEventListener("wheel",e=>{const gx=e.target.closest&&e.target.closest(".gx");if(!gx||!(e.ctrlKey||e.metaKey))return;e.preventDefault();const r=gx.getBoundingClientRect();gZoomAt(GCUR.z*Math.exp(-e.deltaY*.0025),e.clientX-r.left,e.clientY-r.top)},{passive:false});
 window.addEventListener("keydown",e=>{const tag=(e.target.tagName||"").toLowerCase(),typing=tag==="input"||tag==="textarea"||tag==="select";

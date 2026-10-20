@@ -543,3 +543,5 @@ div.gl{cursor:default}
 .side-item.lsn .side-label{display:flex;flex-direction:column;line-height:18px}.side-item.lsn small{font:400 11px/14px var(--font-mono);color:var(--subtle)}
 .labref{margin:6px 0 0;font-size:12.5px;color:var(--muted)}.labref a{color:var(--accent)}
 .simbar .spd .cap{display:none}
+.gx-note{position:absolute;left:12px;right:12px;bottom:12px;z-index:5;display:flex;gap:10px;align-items:flex-start;max-width:640px;margin:0 auto;box-shadow:var(--shadow-2,0 6px 24px rgba(0,0,0,.18))}
+.gx-note span{flex:1;font-size:13px;line-height:19px}.gx-note .sm{flex:none}
