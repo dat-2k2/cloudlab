@@ -122,3 +122,23 @@ DOMAIN.nodeActs=n=>{let a=baseActs(n);if(n.type==="CloudLab::NodePool"&&stackUp(
   if(n.type==="CloudLab::Actor")a=`<button class="sm" data-act="actorNow" data-arg="${esc(n.id)}">Chạy thử các thao tác</button>`+a;return a};
 DOMAIN.actions.actorNow=arg=>{const n=nodeOf(arg);if(n){if(!stackUp())deploy();actorRun(n,1)}};
 DOMAIN.api=Object.assign(DOMAIN.api||{},{canI:(...a)=>canI(...a),startUpgrade:()=>startUpgrade(),lbInfo:id=>lbInfo(nodeOf(id))});
+/* ---- WebMCP (../src/shell/webmcp.js): Kubernetes tool descriptions and the manifest format guide */
+DOMAIN.mcp={guideHref:"learn.html#gemini",artifact:"manifest",unitRes:"đối tượng",
+  d:{get_template:"Lấy manifest Kubernetes (YAML nhiều tài liệu, cách nhau ---) của sơ đồ hiện tại, gồm cả các tài liệu apiVersion: cloudlab.dev/v1 chỉ dùng cho mô phỏng (Client, NodePool, IngressController, Actor).",
+    get_format_guide:"Hướng dẫn viết manifest CloudLab Kubernetes đọc được: kind và apiVersion được hỗ trợ, các tài liệu cloudlab.dev/v1 cho mô phỏng, image có trong registry giả lập (cổng, biến môi trường bắt buộc), loại node và storage class. Đọc trước khi gọi load_template.",
+    explain_component:"Giải thích một khối hoặc một kind Kubernetes bằng ngôn ngữ đơn giản (ví dụ ngân hàng) và mô tả kỹ thuật.",
+    "explain_component.idOrType":"Id khối trên sơ đồ, dạng kubectl (ví dụ deploy/ib-web, svc/payment-api) hoặc kind (ví dụ HorizontalPodAutoscaler, CloudLab::Client)",
+    load_template:"Mở manifest Kubernetes YAML (nhiều tài liệu cách nhau ---) vào sandbox, thay sơ đồ sandbox hiện tại. Dùng để dựng cluster theo tình huống của người dùng. Trả về lỗi YAML kèm số dòng, lỗi như API server báo (kind sai apiVersion, thiếu metadata.name…), hoặc danh sách khối và vấn đề.",
+    "load_template.yaml":"Manifest Kubernetes YAML; xem get_format_guide",
+    "add_component.type":"Kind, ví dụ Deployment, Service, Ingress hoặc CloudLab::Client (xem get_format_guide)",
+    connect:"Nối khối from tới khối to, giống kéo mũi tên trên canvas (ví dụ Service → Deployment đặt selector theo nhãn pod, Deployment → ConfigMap thêm envFrom, Ingress → Service thêm luật đường dẫn). Trả lý do nếu không nối được.",
+    "connect.grant":"Không dùng trên trang Kubernetes (giữ để tương thích)",
+    set_property:"Đổi một trường của manifest (đường dẫn có dấu chấm, tính từ gốc tài liệu, bỏ apiVersion và kind; ví dụ spec.replicas, metadata.labels.app hoặc spec.template.spec.containers.0.image).",
+    export_iac:"Xuất sơ đồ hiện tại: yaml (manifest CloudLab, gồm phần mô phỏng cloudlab.dev/v1), kubectl (manifest sạch để kubectl apply lên cluster thật)."},
+  guide:()=>({format:"Kubernetes manifest YAML, nhiều tài liệu cách nhau ---; mỗi tài liệu có apiVersion, kind, metadata.name (namespace mặc định là default). Mũi tên trên sơ đồ suy ra từ tên (scaleTargetRef, configMapRef, secretKeyRef, claimName, backend.service.name…), label selector và biến môi trường trỏ tới DNS của Service (*_HOST, *_URL hoặc giá trị có ://). Phần chỉ dành cho mô phỏng là các tài liệu apiVersion: cloudlab.dev/v1, bị bỏ khi xuất cho cluster thật. Cluster giả lập trên EKS, giá tham khảo ap-southeast-1.",
+    kinds:Object.fromEntries(Object.values(T).filter(t=>!t.edge&&!t.type.startsWith("CloudLab::")).map(t=>[t.type,API[t.type]||""])),
+    cloudlab:Object.fromEntries(Object.values(T).filter(t=>t.type.startsWith("CloudLab::")).map(t=>[t.type.slice(10),(t.fields||[]).map(f=>f.k).filter(Boolean)])),
+    images:Object.fromEntries(Object.entries(IMAGES).map(([r,a])=>[r,{tags:a.tags,label:a.label,...(a.port?{port:a.port}:{}),...(a.health?{health:a.health}:{}),...(a.needs?{needsEnv:a.needs}:{}),...(a.job?{job:true}:{}),memMi:a.mem}])),
+    nodeTypes:Object.keys(NODE_TYPES),storageClasses:STORAGE_CLASSES.list,
+    guide:"https://dat-2k2.github.io/cloudlab/k8s/learn.html#gemini"})};
+DOMAIN.texts.importBody=DOMAIN.texts.importBody.replace("</p>",` Cách nhờ Gemini viết: xem <a href="learn.html#gemini" target="_blank" rel="noopener">hướng dẫn dùng với Gemini</a>.</p>`);

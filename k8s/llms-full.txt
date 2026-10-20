@@ -1,0 +1,831 @@
+# CloudLab Kubernetes: toàn bộ nội dung
+
+CloudLab Kubernetes là trang học Kubernetes chạy trong trình duyệt, đặt trong bối cảnh một ngân hàng (cluster anphat-prod trên EKS giả lập). Người học kéo thả đối tượng Kubernetes hoặc viết manifest YAML, chạy mô phỏng để thấy scheduler xếp pod, probe, Service, Ingress, giới hạn tốc độ, HPA, quota, PodDisruptionBudget, RBAC, NetworkPolicy, ổ đĩa và chi phí cluster, rồi xuất manifest sạch cho kubectl apply. Mỗi bài là một cluster có lỗi cài sẵn; người học sửa rồi bấm Kiểm tra. Mô phỏng chạy hoàn toàn trong trình duyệt, không gọi cluster thật; giá là giá tham khảo.
+
+Ứng dụng: https://dat-2k2.github.io/cloudlab/k8s/
+
+## Dùng CloudLab Kubernetes với Gemini: mô phỏng cluster của riêng bạn
+
+1. Mở Gemini, dán câu lệnh mẫu bên dưới và thay phần [mô tả tình huống].
+2. Gemini trả về manifest Kubernetes (YAML).
+3. Mở https://dat-2k2.github.io/cloudlab/k8s/#/import (hoặc Sandbox → Dán template…), dán YAML, bấm "Mở trong sandbox". CloudLab vẽ sơ đồ; bấm ▶ Chạy để thấy pod khởi động, traffic, lỗi và chi phí; tab Vấn đề liệt kê cấu hình rủi ro.
+
+Câu lệnh mẫu:
+
+```
+Bạn là kỹ sư Kubernetes. Hãy viết manifest Kubernetes (YAML, nhiều tài liệu cách nhau ---) để tôi mở trong CloudLab Kubernetes (https://dat-2k2.github.io/cloudlab/k8s/) và mô phỏng tình huống sau:
+
+[mô tả tình huống của bạn, ví dụ: "ngân hàng cần API tra cứu khoản vay: chạy 3 pod, tự co giãn khi ngày lương, chỉ app web gọi được, mật khẩu DB để trong Secret, giới hạn 50 request/giây mỗi IP"]
+
+Yêu cầu:
+- Đọc hướng dẫn định dạng tại https://dat-2k2.github.io/cloudlab/k8s/learn.html#gemini (hoặc https://dat-2k2.github.io/cloudlab/k8s/llms-full.txt). Chỉ dùng các kind và image được liệt kê ở đó (image phải đúng tên và tag trong danh sách, và đủ biến môi trường bắt buộc).
+- Thêm tài liệu apiVersion: cloudlab.dev/v1, kind: Client (ratePerSecond, target) để tôi bấm Chạy là thấy traffic; có Ingress thì thêm IngressController.
+- Khai báo resources.requests / limits, readinessProbe, nhãn và selector khớp nhau như manifest thật.
+- Chỉ trả về một khối YAML hoàn chỉnh, sau đó giải thích ngắn gọn từng đối tượng bằng tiếng Việt cho người không chuyên kỹ thuật.
+```
+
+### Định dạng manifest CloudLab đọc được
+
+- Manifest Kubernetes YAML chuẩn: nhiều tài liệu cách nhau ---, mỗi tài liệu có apiVersion, kind, metadata.name; namespace mặc định là default. Một tài liệu kind: List cũng được.
+- apiVersion phải khớp kind (ví dụ apps/v1 cho Deployment, networking.k8s.io/v1 cho Ingress); sai thì CloudLab báo lỗi giống API server.
+- Mũi tên trên sơ đồ được suy ra như cluster thật: label selector của Service / NetworkPolicy / PodDisruptionBudget, tên được tham chiếu (configMapRef, secretKeyRef, claimName, scaleTargetRef, backend.service.name, roleRef, subjects), và biến môi trường trỏ tới DNS của Service (tên kết thúc _HOST, _URL… hoặc giá trị có ://).
+- Image chỉ kéo được nếu có trong registry giả lập registry.anphat.vn (danh sách bên dưới); tag sai là ImagePullBackOff, thiếu biến bắt buộc là CrashLoopBackOff.
+- Phần chỉ dành cho mô phỏng là các tài liệu apiVersion: cloudlab.dev/v1 (Client, NodePool, IngressController, Actor); tab “Cho cluster thật” bỏ chúng đi.
+- Cluster giả lập trên EKS: node t3.medium, m5.large, m5.xlarge, c5.xlarge; storage class gp3, standard; giá tham khảo ap-southeast-1.
+
+Kind được hỗ trợ (kind: apiVersion):
+- Namespace: v1
+- Deployment: apps/v1
+- StatefulSet: apps/v1
+- CronJob: batch/v1
+- Service: v1
+- Ingress: networking.k8s.io/v1
+- ConfigMap: v1
+- Secret: v1
+- PersistentVolumeClaim: v1
+- HorizontalPodAutoscaler: autoscaling/v2
+- NetworkPolicy: networking.k8s.io/v1
+- Gateway: gateway.networking.k8s.io/v1
+- HTTPRoute: gateway.networking.k8s.io/v1
+- ServiceAccount: v1
+- Role: rbac.authorization.k8s.io/v1
+- ClusterRole: rbac.authorization.k8s.io/v1
+- RoleBinding: rbac.authorization.k8s.io/v1
+- ClusterRoleBinding: rbac.authorization.k8s.io/v1
+- PodDisruptionBudget: policy/v1
+- ResourceQuota: v1
+- LimitRange: v1
+- DaemonSet: apps/v1
+- Job: batch/v1
+- StorageClass: storage.k8s.io/v1
+
+Tài liệu chỉ cho mô phỏng (apiVersion: cloudlab.dev/v1):
+- Client (Client / khách hàng): spec.target, spec.ratePerSecond, spec.pattern, spec.peak, spec.host, spec.path, spec.network, spec.sources, spec.from.namespace, spec.from.labels, spec.expect
+- NodePool (Node pool (worker node)): spec.instanceType, spec.nodes, spec.maxNodes
+- IngressController (Ingress controller): spec.controller, spec.scheme, spec.rateLimitStatus
+- Actor (Người / pipeline gọi API): spec.as, spec.actions, spec.perMinute
+
+Image có trong registry giả lập:
+- registry.anphat.vn/ib-web: tag 2.4.0 / 2.4.1 · Web Internet Banking · cổng 8080 · health /healthz · khoảng 160Mi memory · khởi động khoảng 6s
+- registry.anphat.vn/core-api: tag 5.2.0 / 5.3.0 · Core banking API · cổng 8080 · health /healthz, /ready · cần biến DB_HOST, DB_PASSWORD · khoảng 420Mi memory · khởi động khoảng 45s
+- registry.anphat.vn/payment-api: tag 3.1.0 / 3.1.2 · API thanh toán · cổng 8080 · health /healthz · khoảng 240Mi memory · khởi động khoảng 8s
+- registry.anphat.vn/card-vault: tag 1.7.0 · Kho dữ liệu thẻ (tokenization) · cổng 8443 · health /healthz · khoảng 200Mi memory · khởi động khoảng 10s
+- registry.anphat.vn/admin-portal: tag 4.0.2 · Back-office cho nhân viên · cổng 3000 · health /health · khoảng 150Mi memory · khởi động khoảng 5s
+- registry.anphat.vn/campaign-api: tag 1.2.0 · API chiến dịch marketing · cổng 8080 · health /healthz · khoảng 180Mi memory · khởi động khoảng 5s
+- registry.anphat.vn/statement-api: tag 1.9.0 · API sao kê · cổng 8080 · health /healthz · khoảng 350Mi memory · khởi động khoảng 6s
+- registry.anphat.vn/loan-api: tag 2.2.0 · API khoản vay / tra soát · cổng 8080 · health /healthz · cần biến DB_HOST, DB_PASSWORD · khoảng 256Mi memory · khởi động khoảng 10s
+- registry.anphat.vn/recon-job: tag 2.0.0 · Đối soát cuối ngày · cần biến DB_HOST · chạy xong rồi thoát (dùng cho Job / CronJob) · khoảng 300Mi memory
+- registry.anphat.vn/otp-api: tag 1.4.0 · Gửi mã OTP qua SMS · cổng 8080 · health /healthz · khoảng 200Mi memory · khởi động khoảng 5s
+- registry.anphat.vn/log-agent: tag 3.2.0 · Thu log từ mỗi node (agent) · cổng 2020 · health /api/v1/health · khoảng 120Mi memory · khởi động khoảng 3s
+- registry.anphat.vn/ci-runner: tag 16.5.0 · CI runner · chạy xong rồi thoát (dùng cho Job / CronJob) · khoảng 256Mi memory
+- postgres: tag 15 / 16 · PostgreSQL · cổng 5432 (TCP) · cần biến POSTGRES_PASSWORD · khoảng 300Mi memory · khởi động khoảng 8s
+- nginx: tag 1.27 / latest · nginx · cổng 80 · health / · khoảng 40Mi memory · khởi động khoảng 2s
+
+Ví dụ hoàn chỉnh (Internet Banking: Ingress → Service → Deployment, có khách gửi request):
+
+```yaml
+# CloudLab Kubernetes · sandbox · Internet Banking cơ bản
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ib-config
+data:
+  LOG_LEVEL: info
+  PAYMENT_API_URL: http://payment-api:80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ib-web
+spec:
+  replicas: 3
+  selector:
+    matchLabels: {app: ib-web}
+  template:
+    metadata:
+      labels: {app: ib-web}
+    spec:
+      containers:
+        - name: ib-web
+          image: registry.anphat.vn/ib-web:2.4.1
+          ports: [{containerPort: 8080}]
+          envFrom: [{configMapRef: {name: ib-config}}]
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8080}
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: payment-api}
+  template:
+    metadata:
+      labels: {app: payment-api}
+    spec:
+      containers:
+        - name: payment-api
+          image: registry.anphat.vn/payment-api:3.1.2
+          ports: [{containerPort: 8080}]
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8080}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ib-web
+spec:
+  selector: {app: ib-web}
+  ports: [{port: 80, targetPort: 8080}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-api
+spec:
+  selector: {app: payment-api}
+  ports: [{port: 80, targetPort: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: public
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: ib.anphat.vn
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: ib-web, port: {number: 80}}
+---
+apiVersion: cloudlab.dev/v1
+kind: IngressController
+metadata:
+  name: ingress-nginx
+spec:
+  controller: ingress-nginx
+  scheme: internet-facing
+  rateLimitStatus: 503
+---
+apiVersion: cloudlab.dev/v1
+kind: Client
+metadata:
+  name: customers
+spec:
+  target: ing/public
+  ratePerSecond: 40
+  host: ib.anphat.vn
+  path: /
+---
+apiVersion: cloudlab.dev/v1
+kind: NodePool
+metadata:
+  name: nodes
+spec:
+  instanceType: t3.medium
+  nodes: 3
+  maxNodes: 3
+```
+
+## Bài 1: Pod không chạy: đọc trạng thái
+
+Nhóm: Nền tảng · Chủ đề: Deployment + ConfigMap
+
+**Mục tiêu:** Cả 3 pod của ib-web chạy (Running, Ready) và khách vào được web.
+
+**Tình huống:** Sáng nay tôi phát hành bản Internet Banking mới với màn hình chuyển khoản cải tiến. Trên màn hình quản trị, bản mới cứ báo lỗi và không chịu chạy, khách thì không mở được trang. Còn nửa tiếng nữa là đến giờ cao điểm buổi sáng.
+
+**Trong ngân hàng:** Triển khai ứng dụng giống mở một quầy giao dịch mới: chỉ cần sai tên mẫu biểu hay thiếu con dấu là quầy không mở được. Một lỗi gõ nhầm tag image hoặc tên ConfigMap khiến Pod không chạy, bản Internet Banking mới không lên. Vì vậy cấu hình phải được kiểm tra trước khi đưa vào vận hành, và phải có đường quay lại bản cũ.
+- Ngày 1/8/2012, Knight Capital triển khai sai code mới lên bộ định tuyến lệnh tự động, hệ thống gửi hơn 4 triệu lệnh trong 45 phút đầu phiên và công ty lỗ hơn 460 triệu USD; SEC sau đó phạt 12 triệu USD. (https://www.sec.gov/news/press-release/2013-222)
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 21 yêu cầu xây dựng tiêu chuẩn và yêu cầu kỹ thuật bảo đảm hệ thống hoạt động bình thường trước khi đưa vào sử dụng chính thức, và rà soát lại các tiêu chuẩn này khi hệ thống thay đổi. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Ở đơn vị anh/chị, ai kiểm tra lại tên phiên bản và tham số cấu hình trước khi một bản phát hành được đưa lên môi trường thật?
+
+**Nhiệm vụ:**
+1. Image trỏ đúng một bản có trong registry (Kubelet kéo được image về node.)
+2. Pod tìm thấy ConfigMap nó cần (envFrom trỏ đúng tên ConfigMap có trong namespace.)
+3. 3/3 pod Ready, khách vào được web (Service có đủ endpoint, request trả về 200.)
+
+**Các khối trong cluster:**
+- client/customers: Khách mở trang Internet Banking, khoảng 30 lượt mỗi giây.
+- svc/ib-web: Địa chỉ cố định khách gọi tới; chia request cho các pod ib-web đang Ready.
+- deploy/ib-web: Bản web mới: giữ 3 pod chạy image ib-web. Bấm vào để xem từng pod và lý do pod không lên.
+- cm/ib-config: Cấu hình của web (mức log, tên thương hiệu), nạp vào pod thành biến môi trường.
+- nodepool/nodes: 3 máy chủ của cluster, nơi các pod chạy.
+
+**Khái niệm:** Pod, Deployment, image và tag, ImagePullBackOff, ConfigMap, envFrom, CreateContainerConfigError
+
+**Gợi ý:** Bấm khối ib-web, xem bảng Pod: cột Trạng thái nói pod đang kẹt ở bước nào. ImagePullBackOff nghĩa là không kéo được image: so tag trong Image với các tag registry có (thông báo lỗi liệt kê sẵn). Sửa image xong thì pod qua bước kéo image và gặp lỗi tiếp theo: CreateContainerConfigError. Tên ConfigMap trong envFrom phải trùng tên khối ConfigMap.
+
+**Sau khi đạt:** Pod đi qua từng bước: được xếp lên node → kéo image → tạo container (lúc này mới đọc ConfigMap / Secret) → chạy → Ready. Đọc cột Trạng thái là biết pod kẹt ở bước nào, và thông báo lỗi thường nói luôn cách sửa.
+
+## Bài 2: Service không có endpoint
+
+Nhóm: Nền tảng · Chủ đề: Service + selector
+
+**Mục tiêu:** Service ib-web chọn đúng pod và gửi request vào đúng cổng app nghe; khách vào được web.
+
+**Tình huống:** Từ 9 giờ, tổng đài nhận liên tiếp phản ánh: mở trang Internet Banking chỉ thấy thông báo lỗi 503. Bên kỹ thuật nói các máy chủ ứng dụng đều đang chạy bình thường, nhưng khách vẫn không vào được. Tôi cần biết khi nào dịch vụ trở lại để trả lời khách.
+
+**Trong ngân hàng:** Service giống tổng đài chuyển cuộc gọi: khách gọi một số chung, tổng đài nối tới giao dịch viên đang trực. Nếu tổng đài ghi sai tên nhóm (label selector) hoặc sai số máy lẻ (targetPort), cuộc gọi không đến được ai dù mọi người vẫn ngồi đó. Khách nhận lỗi 503 và nghĩ ngân hàng sập.
+- Ngày 27/10/2017, ngân hàng số Monzo (Anh) bị sự cố hơn một giờ khi lớp định tuyến linkerd trên Kubernetes không còn nhận cập nhật vị trí Pod và gửi yêu cầu tới địa chỉ IP không hợp lệ; thanh toán đi bị lỗi, thanh toán đến bị chậm. (https://www.theregister.com/2017/10/31/kubernetes_bug_bank_app_monzo/)
+- Câu hỏi thảo luận: Khi khách báo lỗi dịch vụ tạm thời không khả dụng, đơn vị anh/chị kiểm tra gì trước: ứng dụng có đang chạy không, hay đường nối tới ứng dụng có đúng không?
+
+**Nhiệm vụ:**
+1. Selector của Service khớp nhãn pod (Service tìm thấy pod: có endpoint.)
+2. targetPort trỏ vào cổng app đang nghe (Request tới được app, không còn connection refused.)
+3. Khách vào được web (Hơn 95% request thành công.)
+
+**Các khối trong cluster:**
+- client/customers: Khách mở trang Internet Banking.
+- svc/ib-web: Tổng đài: tìm pod theo nhãn (selector) rồi nối máy vào cổng targetPort của pod. Bấm vào để xem endpoint.
+- deploy/ib-web: 3 pod web đang chạy bình thường, nhãn app=ib-web, app nghe cổng 8080.
+
+**Khái niệm:** Service, label, selector, endpoint, port và targetPort, 503 no endpoints, connection refused
+
+**Gợi ý:** Bấm khối Service ib-web, xem mục Endpoint: Service đang tìm pod có nhãn gì? Nhãn pod của ib-web là app=ib-web. Selector của Service phải dùng đúng nhãn đó (hoặc kéo từ chấm của Service sang Deployment để CloudLab điền giúp). Có endpoint rồi mà vẫn lỗi: Service gửi tới targetPort 80, nhưng app trong pod nghe 8080.
+
+**Sau khi đạt:** Service không biết Deployment là gì: nó chỉ tìm pod theo nhãn, rồi nối vào cổng targetPort. Sai nhãn thì 503 (không có endpoint); sai cổng thì connection refused. Hai lỗi này rất phổ biến vì Kubernetes không báo lỗi lúc apply.
+
+## Bài 3: Readiness và liveness probe
+
+Nhóm: Nền tảng · Chủ đề: Probe + khởi động chậm
+
+**Mục tiêu:** core-api khởi động xong và ở yên (không restart), chỉ nhận request khi đã sẵn sàng; giao dịch viên gọi được.
+
+**Tình huống:** Đêm qua, trong khung bảo trì, chúng tôi nâng cấp core API. Đến 6 giờ sáng hệ thống vẫn chưa lên: dịch vụ khởi động được một lúc lại tắt, rồi lại khởi động. Còn hai tiếng nữa là chi nhánh mở cửa.
+
+**Trong ngân hàng:** Core API khởi động chậm giống chi nhánh cần 15 phút đầu ngày để kiểm quỹ. Nếu bảo vệ thấy chưa mở cửa là bắt nhân viên ra về, chi nhánh không bao giờ mở được: đó là liveness probe quá vội gây CrashLoopBackOff. Còn readiness probe kiểm tra sai đường dẫn thì giống biển báo luôn ghi chưa sẵn sàng, Pod không bao giờ được nhận khách.
+- Tài liệu Kubernetes cảnh báo liveness probe cấu hình sai có thể gây lỗi dây chuyền: container bị khởi động lại đúng lúc tải cao, yêu cầu của khách bị lỗi và phần tải dồn lên các Pod còn lại. (https://kubernetes.io/docs/concepts/workloads/pods/probes/)
+- Tháng 4/2018, TSB (Anh) chuyển đổi nền tảng CNTT và gặp lỗi làm gián đoạn chi nhánh, điện thoại, Internet và mobile banking, ảnh hưởng một phần đáng kể trong 5,2 triệu khách; tháng 12/2022 FCA và PRA phạt tổng cộng 48,65 triệu bảng. (https://www.fca.org.uk/news/press-releases/tsb-fined-48m-operational-resilience-failings)
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 20 khoản 1 yêu cầu hệ thống từ cấp độ 3 trở lên có quy trình vận hành, gồm cả khởi động và dừng hệ thống, được rà soát ít nhất mỗi năm một lần. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Core banking của đơn vị anh/chị cần bao lâu để khởi động xong sau bảo trì, và con số đó có được ghi trong quy trình vận hành không?
+
+**Nhiệm vụ:**
+1. Liveness không giết app khi app còn đang khởi động (Pod mới chạy liền mạch, không restart.)
+2. Readiness probe hỏi đúng đường dẫn app phục vụ (Pod chuyển Ready khi app sẵn sàng.)
+3. Giao dịch viên gọi được core API (Hơn 95% request thành công.)
+
+**Các khối trong cluster:**
+- client/tellers: Ứng dụng của giao dịch viên chạy trong cùng cluster, gọi core API khoảng 15 lần mỗi giây.
+- svc/core-api: Địa chỉ nội bộ (ClusterIP) của core API.
+- deploy/core-api: Core API: cần khoảng 45 giây để nạp dữ liệu tham chiếu rồi mới trả lời. Phục vụ /healthz (còn sống) và /ready (sẵn sàng nhận việc).
+- secret/core-db: Mật khẩu database của core API.
+
+**Khái niệm:** liveness probe, readiness probe, startup probe, CrashLoopBackOff, initialDelaySeconds, failureThreshold
+
+**Gợi ý:** Bấm core-api, xem cột Restart và dòng “Lần lỗi gần nhất”: ai đã khởi động lại container? Liveness bắt đầu hỏi sau 10 giây, chịu 3 lần lỗi cách nhau 5 giây: tới giây 20 là giết container. App cần 45 giây mới trả lời. Cách chuẩn cho app khởi động chậm: thêm startup probe (ví dụ /healthz, mỗi 5 giây, chịu 12 lần = 60 giây). Readiness thì app phục vụ /ready, không phải /health.
+
+**Sau khi đạt:** Ba probe ba việc: startup chờ app khởi động, liveness khởi động lại app bị treo, readiness quyết định pod có nhận traffic không. Liveness quá vội biến app chậm thành app chết; thiếu readiness thì khách bị gửi vào app chưa sẵn sàng.
+
+## Bài 4: Một cửa vào: Ingress
+
+Nhóm: Ra Internet · Chủ đề: Ingress thay LoadBalancer
+
+**Mục tiêu:** Khách và đối tác vào qua một Ingress duy nhất; back-office chỉ vào được từ mạng nội bộ của ngân hàng; không còn load balancer nào của Service mở ra Internet.
+
+**Tình huống:** Đợt rà soát bề mặt tấn công tuần này cho thấy An Phát có năm địa chỉ IP công khai, mỗi địa chỉ trỏ vào một dịch vụ khác nhau. Một trong số đó là trang quản trị back-office, nơi nhân viên duyệt hồ sơ khách hàng, và ai trên Internet cũng mở được trang đăng nhập của nó.
+
+**Trong ngân hàng:** Mỗi Service kiểu LoadBalancer là một cửa mở thẳng ra Internet, như tòa nhà có nhiều cửa phụ không ai trực. Gom về một Ingress là chỉ để một cửa chính có bảo vệ; công cụ quản trị nội bộ phải nằm phía trong và chỉ vào qua kênh nội bộ. Ít cửa hơn cũng là ít địa chỉ IP công khai và ít chi phí load balancer hơn.
+- Tháng 2/2018, RedLock công bố bảng điều khiển Kubernetes của Tesla mở ra Internet không có mật khẩu; kẻ tấn công lấy được thông tin đăng nhập AWS lưu trong một Pod và dùng tài nguyên để đào tiền mã hóa Monero. (https://www.bleepingcomputer.com/news/security/tesla-internal-servers-infected-with-cryptocurrency-miner/)
+- Tài liệu Kubernetes nêu Ingress cho phép định tuyến từ một địa chỉ IP tới nhiều Service theo đường dẫn, nhờ đó giữ số load balancer ở mức tối thiểu. (https://kubernetes.io/docs/concepts/services-networking/ingress/)
+- AWS Load Balancer Controller: annotation service.beta.kubernetes.io/aws-load-balancer-scheme nhận internal hoặc internet-facing, mặc định là internal. Trang quản trị nội bộ nên đi qua load balancer internal hoặc mạng nội bộ. (https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/service/annotations/)
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 23 khoản 3 yêu cầu chia mạng thành các vùng và có vùng DMZ riêng cho dịch vụ cung cấp trên Internet. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Hôm nay có bao nhiêu màn hình quản trị của đơn vị anh/chị mà người ngoài ngân hàng mở được từ Internet, và ai là người biết chắc con số đó?
+
+**Nhiệm vụ:**
+1. Khách và đối tác đi qua Ingress (Hai client gọi Ingress public, và vẫn thành công.)
+2. Không Service nào có load balancer mở ra Internet (Service web và API là ClusterIP; nếu còn LoadBalancer thì là internal.)
+3. Back-office chỉ vào được từ mạng nội bộ (Máy quét ngoài Internet bị chặn, nhân viên chi nhánh vẫn vào được; Ingress không có luật nào tới admin-portal.)
+
+**Các khối trong cluster:**
+- client/customers: Khách vào web Internet Banking, hiện gọi thẳng IP của Service ib-web.
+- client/partners: Đối tác (ví điện tử, sàn TMĐT) gọi API thanh toán, hiện gọi thẳng IP của Service payment-api.
+- client/internet-scanner: Một máy quét lạ trên Internet thử mở trang quản trị. Request này lẽ ra phải bị chặn.
+- ing/public: Ingress đã được dựng sẵn: ib.anphat.vn/ → web, /api → API thanh toán, có TLS. Chưa ai dùng nó.
+- svc/admin-portal: Back-office cho nhân viên duyệt hồ sơ. Kiểu LoadBalancer = có IP công khai, ai cũng mở được trang đăng nhập.
+- svc/ib-web: Kiểu LoadBalancer: một load balancer riêng, tính tiền theo giờ.
+- svc/payment-api: Kiểu LoadBalancer: thêm một load balancer và IP công khai nữa.
+- client/branch-staff: Nhân viên ở chi nhánh, vào mạng nội bộ của ngân hàng (VPN / đường truyền riêng tới AWS). Họ vẫn phải mở được back-office.
+- ingressctl/ingress-nginx: ingress-nginx: nhận traffic cho mọi Ingress class nginx qua một NLB internet-facing dùng chung.
+
+**Khái niệm:** Ingress, ingress controller, host và đường dẫn, Service ClusterIP, LoadBalancer internet-facing / internal, NLB và AWS Load Balancer Controller, bề mặt tấn công, chi phí load balancer
+
+**Gợi ý:** Đếm số khối Service có pill “IP public”: mỗi cái là một load balancer, một IP công khai, và một cửa vào phải canh. Kéo từ chấm của client customers sang Ingress public (đối tác cũng vậy, đặt đường dẫn /api). Ingress chia request theo đường dẫn tới đúng Service. Khi khách đã đi qua Ingress, đổi ib-web và payment-api về ClusterIP. Back-office: nếu đổi về ClusterIP thì nhân viên chi nhánh cũng mất đường vào. Giữ LoadBalancer nhưng đổi Phạm vi thành internal (NLB nội bộ): chỉ mạng nội bộ tới được.
+
+**Sau khi đạt:** Một Ingress, một load balancer, một chỗ đặt TLS và tường lửa ứng dụng cho khách; Service phía sau là ClusterIP. Công cụ nội bộ dùng load balancer internal: mạng nội bộ vào được, Internet thì không. Lưu ý: AWS Load Balancer Controller mặc định tạo load balancer internal, Classic LB mặc định thì internet-facing. Bài này dùng ingress-nginx vì phổ biến, nhưng dự án đã ngừng bảo trì từ tháng 3/2026: hệ thống mới nên dùng Gateway API (thử mẫu “Canary 90 / 10 với Gateway API” trong sandbox).
+
+## Bài 5: Giới hạn tốc độ: chặn bot gửi OTP
+
+Nhóm: Ra Internet · Chủ đề: Ingress + limit-rps
+
+**Mục tiêu:** Bot không còn đốt tiền SMS: mỗi IP chỉ được xin OTP vài lần mỗi giây; khách thật vẫn đăng nhập và nhận OTP bình thường.
+
+**Tình huống:** Hóa đơn SMS brandname tháng này tăng gấp nhiều lần so với tháng trước, trong khi số khách đăng ký mới gần như không đổi. Cùng lúc, tổng đài nhận rất nhiều phản ánh rằng mã OTP về chậm và ứng dụng quay vòng mãi không vào được.
+
+**Trong ngân hàng:** Mỗi lần API gửi OTP được gọi, ngân hàng trả tiền cho một tin SMS, dù người gọi là khách thật hay bot. Giống một quầy giao dịch không giới hạn số phiếu mỗi người được bốc: vài kẻ bốc hàng nghìn phiếu, khách thật phải chờ còn ngân hàng chịu chi phí. Giới hạn số yêu cầu mỗi giây theo từng IP là cách chia lượt cho công bằng.
+- Theo Twilio, SMS pumping là khi kẻ gian lợi dụng ô nhập số điện thoại (ví dụ luồng gửi OTP) để kích hoạt tin nhắn tới các dải số do một nhà mạng kiểm soát rồi chia phần doanh thu; dấu hiệu thường gặp là OTP được gửi đi nhưng không bao giờ được xác thực. (https://www.twilio.com/docs/glossary/what-is-sms-pumping-fraud)
+- OWASP API Security Top 10 2023 (API4: Unrestricted Resource Consumption) mô tả một luồng quên mật khẩu qua SMS bị script gọi lặp lại, gửi hàng chục nghìn tin và làm công ty mất hàng nghìn đô la trong vài phút; OWASP khuyến nghị giới hạn tần suất gọi API và đặt hạn mức chi tiêu với nhà cung cấp dịch vụ. (https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/)
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 23 khoản 3 điểm đ yêu cầu hệ thống thông tin từ cấp độ 3 trở lên cung cấp dịch vụ trên Internet phải có phương án cân bằng tải và phương án ứng phó tấn công từ chối dịch vụ. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Nhiều khách dùng 4G có thể đi ra Internet chung một địa chỉ IP: ngân hàng nên đặt ngưỡng bao nhiêu để chặn bot mà không chặn nhầm khách thật, và ai được quyền quyết định ngưỡng đó?
+
+**Nhiệm vụ:**
+1. Đường dẫn OTP có giới hạn tốc độ theo IP (Ingress phục vụ /api/otp có limit-rps tối đa 2.)
+2. Không quá 10 tin SMS OTP mỗi giây (Bot bị chặn phần lớn; hóa đơn SMS về mức bình thường.)
+3. Khách thật không bị ảnh hưởng (Hơn 99% request của khách (web và OTP) thành công.)
+
+**Các khối trong cluster:**
+- client/customers: Khách vào Internet Banking, khoảng 30 lượt mỗi giây từ hàng trăm địa chỉ IP khác nhau.
+- client/otp-users: Khách xin mã OTP khi chuyển tiền: 2 lượt mỗi giây, mỗi IP chỉ vài lần một phút.
+- client/sms-bot: Bot đứng sau 4 địa chỉ IP, xin OTP liên tục cho các số điện thoại trả phí cao (SMS pumping): 60 lượt mỗi giây.
+- deploy/otp-api: Gửi mã OTP qua SMS brandname. Mỗi tin nhắn ngân hàng trả khoảng $0.02 (giá tham khảo).
+- ing/public: Ingress cho ib.anphat.vn: / tới web, /api/otp tới dịch vụ OTP. Chưa giới hạn tốc độ.
+- ingressctl/ingress-nginx: ingress-nginx: hiểu annotation nginx.ingress.kubernetes.io/limit-rps (giới hạn theo từng IP).
+- svc/otp-api: Địa chỉ nội bộ của dịch vụ OTP.
+- svc/ib-web: Địa chỉ nội bộ của web.
+- deploy/ib-web: Web Internet Banking.
+
+**Khái niệm:** rate limiting, giới hạn theo IP, annotation của ingress-nginx, 429 / 503, SMS pumping, OWASP API4: Unrestricted Resource Consumption
+
+**Gợi ý:** Bấm ▶ Chạy rồi nhìn đồng hồ chi phí: dòng “SMS OTP” của otp-api. 60 tin mỗi giây là hơn $4.000 mỗi giờ. Bot chỉ có 4 IP, mỗi IP gửi 15 lần/giây; khách thật mỗi IP vài lần một phút. Giới hạn theo IP chặn được bot mà khách không biết gì. Mở Ingress public, đặt “Giới hạn tốc độ (mỗi IP)” = 1. (Muốn chỉ giới hạn riêng OTP thì tách /api/otp ra một Ingress riêng có annotation này.) Ở Ingress controller, đổi mã trả về sang 429 cho đúng nghĩa.
+
+**Sau khi đạt:** Giới hạn tốc độ theo IP chặn được kẻ gửi dồn dập từ ít địa chỉ, còn khách thật (nhiều IP, ít request mỗi IP) không bị ảnh hưởng. Với API tốn tiền mỗi lần gọi (SMS, eKYC, tra cứu CIC), đây là lớp bảo vệ đầu tiên; bot dùng hàng nghìn IP thì cần thêm CAPTCHA, giới hạn theo số điện thoại hay tài khoản. Lưu ý: limit-rps của ingress-nginx tính trên mỗi bản controller, và ingress-nginx đã ngừng bảo trì từ 3/2026; với ALB dùng AWS WAF rate-based rule.
+
+## Bài 6: Requests và limits
+
+Nhóm: Tải và tài nguyên · Chủ đề: OOMKilled + Pending
+
+**Mục tiêu:** statement-api không còn bị OOMKilled; statement-export được xếp lên node và chạy.
+
+**Tình huống:** Dịch vụ tra cứu sao kê cứ khoảng nửa tiếng lại gián đoạn vài giây, khách đang xem dở thì bị văng ra. Bên kỹ thuật thêm một bản chạy nữa thì bản đó không chịu khởi động, cứ nằm chờ. Tuần sau là kỳ gửi sao kê cuối tháng.
+
+**Trong ngân hàng:** Requests giống số chỗ đặt trước, limits là mức trần. Trần bộ nhớ quá thấp thì ứng dụng bị tắt ngang (OOMKilled), như quầy bị cắt điện giữa giao dịch. Đặt trước nhiều CPU hơn sức chứa của một node thì Pod chờ mãi (Pending), như đặt bàn 20 người trong phòng 10 ghế. Đây là bài toán hoạch định năng lực, cần số đo thực tế chứ không đoán.
+- Tài liệu Kubernetes nêu scheduler từ chối đặt Pod lên node nếu tổng requests vượt sức chứa, kể cả khi mức dùng thực tế đang thấp, để phòng lúc tải tăng vào giờ cao điểm; còn vượt memory limit thì container có thể bị kernel tắt (OOM kill). (https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 21 khoản 2 yêu cầu giám sát, tối ưu hiệu suất và đánh giá năng lực hệ thống để dự báo, lập kế hoạch mở rộng, nâng cấp đáp ứng nhu cầu tương lai. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Đơn vị anh/chị dựa vào đâu để quyết định một hệ thống cần bao nhiêu CPU và bộ nhớ: số đo thực tế, khuyến nghị của nhà cung cấp, hay thói quen?
+
+**Nhiệm vụ:**
+1. statement-api không còn bị OOMKilled (limits.memory đủ cho app (≥ 350Mi); pod không restart.)
+2. statement-export được xếp lên node (requests.cpu vừa một node (≤ 1800m) và pod Ready.)
+3. Khách xem được sao kê (Hơn 95% request thành công.)
+
+**Các khối trong cluster:**
+- deploy/statement-api: API tra cứu sao kê. Khi chạy, app dùng khoảng 350Mi memory.
+- deploy/statement-export: Xuất sao kê PDF cuối tháng: xin 3 vCPU cho mỗi pod.
+- nodepool/nodes: 3 node t3.medium: mỗi node 2 vCPU, 4 GiB; trừ phần hệ thống còn 1800m CPU và 3200Mi cho pod.
+- svc/statement-api: Khách xem sao kê qua đây.
+- client/customers: Khách xem sao kê trên app.
+
+**Khái niệm:** requests, limits, OOMKilled, Pending, Insufficient cpu, node allocatable
+
+**Gợi ý:** Bấm statement-api: lý do restart là OOMKilled. App cần bao nhiêu memory, limit đang cho bao nhiêu? Bấm statement-export: pod Pending, lý do ghi “Insufficient cpu”. Xin 3 vCPU trong khi một node chỉ có 1800m cho pod. Đặt limits.memory của statement-api ≥ 350Mi (ví dụ 512Mi). Hạ requests.cpu của statement-export xuống (ví dụ 1) hoặc chọn node lớn hơn trong node pool (tốn tiền hơn).
+
+**Sau khi đạt:** requests là chỗ đặt trước khi xếp pod lên node; limits là trần lúc chạy. Memory vượt trần thì bị giết (OOMKilled); xin nhiều hơn một node có thì không bao giờ được xếp (Pending). Cả hai con số nên đo từ mức dùng thật.
+
+## Bài 7: Ngày lương về: HPA
+
+Nhóm: Tải và tài nguyên · Chủ đề: HorizontalPodAutoscaler
+
+**Mục tiêu:** Khi tải lên gấp 8 lần, payment-api tự tăng pod và khách vẫn chuyển tiền được (lỗi dưới 1%).
+
+**Tình huống:** Ngày 25 là ngày nhiều doanh nghiệp trả lương. Từ 8 giờ, mobile banking chậm dần, nhiều khách phải chờ hơn 30 giây mới chuyển được tiền. Chúng tôi đã cài tự động mở rộng từ tháng trước, nhưng số bản chạy vẫn đứng yên ở 2.
+
+**Trong ngân hàng:** Ngày trả lương hay cận Tết, lượng giao dịch có thể tăng gấp mấy lần trong vài giờ. HPA giống việc mở thêm quầy khi hàng chờ dài, nhưng nó chỉ đo được mức bận khi mỗi container khai báo requests, và chỉ mở thêm được khi node pool còn chỗ. Thiếu một trong hai điều đó, quầy mới không bao giờ mở.
+- Ngày 28/1/2022, cận Tết Nhâm Dần, khách hàng BIDV, Vietcombank, Techcombank phản ánh app báo lỗi khi chuyển khoản; Vietcombank cho biết lượng giao dịch khi đó cao gấp khoảng ba lần ngày thường. (https://vnbusiness.vn/sat-tet-app-ngan-hang-lai-lien-tuc-do.html)
+- Ngày 9/2/2024, cận Tết Giáp Thìn, khách hàng phản ánh chuyển khoản nhanh qua app TPBank, Vietcombank, BIDV bị lỗi hoặc treo nhiều giờ; BIDV giải thích lượng giao dịch tăng đột biến vào giờ cao điểm gây quá tải. (https://doanhnhan.baophapluat.vn/den-hen-lai-len-khach-hang-ngan-ngam-truoc-tinh-trang-nghen-mang-chuyen-khoan-thanh-toan-online-ngay-can-tet-65513.html)
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 23 khoản 3 yêu cầu hệ thống từ cấp độ 3 trở lên cung cấp dịch vụ trên Internet phải có cân bằng tải và phương án xử lý tấn công từ chối dịch vụ. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Đơn vị anh/chị có gửi lịch các ngày cao điểm (trả lương, Tết, sự kiện lớn) cho bộ phận hạ tầng trước ít nhất một tuần không?
+
+**Nhiệm vụ:**
+1. HPA đo được CPU (Container khai báo resources.requests.cpu.)
+2. Đủ pod cho giờ cao điểm, và node đủ chỗ cho chúng (Lúc đỉnh có từ 6 pod Ready trở lên.)
+3. Khách chuyển tiền được suốt ngày lương (Lỗi dưới 1% qua trọn một giờ có đỉnh tải.)
+
+**Các khối trong cluster:**
+- client/payday: Ngày 25: bình thường 40 lệnh chuyển tiền mỗi giây, đỉnh gấp 8 lần (320/giây) kéo dài khoảng nửa giờ, lặp lại mỗi giờ mô phỏng.
+- deploy/payment-api: API chuyển tiền. Mỗi request tốn khoảng 8ms CPU: một pod với limits 500m chịu chừng 60 request/giây.
+- hpa/payment-api: Tự co giãn theo CPU, mục tiêu 70% của requests.cpu. Bấm vào để xem vì sao nó chưa làm gì.
+- nodepool/nodes: 2 node t3.medium: còn 3600m CPU cho pod.
+- ing/public: Cửa vào chung; /api tới payment-api.
+- svc/payment-api: Chia lệnh cho các pod payment-api.
+
+**Khái niệm:** HorizontalPodAutoscaler, requests.cpu, % CPU utilization, minReplicas / maxReplicas, scale-up, stabilization, node pool capacity
+
+**Gợi ý:** Bấm HPA payment-api: nó báo FailedGetResourceMetric, missing request for cpu. HPA tính % CPU so với requests.cpu. Đỉnh 320 request/giây, mỗi pod (limits 500m) chịu khoảng 60: cần ít nhất 6 pod. maxReplicas đang là 4. Thêm requests.cpu (ví dụ 250m) cho payment-api, nâng maxReplicas lên 10. 10 pod × 250m = 2500m, vừa 2 node.
+
+**Sau khi đạt:** HPA chỉ là phép tính: % CPU = CPU đang dùng ÷ requests.cpu. Không có requests thì không có phép tính; maxReplicas quá thấp thì dừng sớm; node pool hết chỗ thì pod mới nằm Pending. Ngày cao điểm cần cả ba thứ đúng.
+
+## Bài 8: Hạn mức cho từng khối: ResourceQuota
+
+Nhóm: Vận hành cluster · Chủ đề: ResourceQuota
+
+**Mục tiêu:** Khối Marketing không còn chiếm hết CPU của cluster: namespace marketing có hạn mức, mọi pod thanh toán đều chạy và khách thanh toán không lỗi.
+
+**Tình huống:** Từ 11 giờ đến 13 giờ hôm nay, nhiều lệnh chuyển tiền của khách bị báo hệ thống bận, đúng lúc lưu lượng thanh toán cao nhất trong ngày. Dịch vụ thanh toán cần mở thêm phiên bản để chịu tải nhưng cứ phải xếp hàng chờ, trong khi cluster vẫn đang chạy rất nhiều việc khác của đợt gửi ưu đãi bên marketing.
+
+**Trong ngân hàng:** Cluster dùng chung giống một quỹ chi tiêu chung giữa các phòng: không có hạn mức thì một phòng có thể dùng gần hết, phòng khác không còn gì để chi. ResourceQuota đặt hạn mức CPU, bộ nhớ cho từng namespace, LimitRange đặt mức mặc định cho từng container. Nhờ đó chiến dịch marketing không lấn sang phần của thanh toán.
+- Tài liệu Kubernetes về multi-tenancy giải thích quota ngăn một tenant dùng quá phần tài nguyên được cấp, giảm vấn đề noisy neighbor khi một tenant làm giảm hiệu năng của tenant khác, nhưng quota không bảo vệ được mọi loại chia sẻ, ví dụ lưu lượng mạng. (https://kubernetes.io/docs/concepts/security/multi-tenancy/)
+- Bộ nguyên tắc về khả năng chống chịu hoạt động của Ủy ban Basel (31/03/2021) gọi hoạt động trọng yếu là những hoạt động, quy trình, dịch vụ mà nếu gián đoạn sẽ ảnh hưởng nghiêm trọng tới hoạt động liên tục của ngân hàng, và yêu cầu ngân hàng lập bản đồ các phụ thuộc cần thiết để cung cấp chúng (Nguyên tắc 4). (https://www.bis.org/publications/202103-guidelines-principles-operational-resilience.pdf)
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 21 khoản 2 yêu cầu tổ chức giám sát, tối ưu hiệu suất của hệ thống thông tin, đánh giá khả năng đáp ứng và lập kế hoạch mở rộng, nâng cấp. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Khi tài nguyên dùng chung bị thiếu vào giờ cao điểm, dịch vụ nào của ngân hàng phải được ưu tiên, và ai có quyền quyết định cắt bớt phần của các phòng khác?
+
+**Nhiệm vụ:**
+1. Namespace marketing có hạn mức CPU (Có ResourceQuota trong marketing với requests.cpu tối đa 2 core.)
+2. Mọi pod thanh toán được xếp lên node (payment-api 6/6 Ready.)
+3. Thanh toán tại điểm bán không lỗi (Hơn 99% giao dịch thành công.)
+
+**Các khối trong cluster:**
+- deploy/campaign-worker: Worker gửi thông báo khuyến mãi của Khối Marketing: 14 pod, mỗi pod xin 250m CPU (tổng 3500m).
+- deploy/payment-api: API thanh toán thẻ tại điểm bán: cần 6 pod (mỗi pod chịu khoảng 60 giao dịch/giây) cho 300 giao dịch/giây.
+- client/pos-terminals: Máy POS tại cửa hàng gửi giao dịch thẻ, qua cổng thanh toán trong cluster.
+- nodepool/nodes: 3 node t3.medium: tổng 5400m CPU cho pod. Marketing xin 3500m, thanh toán xin 3000m: không đủ chỗ cho cả hai.
+- ns/marketing: Namespace của Khối Marketing.
+- ns/payments: Namespace của Khối Thanh toán.
+- svc/payment-api: Địa chỉ nội bộ của API thanh toán.
+
+**Khái niệm:** ResourceQuota, LimitRange, namespace, noisy neighbor, requests.cpu, quota chỉ chặn pod mới
+
+**Gợi ý:** Bấm payment-api: 4 pod Pending, “Insufficient cpu”. Bấm node pool: CPU đã xin gần 100%. Ai đang giữ chỗ? campaign-worker xin 14 × 250m = 3500m. Kéo một ResourceQuota vào khung marketing, đặt requests.cpu: 2 (tối đa 8 pod như vậy). Quota chỉ chặn pod MỚI: 14 pod marketing đang chạy vẫn giữ chỗ. Giảm replicas của campaign-worker xuống 8 để trả chỗ cho thanh toán.
+
+**Sau khi đạt:** Trong một cluster dùng chung, mỗi khối nghiệp vụ cần hạn mức riêng, như hạn mức ngân sách. ResourceQuota chặn pod mới khi vượt; LimitRange đặt mặc định cho pod không khai báo. Dịch vụ quan trọng có thể dùng thêm PriorityClass để được ưu tiên xếp chỗ.
+
+## Bài 9: Nâng cấp node không làm gián đoạn
+
+Nhóm: Vận hành cluster · Chủ đề: PodDisruptionBudget
+
+**Mục tiêu:** Nâng cấp cả node group mà giao dịch viên không bị gián đoạn: core API luôn còn ít nhất một pod sẵn sàng.
+
+**Tình huống:** Tối thứ Bảy có lịch bảo trì hạ tầng, nhóm kỹ thuật báo chỉ nâng cấp máy chủ, không ảnh hưởng nghiệp vụ. Nhưng các quầy còn mở cửa ngoài giờ ở chi nhánh lại báo hệ thống lõi treo hẳn hơn mười phút, khách xếp hàng mà không hạch toán được giao dịch nào.
+
+**Trong ngân hàng:** Bảo trì theo kế hoạch vẫn gây gián đoạn nếu không ai giữ số người trực tối thiểu. Giống chi nhánh nâng cấp quầy: cho cả hai giao dịch viên nghỉ cùng lúc thì khách vẫn phải chờ, dù chỉ là bảo trì. PodDisruptionBudget là quy định luôn còn ít nhất một quầy mở, và quy trình drain node phải tôn trọng quy định đó.
+- Theo AWS, khi cập nhật managed node group, EKS drain Pod khỏi từng node; nếu Pod không rời node trong 15 phút (một nguyên nhân được nêu là PDB quá chặt) và không dùng cờ force, bước nâng cấp thất bại với lỗi PodEvictionFailure. (https://docs.aws.amazon.com/eks/latest/userguide/managed-node-update-behavior.html)
+- Ngày 14/10/2023, trong một đợt nâng cấp hệ thống theo kế hoạch tại trung tâm dữ liệu Equinix ở Singapore, nhà thầu gửi nhầm tín hiệu đóng van bồn nước làm mát, nhiệt độ tăng và khách hàng của DBS và Citibank Singapore mất dịch vụ ngân hàng. (https://datacenterdynamics.com/en/news/equinix-blames-singapore-outage-on-third-party-contractor)
+- Quy định: MAS (Singapore) yêu cầu ngân hàng khôi phục hệ thống và dịch vụ trọng yếu trong vòng 4 giờ sau sự cố, và thời gian ngừng ngoài kế hoạch của mỗi hệ thống trọng yếu không vượt quá 4 giờ trong bất kỳ 12 tháng nào. (https://www.mas.gov.sg/news/media-releases/2023/mas-response-to-media-queries-on-dbs-bank-and-citibank)
+- Câu hỏi thảo luận: Trong khung giờ bảo trì của ngân hàng mình, dịch vụ nào bắt buộc phải luôn còn chạy, và ai xác nhận điều đó trước khi bắt đầu bảo trì?
+
+**Nhiệm vụ:**
+1. Có PodDisruptionBudget cho core-api (Drain phải chờ khi đuổi pod làm core-api còn dưới 1 pod sẵn sàng.)
+2. Nâng cấp node group chạy xong, không kẹt (Mọi node được thay; không bị PodEvictionFailure.)
+3. Giao dịch viên không bị gián đoạn trong lúc nâng cấp (Hơn 99% request thành công suốt đợt nâng cấp.)
+
+**Các khối trong cluster:**
+- deploy/core-api: Core API: 2 pod, mỗi pod cần khoảng 45–50 giây mới sẵn sàng sau khi khởi động.
+- nodepool/nodes: 3 node. Bấm vào rồi bấm “Nâng cấp node group”: từng node bị cordon, drain (đuổi pod), rồi thay bằng node mới.
+- client/tellers: Ứng dụng giao dịch viên gọi core API 15 lần mỗi giây.
+- svc/core-api: Địa chỉ nội bộ của core API.
+- secret/core-db: Mật khẩu database của core API.
+
+**Khái niệm:** kubectl drain, cordon, eviction, PodDisruptionBudget, minAvailable / maxUnavailable, EKS managed node group update
+
+**Gợi ý:** Bấm node pool → “Nâng cấp node group”, rồi xem core-api và mũi tên từ tellers: có lúc cả hai pod cùng bị đuổi. Drain không biết app của bạn cần bao lâu để khởi động. Pod mới còn đang khởi động (45 giây) thì drain đã sang node tiếp theo và đuổi nốt pod còn lại. Kéo PodDisruptionBudget vào canvas, nối nó tới core-api, đặt minAvailable: 1. Đừng đặt 2 khi chỉ có 2 pod: không pod nào được đuổi, nâng cấp sẽ kẹt rồi thất bại.
+
+**Sau khi đạt:** Kubernetes không tự biết app nào quan trọng. PodDisruptionBudget là lời cam kết “luôn còn N pod”, và mọi thao tác bảo trì tự nguyện (drain, nâng cấp node) phải tôn trọng nó. Nó không chống được sự cố bất ngờ (node chết): việc đó cần nhiều pod trên nhiều node, nhiều AZ.
+
+## Bài 10: Mật khẩu không để trong ConfigMap
+
+Nhóm: Bảo mật · Chủ đề: Secret + secretKeyRef
+
+**Mục tiêu:** Mật khẩu database của loan-api nằm trong một Secret; không ConfigMap nào còn mật khẩu; app vẫn chạy.
+
+**Tình huống:** Trong đợt kiểm toán quý, tôi mở file cấu hình của ứng dụng cho vay để đối chiếu tham số. Ngay dòng thứ mười là tài khoản và mật khẩu cơ sở dữ liệu khách hàng, đọc được bằng mắt thường. Tôi cần biết còn những ai khác xem được file này.
+
+**Trong ngân hàng:** Để mật khẩu cơ sở dữ liệu trong ConfigMap giống dán mã két sắt lên cửa phòng: ai đọc được cấu hình là có chìa khóa. Secret tách thông tin này ra để phân quyền riêng, nhưng mặc định nó chỉ được mã hóa base64 và lưu không mã hóa trong etcd. Cần bật encryption at rest, RBAC tối thiểu và cân nhắc kho bí mật bên ngoài.
+- Năm 2016, một kỹ sư Uber đăng khóa truy cập (access key) lên một kho GitHub riêng tư; kẻ xâm nhập dùng khóa đó tải dữ liệu gồm 25,6 triệu tên và email của khách và tài xế, theo FTC. (https://www.ftc.gov/node/54285)
+- Thông tư 50/2024/TT-NHNN (hiệu lực 01/01/2025), Điều 19 yêu cầu thông tin xác thực giao dịch như mật khẩu, mã PIN phải được mã hóa hoặc che dấu khi lưu trữ. (https://luatvietnam.vn/tin-van-ban-moi/ngan-hang-ap-dung-toi-thieu-5-bien-phap-bao-mat-du-lieu-khach-hang-tu-01-01-2025-186-99993-article.html)
+- Quy định: PCI DSS v4, yêu cầu 8.3.2: mọi yếu tố xác thực phải được làm cho không đọc được bằng mật mã mạnh khi truyền và khi lưu trữ. (https://www.pcisecuritystandards.org/faq/articles/Frequently_Asked_Question/does-hashing-of-passwords-meet-the-intent-of-pci-dss-requirement-8-3-2)
+- Câu hỏi thảo luận: Nếu hôm nay một nhân viên từng có quyền đọc cấu hình hệ thống nghỉ việc, đơn vị anh/chị cần bao lâu để đổi hết các mật khẩu người đó có thể đã thấy?
+
+**Nhiệm vụ:**
+1. Không ConfigMap nào chứa mật khẩu (Không còn khóa kiểu PASSWORD / SECRET / TOKEN trong ConfigMap.)
+2. loan-api lấy DB_PASSWORD từ một Secret (Biến DB_PASSWORD của pod đến từ Secret.)
+3. Cán bộ tín dụng vẫn dùng được API (Pod Ready, hơn 95% request thành công.)
+
+**Các khối trong cluster:**
+- cm/loan-config: Cấu hình của API cho vay. Dòng DB_PASSWORD là mật khẩu database, đọc được bằng mắt thường bởi bất kỳ ai xem được cấu hình.
+- deploy/loan-api: API cho vay: cần DB_HOST và DB_PASSWORD để kết nối database.
+- sts/ledger-db: Database PostgreSQL. Nó lấy mật khẩu đúng cách: từ Secret ledger-db qua secretKeyRef. Làm loan-api giống vậy.
+- secret/ledger-db: Mật khẩu của database, đặt trong Secret.
+- svc/ledger-db: Địa chỉ nội bộ của database.
+- svc/loan-api: Địa chỉ nội bộ của API cho vay.
+- client/loan-officers: Cổng thông tin của cán bộ tín dụng, chạy trong cluster.
+
+**Khái niệm:** ConfigMap, Secret, secretKeyRef, envFrom, base64 ≠ mã hóa, encryption at rest, RBAC
+
+**Gợi ý:** Mở ConfigMap loan-config: pill “Có mật khẩu”. ConfigMap dành cho cấu hình thường, ai đọc được namespace là đọc được nó. Kéo một Secret từ thư viện vào canvas, thêm khóa DB_PASSWORD với mật khẩu. Rồi nối loan-api → Secret (envFrom) hoặc thêm biến DB_PASSWORD lấy từ Secret. Cuối cùng xóa dòng DB_PASSWORD khỏi loan-config. Nếu xóa trước khi có Secret, loan-api thiếu biến và không khởi động được (thử xem).
+
+**Sau khi đạt:** Secret tách mật khẩu ra để phân quyền riêng (ai được get secrets), không in ra log và có thể mã hóa khi lưu. Nhưng base64 không phải mã hóa: cluster thật cần bật encryption at rest và giới hạn RBAC, hoặc dùng kho bí mật bên ngoài (AWS Secrets Manager, Vault).
+
+## Bài 11: Quyền tối thiểu: RBAC
+
+Nhóm: Bảo mật · Chủ đề: Role + RoleBinding
+
+**Mục tiêu:** Pipeline CI chỉ được cập nhật ứng dụng ở namespace web; kiểm toán chỉ được xem, không sửa và không đọc Secret.
+
+**Tình huống:** Khi rà soát quyền định kỳ, tôi thấy tài khoản dùng cho pipeline triển khai có thể đọc dữ liệu thẻ và xóa cả môi trường của các phòng khác. Trớ trêu là chính nhóm kiểm toán chúng tôi cũng được cấp quyền sửa cấu hình và đọc mật khẩu hệ thống, trong khi việc của chúng tôi chỉ là xem.
+
+**Trong ngân hàng:** Trong ngân hàng, thủ quỹ giữ chìa két nhưng không tự duyệt chi, kiểm soát viên được xem sổ nhưng không được sửa. Kubernetes cũng vậy: pipeline CI chỉ cần quyền triển khai trong một namespace, kiểm toán viên chỉ cần quyền xem. Trao cluster-admin cho CI giống đưa chìa tổng của mọi kho cho một nhân viên giao hàng.
+- Theo tài liệu Kubernetes, ClusterRole edit cho phép truy cập Secrets và chạy Pod dưới bất kỳ ServiceAccount nào trong namespace, còn view không cho xem Secrets vì đọc Secrets có thể dẫn tới leo thang đặc quyền. (https://kubernetes.io/docs/reference/access-authn-authz/rbac/#user-facing-roles)
+- Từ 31/01 đến 01/04/2021, script Bash Uploader của Codecov bị sửa trái phép để gửi biến môi trường của CI ra máy chủ bên ngoài, làm lộ credential, token và key mà pipeline của khách hàng đang giữ. (https://about.codecov.io/security-update/)
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 30 khoản 3 yêu cầu quản lý và phân quyền truy cập thông tin và ứng dụng theo nguyên tắc cấp quyền vừa đủ, phân quyền đến từng thư mục, chức năng và các quyền đọc, ghi, xóa, thực thi. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Ở đơn vị của anh chị, có tài khoản hệ thống hoặc tài khoản dùng chung nào đang giữ quyền rộng hơn công việc thực tế cần không, và lần cuối quyền đó được rà soát là khi nào?
+
+**Nhiệm vụ:**
+1. Pipeline vẫn deploy được ib-web (ci-deployer được update deployments ở namespace web.)
+2. Pipeline không đọc được Secret thẻ, không xóa được namespace (Không còn chìa khóa vạn năng cluster-admin.)
+3. Kiểm toán chỉ xem (Vy xem được pod, không sửa được Deployment, không đọc được Secret.)
+
+**Các khối trong cluster:**
+- actor/gitlab-ci: Pipeline CI/CD: mỗi lần merge code thì cập nhật Deployment ib-web ở namespace web, bằng token của ServiceAccount ci-deployer.
+- actor/vy-auditor: Chị Vy (kiểm toán, nhóm auditors) dùng kubectl để xem hệ thống đang chạy gì.
+- clusterrolebinding/ci-admin: Cấp cluster-admin cho ci-deployer: toàn quyền mọi namespace. Ai lấy được token của pipeline là có chìa khóa vạn năng.
+- clusterrolebinding/auditors: Cấp ClusterRole edit cho nhóm auditors: được sửa tài nguyên và đọc được Secret, ở mọi namespace.
+- sa/ci-deployer: Danh tính của pipeline. Bấm vào để xem bảng quyền thực tế theo từng namespace.
+- secret/vault-keys: Khóa của kho dữ liệu thẻ (namespace card). Không ai ngoài đội thẻ được đọc.
+- deploy/ib-web: Web Internet Banking, thứ duy nhất pipeline cần cập nhật.
+
+**Khái niệm:** RBAC, ServiceAccount, Role / ClusterRole, RoleBinding / ClusterRoleBinding, cluster-admin, view vs edit, least privilege, kubectl auth can-i
+
+**Gợi ý:** Bấm gitlab-ci và vy-auditor: các dòng đỏ là thao tác lẽ ra phải bị chặn mà vẫn được phép. Bấm ci-deployer để xem bảng quyền thực tế. Pipeline chỉ cần: update / patch / get deployments ở namespace web. Kéo một Role vào khung web với đúng quyền đó, một RoleBinding (cũng ở web) nối tới Role và tới ServiceAccount ci-deployer. Rồi xóa ci-admin. Kiểm toán: đổi role của ClusterRoleBinding auditors từ edit sang view. view chỉ xem, và không đọc được Secret.
+
+**Sau khi đạt:** Quyền tối thiểu: mỗi danh tính chỉ có đúng quyền cần cho việc của nó, ở đúng namespace. RoleBinding hẹp hơn ClusterRoleBinding; view khác edit ở chỗ không đọc được Secret. Kiểm tra bằng kubectl auth can-i, và rà định kỳ ai đang có cluster-admin.
+
+## Bài 12: NetworkPolicy: cô lập vùng dữ liệu thẻ
+
+Nhóm: Bảo mật · Chủ đề: NetworkPolicy + DNS giữa namespace
+
+**Mục tiêu:** Chỉ namespace payments gọi được card-vault; marketing bị chặn; thanh toán của khách vẫn chạy.
+
+**Tình huống:** Trong đợt kiểm thử xâm nhập tháng này, đối tác đứng từ một ứng dụng khuyến mãi của khối marketing và gọi thẳng được tới dịch vụ lưu số thẻ. Không có lớp nào chặn lại. Nếu để vậy, đợt đánh giá PCI DSS sắp tới sẽ coi cả cụm là phạm vi dữ liệu thẻ.
+
+**Trong ngân hàng:** Vùng dữ liệu thẻ giống kho tiền: chỉ bộ phận thanh toán được vào, phòng marketing dù cùng tòa nhà cũng không có thẻ từ. Mặc định trong Kubernetes, Pod nào cũng gọi được Pod nào. NetworkPolicy là cửa kiểm soát giữa các namespace, giúp thu hẹp phạm vi đánh giá PCI DSS và hạn chế thiệt hại khi một ứng dụng bị chiếm quyền.
+- Tài liệu Kubernetes nêu mặc định Pod không bị cô lập, mọi kết nối vào và ra đều được phép; NetworkPolicy chỉ có hiệu lực khi network plugin của cụm hỗ trợ. (https://kubernetes.io/docs/concepts/services-networking/network-policies/)
+- PCI DSS v4, yêu cầu 1.3.1 và 1.3.2: lưu lượng vào và ra khỏi môi trường dữ liệu chủ thẻ (CDE) chỉ được phép ở mức cần thiết, mọi lưu lượng khác phải bị từ chối. (https://learn.microsoft.com/en-us/entra/standards/pci-requirement-1)
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 23 khoản 3 yêu cầu chia mạng thành các vùng theo đối tượng, mục đích sử dụng và hệ thống, tối thiểu có vùng riêng cho máy chủ ứng dụng và cơ sở dữ liệu của hệ thống từ cấp độ 3 trở lên, và dùng tường lửa kiểm soát truy cập giữa các vùng quan trọng. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Nếu ứng dụng khảo sát khách hàng của khối marketing bị chiếm quyền, kẻ tấn công có thể đi tới những hệ thống nào khác của ngân hàng?
+
+**Nhiệm vụ:**
+1. payment-api tìm thấy card-vault (VAULT_URL dùng tên DNS có namespace.)
+2. Marketing không gọi được kho thẻ (Có NetworkPolicy trong namespace card; request từ marketing bị chặn.)
+3. Khách vẫn thanh toán được (Hơn 95% request thanh toán thành công (payments vẫn được vào kho thẻ).)
+
+**Các khối trong cluster:**
+- ns/card: Vùng dữ liệu thẻ (cardholder data environment). Nhãn pci=true.
+- ns/payments: Khối Thanh toán, nhãn team=payments: được phép gọi kho thẻ.
+- ns/marketing: Khối Marketing, nhãn team=marketing: không có lý do gì để chạm dữ liệu thẻ.
+- deploy/card-vault: Kho token hóa số thẻ. Nghe cổng 8443.
+- svc/card-vault: Địa chỉ của kho thẻ: card-vault.card.svc.cluster.local.
+- deploy/payment-api: API thanh toán: gọi kho thẻ qua biến VAULT_URL.
+- client/checkout: Khách thanh toán trên pay.anphat.vn.
+- client/from-marketing: Thử nghiệm xâm nhập: đứng từ một pod của campaign-api gọi thẳng kho thẻ. Lẽ ra phải bị chặn.
+- deploy/campaign-api: API chiến dịch khuyến mãi của Marketing.
+
+**Khái niệm:** Namespace, NetworkPolicy, default deny, namespaceSelector, DNS: service.namespace, PCI DSS segmentation
+
+**Gợi ý:** Bấm payment-api: request lỗi “could not resolve host card-vault”. Tên Service ngắn chỉ có nghĩa trong cùng namespace. Đổi VAULT_URL thành https://card-vault.card:443. Giờ thanh toán chạy, nhưng marketing cũng vẫn gọi được kho thẻ. Kéo một NetworkPolicy vào khung namespace card: mặc định nó chặn hết. Thêm một luật cho phép: namespace có nhãn team=payments, cổng 8443.
+
+**Sau khi đạt:** Namespace chỉ là cách đặt tên; nó không chặn gì cả. NetworkPolicy mới là tường lửa giữa các pod: một khi policy chọn pod, mọi traffic không được cho phép đều bị chặn. Và từ namespace khác, phải gọi Service bằng tên đầy đủ (service.namespace).
+
+## Bài 13: Dữ liệu sống sót khi pod khởi động lại
+
+Nhóm: Dữ liệu và tác vụ · Chủ đề: PersistentVolumeClaim
+
+**Mục tiêu:** Database tra soát lưu dữ liệu trên ổ đĩa bền: khởi động lại pod database, dữ liệu vẫn còn.
+
+**Tình huống:** Sáng nay hệ thống ghi nhận yêu cầu tra soát khởi động lại sau một lần cập nhật. Khi lên lại, toàn bộ yêu cầu khách gửi từ tuần trước biến mất, danh sách trống trơn. Hơn 300 khách đang chờ phản hồi khiếu nại.
+
+**Trong ngân hàng:** Chạy cơ sở dữ liệu bằng Deployment không có ổ lưu trữ bền giống ghi sổ cái lên bảng trắng: lau bảng là mất. Container khởi động lại với trạng thái trắng, dữ liệu ghi bên trong biến mất. Ngân hàng phải lưu chứng từ, sổ sách nhiều năm và sao lưu định kỳ, nên dữ liệu phải nằm trên PersistentVolume gắn với StatefulSet, không phụ thuộc vòng đời Pod.
+- Tài liệu Kubernetes nêu file trong container là tạm thời: khi container bị lỗi hoặc dừng, kubelet khởi động lại nó với trạng thái sạch, và dữ liệu trong emptyDir bị xóa vĩnh viễn khi Pod rời node. (https://kubernetes.io/docs/concepts/storage/volumes/)
+- Bộ Tài chính hướng dẫn theo Nghị định 174/2016/NĐ-CP: chứng từ dùng trực tiếp ghi sổ, sổ kế toán và báo cáo tài chính phải lưu trữ tối thiểu 10 năm. (https://portal.mof.gov.vn/hoidapcstc/home/cthoidap/162984)
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 22 yêu cầu dữ liệu hệ thống từ cấp độ 3 trở lên được sao lưu tự động, sao ra phương tiện lưu trữ ngoài và kiểm tra phục hồi ít nhất mỗi năm một lần. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Lần gần nhất đơn vị anh/chị thử khôi phục dữ liệu từ bản sao lưu là khi nào, và mất bao lâu?
+
+**Nhiệm vụ:**
+1. Database ghi dữ liệu lên ổ đĩa bền (Pod database gắn một PersistentVolumeClaim (hoặc là StatefulSet có volumeClaimTemplates).)
+2. Khởi động lại database, dữ liệu vẫn còn (Sau rollout restart, số bản ghi không về 0.)
+3. Khách vẫn gửi được yêu cầu tra soát (Hơn 95% request thành công.)
+
+**Các khối trong cluster:**
+- deploy/dispute-db: PostgreSQL lưu yêu cầu tra soát, chạy bằng Deployment, không gắn ổ đĩa nào: dữ liệu nằm trong container. Bấm Restart để thấy chuyện gì xảy ra.
+- deploy/dispute-api: API nhận yêu cầu tra soát của khách, ghi vào database.
+- svc/dispute-db: Địa chỉ nội bộ của database.
+- secret/dispute-db: Mật khẩu database.
+- client/customers: Khách gửi yêu cầu tra soát (giao dịch lỗi, bị trừ tiền hai lần…).
+- ing/public: Cửa vào: /tra-soat tới API tra soát.
+- svc/dispute-api: Chia yêu cầu cho các pod API.
+
+**Khái niệm:** PersistentVolumeClaim, StatefulSet, volumeMounts, emptyDir và dữ liệu tạm, ReadWriteOnce, storage class
+
+**Gợi ý:** Bấm dispute-db, bấm Restart, rồi xem “Bản ghi đang có”: dữ liệu nằm “trong pod”. Pod mới là một container mới, trống trơn. Cần một ổ đĩa sống lâu hơn pod: PersistentVolumeClaim. Kéo PVC từ thư viện vào canvas (storage class gp3). Nối dispute-db → PVC: CloudLab gắn ổ đĩa vào /var/lib/postgresql/data, đúng chỗ PostgreSQL ghi dữ liệu. (Cách chuẩn hơn cho database: StatefulSet có volumeClaimTemplates, xem mẫu “Database có ổ đĩa riêng”.)
+
+**Sau khi đạt:** Container là dùng xong bỏ: khởi động lại là một container mới. Thứ gì phải sống lâu hơn pod (database, file khách tải lên) phải nằm trên PersistentVolume. Và vẫn phải sao lưu: ổ đĩa bền không thay được bản sao lưu.
+
+## Bài 14: Đối soát không được chạy hai lần
+
+Nhóm: Dữ liệu và tác vụ · Chủ đề: CronJob + concurrencyPolicy
+
+**Mục tiêu:** Job đối soát với NAPAS chạy mỗi 20 phút nhưng không bao giờ có hai lần chạy chồng nhau, và mỗi lần chạy đều xong.
+
+**Tình huống:** Sáng thứ Hai, báo cáo đối soát cuối ngày thứ Sáu có hai bộ bút toán điều chỉnh giống hệt nhau, chênh lệch quỹ bị nhân đôi. Khối Vận hành cho biết đêm đó job chạy lâu hơn thường lệ vì lượng giao dịch tăng. Tôi cần biết còn những ngày nào khác cũng bị như vậy.
+
+**Trong ngân hàng:** Đối soát cuối ngày giống kiểm quỹ lúc đóng cửa: chỉ làm một lần và phải xong trước ca sau. Nếu lần chạy hôm nay chậm mà lịch vẫn khởi động lần kế tiếp (concurrencyPolicy: Allow), hai lần đối soát chạy chồng nhau và bút toán có thể bị ghi hai lần. Tài liệu Kubernetes cũng nói CronJob đôi khi tạo hai Job, nên Job phải idempotent.
+- Tháng 6/2012, một lần nâng cấp phần mềm xử lý cập nhật tài khoản qua đêm tại RBS, NatWest và Ulster Bank gây gián đoạn cho hơn 6,5 triệu khách trong nhiều tuần; năm 2014 FCA phạt 42 triệu bảng và PRA phạt thêm 14 triệu bảng. (https://www.fca.org.uk/news/press-releases/fca-fines-rbs-natwest-and-ulster-bank-ltd-42m-for-it-failures)
+- Tháng 3/2018, lỗi hệ thống thanh toán của ING (Hà Lan) làm khoảng 3 triệu khoản ghi nợ tự động bị ghi hai lần. (https://www.dutchnews.nl/2018/03/ing-repairs-system-rebooks-funds-transferred-by-glitch)
+- Quy định: Thông tư 09/2020/TT-NHNN, Điều 20 khoản 4 yêu cầu hệ thống giao dịch khách hàng có biện pháp bảo vệ tính toàn vẹn dữ liệu giao dịch và ghi nhật ký mọi thao tác để phục vụ kiểm tra. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
+- Câu hỏi thảo luận: Nếu đêm nay job đối soát chạy hai lần, sáng mai ai sẽ phát hiện ra đầu tiên, và bằng cách nào?
+
+**Nhiệm vụ:**
+1. Lần trước chưa xong thì không chạy thêm (concurrencyPolicy: Forbid.)
+2. Không có hai lần đối soát chồng nhau (Chạy 3 giờ mô phỏng, không lần nào chồng.)
+3. Mỗi lần chạy đều xong (Không job nào bị dừng giữa chừng (Failed).)
+
+**Các khối trong cluster:**
+- cj/napas-recon: Đối soát giao dịch với NAPAS, theo lịch mỗi 20 phút. Mỗi lần chạy khoảng 25 phút (ban đêm lâu hơn vì nhiều giao dịch).
+- cm/recon-config: Nguồn dữ liệu đối soát.
+- nodepool/nodes: Node chạy pod của job đối soát.
+
+**Khái niệm:** CronJob, Job, lịch cron, concurrencyPolicy: Allow / Forbid / Replace, activeDeadlineSeconds, idempotent
+
+**Gợi ý:** Bấm ▶ Chạy rồi xem Event log: “Overlap … hai job cùng đối soát một dữ liệu”. Mỗi lần chạy 25 phút, lịch lại gọi mỗi 20 phút. concurrencyPolicy: Allow nghĩa là cứ tới giờ là chạy thêm, kể cả khi lần trước chưa xong. Đối soát mà chạy hai lần là ghi bút toán hai lần. Đặt concurrencyPolicy: Forbid (bỏ qua lần mới khi lần cũ chưa xong). Đừng dùng Replace: nó dừng lần cũ giữa chừng. Nếu đặt activeDeadlineSeconds, phải đủ dài cho lần chạy chậm nhất.
+
+**Sau khi đạt:** Tác vụ theo lịch phải trả lời được: lần này chạy lâu hơn chu kỳ thì sao? Forbid bỏ qua lần mới, Replace dừng lần cũ, Allow cho chạy chồng. Với đối soát, chạy chồng là ghi hai lần; và job nên idempotent, vì Kubernetes cũng có lúc tạo hai Job cho một lần lịch.
+
+## Kind Kubernetes (giải thích bằng ví dụ ngân hàng)
+
+### Namespace (Namespace)
+
+Như một khối nghiệp vụ trong ngân hàng (Khối Thẻ, Khối Thanh toán): có không gian, nội quy và người phụ trách riêng, dù cùng một tòa nhà.
+
+Một vùng tách biệt trong cluster, có tên riêng. Tên Service chỉ tự hiểu trong cùng namespace; NetworkPolicy, quota, quyền (RBAC) thường đặt theo namespace.
+
+### Deployment (Deployment)
+
+Như trưởng ca giao dịch: luôn giữ đủ N quầy mở. Một giao dịch viên nghỉ thì gọi người khác thay ngay; đổi quy trình thì thay từng quầy, không đóng cửa cả sảnh.
+
+Chạy và giữ đủ N bản (pod) của một app không lưu trạng thái. Đổi image hay cấu hình thì Deployment thay pod dần dần (rolling update); pod chết thì tạo pod mới.
+
+### StatefulSet (StatefulSet)
+
+Như các két sắt có số hiệu cố định ở chi nhánh: mỗi két có sổ sách riêng, thay khóa thì két vẫn giữ nguyên tiền bên trong.
+
+Như Deployment nhưng cho app có dữ liệu (database): pod có tên cố định (ledger-0, ledger-1) và mỗi pod giữ ổ đĩa riêng (volumeClaimTemplates) kể cả khi bị khởi động lại.
+
+### CronJob (CronJob)
+
+Như lịch đối soát cuối ngày: đúng 23:00 thì chạy. Câu hỏi quan trọng: hôm nay chạy lâu, tới giờ lần sau thì làm gì?
+
+Chạy một tác vụ theo lịch (cron), mỗi lần là một Job tạo pod chạy tới khi xong. concurrencyPolicy quyết định chuyện gì xảy ra khi lần trước chưa xong mà tới giờ chạy lần sau.
+
+### Service (Service)
+
+Như số tổng đài 1900: khách gọi một số cố định, tổng đài chuyển tới giao dịch viên đang rảnh. Giao dịch viên thay người nhưng số tổng đài không đổi.
+
+Một địa chỉ cố định đứng trước các pod: tìm pod theo nhãn (selector) rồi chia request cho các pod đang Ready. ClusterIP chỉ dùng trong cluster; LoadBalancer tạo một load balancer có IP public (tính tiền theo giờ).
+
+### Ingress (Ingress)
+
+Như quầy lễ tân ở sảnh trụ sở: mọi khách vào một cửa, lễ tân hỏi cần gì rồi chỉ tới đúng quầy. Phòng kho quỹ thì không có trên bảng chỉ dẫn.
+
+Cửa vào HTTP/HTTPS duy nhất cho nhiều Service: chia request theo tên miền và đường dẫn (ib.anphat.vn/ → web, /api → API). Cần một ingress controller (ở đây: ingress-nginx, dùng chung một load balancer).
+
+### ConfigMap (ConfigMap)
+
+Như bảng biểu phí niêm yết: ai cũng xem được, đổi bảng thì không cần đào tạo lại nhân viên. Vì ai cũng xem được nên không ghi mật mã vào đó.
+
+Bảng cấu hình dạng khóa = giá trị (địa chỉ API, chế độ chạy…) để không phải build lại image khi đổi cấu hình. Ai đọc được namespace là đọc được ConfigMap: không chứa mật khẩu.
+
+### Secret (Secret)
+
+Như mã két trong phong bì niêm phong: chỉ người được giao mới mở. Phong bì không phải két sắt (base64 không phải mã hóa), nên còn phải cất phong bì cẩn thận.
+
+Như ConfigMap nhưng cho mật khẩu, token, chứng chỉ: quyền đọc tách riêng, không in ra log, có thể mã hóa khi lưu. Lưu ý: data chỉ là base64, không phải mã hóa.
+
+### PersistentVolumeClaim (PersistentVolumeClaim)
+
+Như tủ hồ sơ có số tủ riêng trong kho lưu trữ: nhân viên đổi ca, hồ sơ vẫn nằm trong tủ.
+
+Yêu cầu một ổ đĩa bền (EBS gp3…) cho pod. Dữ liệu trên PVC còn nguyên khi pod chết hay được tạo lại; ReadWriteOnce = mỗi lúc chỉ gắn vào một node.
+
+### HorizontalPodAutoscaler (HorizontalPodAutoscaler)
+
+Như mở thêm quầy khi hàng chờ dài ngày lương về, đóng bớt khi vắng. Nhưng phải biết mỗi quầy phục vụ được bao nhiêu khách (requests) thì mới tính được cần mở thêm mấy quầy.
+
+Tự tăng giảm số pod theo tải: đo CPU trung bình của các pod so với CPU đã request, cao hơn mục tiêu thì thêm pod (tới max), thấp thì bớt (sau 5 phút ổn định). Pod không khai báo requests.cpu thì HPA không tính được.
+
+### NetworkPolicy (NetworkPolicy)
+
+Như thẻ ra vào tòa nhà: khu kho tiền chỉ quẹt được bằng thẻ của bộ phận ngân quỹ, nhân viên phòng khác đi ngang cũng không vào được.
+
+Tường lửa giữa các pod. Mặc định pod nào cũng gọi được pod nào. Khi một policy chọn một pod, pod đó chỉ nhận traffic mà một luật nào đó cho phép (theo namespace, nhãn pod, cổng).
+
+### Gateway (Gateway API) (Gateway)
+
+Như cổng chính của trụ sở do ban quản lý tòa nhà quản: cổng nào, giờ nào, ai trực. Từng phòng ban tự dán bảng chỉ đường (HTTPRoute) vào cổng đó.
+
+Thế hệ sau của Ingress: Gateway là cửa vào (cổng, tên miền, chứng chỉ) do đội hạ tầng quản lý; các HTTPRoute do từng đội app gắn vào để chia đường dẫn, kể cả chia theo tỷ lệ (90% bản cũ, 10% bản mới).
+
+### HTTPRoute (HTTPRoute)
+
+Như bảng chỉ đường của một phòng ban dán ở cổng chính. Có thể ghi: 90% khách vào quầy cũ, 10% thử quầy mới.
+
+Luật định tuyến gắn vào một Gateway: tên miền + đường dẫn → một hoặc nhiều Service, mỗi Service một trọng số (weight). Dùng để chuyển dần traffic sang bản mới (canary).
+
+### ServiceAccount (ServiceAccount)
+
+Như thẻ nhân viên cấp cho một hệ thống (không phải cho người): bản thân tấm thẻ chưa mở được cửa nào, phải được gán quyền.
+
+Danh tính cho pod và cho pipeline gọi Kubernetes API. Bản thân nó không có quyền gì: quyền đến từ RoleBinding / ClusterRoleBinding trỏ tới nó.
+
+### Role (Role)
+
+Như bản mô tả quyền hạn của một vị trí trong một phòng ban: được xem gì, được sửa gì.
+
+Danh sách quyền trong một namespace: động từ (get, list, update…) trên loại tài nguyên (pods, deployments, secrets…). Một mình Role không cấp quyền cho ai: cần RoleBinding.
+
+### ClusterRole (ClusterRole)
+
+Như bản mô tả quyền hạn áp dụng cho toàn ngân hàng. Bản có sẵn “view” là chỉ xem, không mở được két (Secret).
+
+Như Role nhưng dùng được ở mọi namespace (và cho tài nguyên cấp cluster như namespaces, nodes). Có sẵn: cluster-admin (mọi quyền), admin, edit (sửa được và đọc được Secret), view (chỉ xem, không đọc Secret).
+
+### RoleBinding (RoleBinding)
+
+Như quyết định bổ nhiệm: giao vị trí (Role) cho một người, chỉ trong một phòng ban.
+
+Cấp một Role (hoặc ClusterRole) cho người / nhóm / ServiceAccount, chỉ trong namespace của RoleBinding. Đây là cách cấp quyền hẹp: ví dụ CI chỉ được cập nhật Deployment ở namespace web.
+
+### ClusterRoleBinding (ClusterRoleBinding)
+
+Như quyết định bổ nhiệm có hiệu lực toàn hệ thống. Giao “cluster-admin” là giao chìa khóa vạn năng.
+
+Cấp một ClusterRole cho ai đó ở MỌI namespace. Rất mạnh: một ClusterRoleBinding tới cluster-admin là chìa khóa vạn năng của cả cluster.
+
+### PodDisruptionBudget (PodDisruptionBudget)
+
+Như quy định “luôn phải có ít nhất 2 giao dịch viên tại quầy”: khi điều người đi tập huấn (bảo trì node), phải chờ người thay vào rồi mới điều người tiếp theo.
+
+Cam kết khi bảo trì: trong lúc rút node (drain, nâng cấp), luôn còn ít nhất N pod của app chạy. Lệnh drain sẽ chờ thay vì đuổi pod làm vi phạm cam kết này.
+
+### ResourceQuota (ResourceQuota)
+
+Như hạn mức ngân sách của từng phòng ban: một phòng không thể tiêu hết tiền của cả ngân hàng.
+
+Hạn mức của một namespace: tổng CPU, memory, số pod, số load balancer… mà mọi pod trong namespace được xin. Vượt hạn mức thì pod mới không được tạo. Như hạn mức chi tiêu của từng phòng ban.
+
+### LimitRange (LimitRange)
+
+Như định mức mặc định cho mỗi nhân viên mới (bàn, máy tính) và mức trần không được vượt.
+
+Giá trị mặc định và trần cho từng container trong namespace: container không khai báo requests / limits thì nhận mặc định; xin quá trần thì bị từ chối.
+
+### DaemonSet (DaemonSet)
+
+Như đặt một camera an ninh ở MỌI chi nhánh: mở chi nhánh mới là tự lắp thêm một cái.
+
+Chạy đúng một pod trên MỖI node: agent thu log, agent bảo mật, giám sát. Thêm node là thêm pod. Requests của nó bị trừ trên mọi node, nên ít chỗ hơn cho app.
+
+### Job (Job)
+
+Như một đợt kiểm kê: làm tới khi xong thì kết thúc, không chạy mãi.
+
+Một tác vụ chạy tới khi xong (migrate dữ liệu, xuất báo cáo một lần). completions: cần bao nhiêu lần chạy thành công; parallelism: chạy song song mấy pod; backoffLimit: lỗi bao nhiêu lần thì thôi.
+
+### StorageClass (StorageClass)
+
+Như các loại kho lưu trữ hồ sơ: kho thường, kho truy xuất nhanh, kho lưu trữ dài hạn giá rẻ; và quy định hủy hồ sơ hay giữ lại khi không dùng nữa.
+
+Loại ổ đĩa PVC sẽ nhận: gp3 (đa dụng), io2 (IOPS cao cho database lớn), st1 (đọc tuần tự, rẻ). reclaimPolicy quyết định xóa PVC thì xóa luôn dữ liệu (Delete) hay giữ lại (Retain). Cluster có sẵn gp3 (mặc định) và standard.
+
+### Client / khách hàng (cloudlab.dev/v1 Client)
+
+Khách hàng hoặc hệ thống bên ngoài gửi giao dịch vào. Đặt namespace thì nó đóng vai một pod bên trong cluster.
+
+Người hoặc chương trình gửi request vào hệ thống. Từ Internet thì gọi Ingress hoặc Service kiểu LoadBalancer; đặt Namespace + nhãn để giả lập một pod bên trong cluster (như kubectl run curl).
+
+### Node pool (worker node) (cloudlab.dev/v1 NodePool)
+
+Như diện tích văn phòng thuê: hết chỗ thì quầy mới không có nơi đặt (pod Pending), thuê thêm thì tốn thêm tiền mỗi giờ.
+
+Các máy (EC2) chạy pod, như một EKS managed node group. Pod chỉ chạy được khi còn đủ CPU và memory trên một node. Tính tiền theo giờ chạy của từng node, cộng phí control plane của cluster.
+
+### Ingress controller (cloudlab.dev/v1 IngressController)
+
+Như đội lễ tân của cả tòa nhà: Ingress chỉ là tấm bảng chỉ dẫn, phải có lễ tân đứng đọc bảng và dẫn khách thì mới có người vào.
+
+Chương trình thật sự nhận traffic cho các Ingress (cài bằng Helm, không phải một kind Kubernetes). ingress-nginx: một load balancer dùng chung cho mọi Ingress class nginx, hiểu annotation giới hạn tốc độ. AWS Load Balancer Controller: mỗi Ingress class alb có một ALB riêng. Không có controller thì Ingress không có địa chỉ. Lưu ý: dự án ingress-nginx đã ngừng bảo trì từ tháng 3/2026 (không còn bản vá bảo mật); hệ thống mới nên dùng Gateway API.
+
+### Người / pipeline gọi API (cloudlab.dev/v1 Actor)
+
+Một người hoặc một hệ thống đang thực sự bấm nút: mỗi thao tác được kiểm tra quyền như khi quẹt thẻ qua cửa.
+
+Một người (kubectl) hoặc một pipeline CI dùng token của ServiceAccount, lặp lại một danh sách thao tác trên Kubernetes API. Mỗi thao tác có kỳ vọng: nên được phép, hay nên bị chặn.

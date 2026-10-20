@@ -1,0 +1,55 @@
+# CloudLab Kubernetes
+
+> CloudLab Kubernetes là trang học Kubernetes chạy trong trình duyệt, đặt trong bối cảnh một ngân hàng (cluster anphat-prod trên EKS giả lập). Người học kéo thả đối tượng Kubernetes hoặc viết manifest YAML, chạy mô phỏng để thấy scheduler xếp pod, probe, Service, Ingress, giới hạn tốc độ, HPA, quota, PodDisruptionBudget, RBAC, NetworkPolicy, ổ đĩa và chi phí cluster, rồi xuất manifest sạch cho kubectl apply. Mỗi bài là một cluster có lỗi cài sẵn; người học sửa rồi bấm Kiểm tra. Mô phỏng chạy hoàn toàn trong trình duyệt, không gọi cluster thật; giá là giá tham khảo.
+
+Ứng dụng: https://dat-2k2.github.io/cloudlab/k8s/
+Toàn bộ nội dung dạng văn bản: https://dat-2k2.github.io/cloudlab/k8s/llms-full.txt · bản HTML tĩnh: https://dat-2k2.github.io/cloudlab/k8s/learn.html
+Trang AWS cùng bộ: https://dat-2k2.github.io/cloudlab/ (https://dat-2k2.github.io/cloudlab/llms.txt)
+
+## Nền tảng
+
+- [Bài 1: Pod không chạy: đọc trạng thái](https://dat-2k2.github.io/cloudlab/k8s/learn.html#pods): Cả 3 pod của ib-web chạy (Running, Ready) và khách vào được web.
+- [Bài 2: Service không có endpoint](https://dat-2k2.github.io/cloudlab/k8s/learn.html#service): Service ib-web chọn đúng pod và gửi request vào đúng cổng app nghe; khách vào được web.
+- [Bài 3: Readiness và liveness probe](https://dat-2k2.github.io/cloudlab/k8s/learn.html#probes): core-api khởi động xong và ở yên (không restart), chỉ nhận request khi đã sẵn sàng; giao dịch viên gọi được.
+
+## Ra Internet
+
+- [Bài 4: Một cửa vào: Ingress](https://dat-2k2.github.io/cloudlab/k8s/learn.html#ingress): Khách và đối tác vào qua một Ingress duy nhất; back-office chỉ vào được từ mạng nội bộ của ngân hàng; không còn load balancer nào của Service mở ra Internet.
+- [Bài 5: Giới hạn tốc độ: chặn bot gửi OTP](https://dat-2k2.github.io/cloudlab/k8s/learn.html#ratelimit): Bot không còn đốt tiền SMS: mỗi IP chỉ được xin OTP vài lần mỗi giây; khách thật vẫn đăng nhập và nhận OTP bình thường.
+
+## Tải và tài nguyên
+
+- [Bài 6: Requests và limits](https://dat-2k2.github.io/cloudlab/k8s/learn.html#resources): statement-api không còn bị OOMKilled; statement-export được xếp lên node và chạy.
+- [Bài 7: Ngày lương về: HPA](https://dat-2k2.github.io/cloudlab/k8s/learn.html#hpa): Khi tải lên gấp 8 lần, payment-api tự tăng pod và khách vẫn chuyển tiền được (lỗi dưới 1%).
+
+## Vận hành cluster
+
+- [Bài 8: Hạn mức cho từng khối: ResourceQuota](https://dat-2k2.github.io/cloudlab/k8s/learn.html#quota): Khối Marketing không còn chiếm hết CPU của cluster: namespace marketing có hạn mức, mọi pod thanh toán đều chạy và khách thanh toán không lỗi.
+- [Bài 9: Nâng cấp node không làm gián đoạn](https://dat-2k2.github.io/cloudlab/k8s/learn.html#pdb): Nâng cấp cả node group mà giao dịch viên không bị gián đoạn: core API luôn còn ít nhất một pod sẵn sàng.
+
+## Bảo mật
+
+- [Bài 10: Mật khẩu không để trong ConfigMap](https://dat-2k2.github.io/cloudlab/k8s/learn.html#secrets): Mật khẩu database của loan-api nằm trong một Secret; không ConfigMap nào còn mật khẩu; app vẫn chạy.
+- [Bài 11: Quyền tối thiểu: RBAC](https://dat-2k2.github.io/cloudlab/k8s/learn.html#rbac): Pipeline CI chỉ được cập nhật ứng dụng ở namespace web; kiểm toán chỉ được xem, không sửa và không đọc Secret.
+- [Bài 12: NetworkPolicy: cô lập vùng dữ liệu thẻ](https://dat-2k2.github.io/cloudlab/k8s/learn.html#netpol): Chỉ namespace payments gọi được card-vault; marketing bị chặn; thanh toán của khách vẫn chạy.
+
+## Dữ liệu và tác vụ
+
+- [Bài 13: Dữ liệu sống sót khi pod khởi động lại](https://dat-2k2.github.io/cloudlab/k8s/learn.html#pvc): Database tra soát lưu dữ liệu trên ổ đĩa bền: khởi động lại pod database, dữ liệu vẫn còn.
+- [Bài 14: Đối soát không được chạy hai lần](https://dat-2k2.github.io/cloudlab/k8s/learn.html#cronjob): Job đối soát với NAPAS chạy mỗi 20 phút nhưng không bao giờ có hai lần chạy chồng nhau, và mỗi lần chạy đều xong.
+
+## Dùng với Gemini
+
+- [Nhờ Gemini viết manifest cho tình huống của bạn, rồi mở trong CloudLab Kubernetes](https://dat-2k2.github.io/cloudlab/k8s/learn.html#gemini): định dạng, kind và image được hỗ trợ, câu lệnh mẫu. Dán manifest tại https://dat-2k2.github.io/cloudlab/k8s/#/import
+
+## WebMCP (cho trợ lý AI của trình duyệt)
+
+Trình duyệt có WebMCP (document.modelContext) sẽ thấy các công cụ: get_state, get_template, get_format_guide, list_lessons, get_lesson, explain_component, open_lesson, open_sandbox, load_template, add_component, connect, set_property, remove_component, run_simulation, check_lesson, export_iac (yaml, kubectl). Trợ lý có thể dựng cluster theo tình huống của người dùng bằng load_template rồi run_simulation.
+
+## Thành phần
+
+- [Giải thích từng kind Kubernetes bằng ví dụ ngân hàng](https://dat-2k2.github.io/cloudlab/k8s/learn.html#components)
+
+## Nguồn và bản quyền
+
+- [Bản quyền, nhãn hiệu, nguồn tham khảo](https://dat-2k2.github.io/cloudlab/credits.html). Kubernetes® là nhãn hiệu đã đăng ký của The Linux Foundation; trang này không liên kết với The Linux Foundation hay CNCF.

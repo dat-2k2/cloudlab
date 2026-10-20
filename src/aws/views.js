@@ -213,3 +213,21 @@ DOMAIN.onDragEnd=(n,c,boxes)=>{if(n.type==="AWS::Organizations::Account"){const 
     if(sb&&sb.id!==cur)placeIn(n.id,sb.id);else if(vb&&!cur)autoSubnet(n.id,vb.id);else if(!sb&&cur&&!vb)placeIn(n.id,null)}};
 /* extra entry points on window.CloudLab (tests, WebMCP, the browser console) */
 DOMAIN.api={evalRole:(...a)=>evalRole(...a),evalS3:(...a)=>evalS3(...a),confirmSub:(...a)=>confirmSub(...a),toTerraform:(...a)=>toTerraform(...a),toCdk:(...a)=>toCdk(...a),cfnForAws:(...a)=>cfnForAws(...a)};
+/* ---- WebMCP (src/shell/webmcp.js): the AWS-specific tool descriptions, format guide and property paths */
+DOMAIN.mcp={guideHref:"learn.html#gemini",artifact:"template",
+  d:{get_template:"Lấy template CloudFormation (YAML) của sơ đồ hiện tại, gồm cả Metadata.CloudLab dùng cho mô phỏng.",
+    get_format_guide:"Hướng dẫn viết template CloudLab đọc được: loại tài nguyên AWS được hỗ trợ, nguồn tải bên ngoài trong Metadata.CloudLab.External và thuộc tính của chúng. Đọc trước khi gọi load_template.",
+    explain_component:"Giải thích một khối hoặc một loại thành phần AWS bằng ngôn ngữ đơn giản (ví dụ ngân hàng) và mô tả kỹ thuật.",
+    "explain_component.idOrType":"Id khối trên sơ đồ (ví dụ Db) hoặc loại (ví dụ AWS::RDS::DBInstance)",
+    load_template:"Mở một template CloudFormation YAML vào sandbox (thay sơ đồ sandbox hiện tại). Dùng để dựng tình huống của người dùng. Trả về lỗi YAML kèm số dòng, hoặc danh sách khối và vấn đề.",
+    "load_template.yaml":"Template CloudFormation YAML; xem get_format_guide",
+    "add_component.type":"Loại, ví dụ AWS::S3::Bucket (xem get_format_guide)",
+    connect:"Nối khối from tới khối to, giống kéo mũi tên trên canvas (ví dụ Lambda → bucket thêm biến môi trường và quyền). Trả lý do nếu không nối được.",
+    "connect.grant":"Khi phép nối kèm cấp quyền IAM hoặc mở security group: true để làm luôn (mặc định true)",
+    set_property:"Đổi một thuộc tính của khối (đường dẫn theo Properties, ví dụ MemorySize hoặc PublicAccessBlockConfiguration.BlockPublicAcls). Đường dẫn bắt đầu bằng @ là Metadata.CloudLab (ví dụ @WorkMs).",
+    export_iac:"Xuất sơ đồ hiện tại ra code hạ tầng: cfn (CloudFormation có metadata CloudLab), aws (CloudFormation sạch để deploy), tf (Terraform), cdk (AWS CDK TypeScript)."},
+  guide:()=>({format:"CloudFormation YAML; tham chiếu bằng !Ref/!GetAtt/!Sub; phần chỉ cho mô phỏng nằm trong Metadata.CloudLab; vùng ap-southeast-2; không mô phỏng route table, NAT",
+    awsTypes:Object.keys(T).filter(t=>!t.startsWith("CloudLab::")),external:Object.fromEntries(Object.values(T).filter(t=>t.type.startsWith("CloudLab::")).map(t=>[t.type,t.fields.map(f=>f.k)])),
+    resourceMetadata:Object.fromEntries(Object.values(T).map(t=>[t.type,(t.fields||[]).map(f=>f.k).filter(k=>k&&k.startsWith("@")&&!k.startsWith("@@")).map(k=>k.slice(1))]).filter(x=>x[1].length)),
+    guide:"https://dat-2k2.github.io/cloudlab/learn.html#gemini"}),
+  setProp:(raw,path,value)=>{if(!path.startsWith("@"))return false;setP(raw,"Metadata.CloudLab."+path.slice(1),value);return true}};

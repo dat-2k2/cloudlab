@@ -39,6 +39,10 @@ Toàn bộ nội dung dạng văn bản: https://dat-2k2.github.io/cloudlab/llms
 
 Trình duyệt có WebMCP (document.modelContext) sẽ thấy các công cụ: get_state, get_template, get_format_guide, list_lessons, get_lesson, explain_component, open_lesson, open_sandbox, load_template, add_component, connect, set_property, remove_component, run_simulation, check_lesson, export_iac. Trợ lý có thể dựng tình huống của người dùng bằng load_template rồi run_simulation.
 
+## Kubernetes
+
+- [CloudLab Kubernetes](https://dat-2k2.github.io/cloudlab/k8s/): cùng cách học cho Kubernetes: 14 bài trong bối cảnh ngân hàng (pod, Service, probe, Ingress và load balancer, giới hạn tốc độ, resources, HPA, quota, PodDisruptionBudget, Secret, RBAC, NetworkPolicy, PVC, CronJob). Mục lục: https://dat-2k2.github.io/cloudlab/k8s/llms.txt · toàn văn: https://dat-2k2.github.io/cloudlab/k8s/llms-full.txt
+
 ## Thành phần
 
 - [Giải thích từng thành phần AWS bằng ví dụ ngân hàng](https://dat-2k2.github.io/cloudlab/learn.html#components)

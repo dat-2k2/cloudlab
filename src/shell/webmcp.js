@@ -3,8 +3,11 @@
    through typed tools instead of clicking around. Spec: https://github.com/webmachinelearning/webmcp
    API used: document.modelContext.registerTool({name, description, inputSchema, execute}, {signal}); older builds
    exposed navigator.modelContext, so both are tried. Nothing happens in browsers without WebMCP.
-   The same tools are on window.CloudLab.tools for testing. Tool results are JSON in a single text content item. */
+   The same tools are on window.CloudLab.tools for testing. Tool results are JSON in a single text content item.
+   Shared by every domain: the domain fills DOMAIN.mcp with what is specific to it (tool descriptions for its file format,
+   the format guide, where its learn.html guide is, how a property path maps onto a block). */
 (function(){
+  const D=DOMAIN.mcp||{},d=D.d||{},DS=(k,dflt)=>d[k]||dflt,FMT=Object.keys(EXPORTS);
   const out=x=>({content:[{type:"text",text:typeof x==="string"?x:JSON.stringify(x,null,1)}]});
   const fail=msg=>({content:[{type:"text",text:"Lỗi: "+msg}],isError:true});
   const typeOf=id=>{const n=nodeOf(id);return n?n.type:null};
@@ -15,39 +18,36 @@
   const TOOLS=[
     {name:"get_state",description:"Đọc trạng thái hiện tại của CloudLab: đang ở sandbox hay bài nào, stack, các khối trên sơ đồ (trạng thái, số liệu), các mũi tên kèm lỗi gần nhất, chi phí, và danh sách vấn đề cấu hình.",
       inputSchema:{type:"object",properties:{}},execute:async()=>out(state())},
-    {name:"get_template",description:"Lấy template CloudFormation (YAML) của sơ đồ hiện tại, gồm cả Metadata.CloudLab dùng cho mô phỏng.",inputSchema:{type:"object",properties:{}},execute:async()=>out(toYaml())},
-    {name:"get_format_guide",description:"Hướng dẫn viết template CloudLab đọc được: loại tài nguyên AWS được hỗ trợ, nguồn tải bên ngoài trong Metadata.CloudLab.External và thuộc tính của chúng. Đọc trước khi gọi load_template.",
-      inputSchema:{type:"object",properties:{}},execute:async()=>out({format:"CloudFormation YAML; tham chiếu bằng !Ref/!GetAtt/!Sub; phần chỉ cho mô phỏng nằm trong Metadata.CloudLab; vùng ap-southeast-2; không mô phỏng route table, NAT",
-        awsTypes:Object.keys(T).filter(t=>!t.startsWith("CloudLab::")),external:Object.fromEntries(Object.values(T).filter(t=>t.type.startsWith("CloudLab::")).map(t=>[t.type,t.fields.map(f=>f.k)])),
-        resourceMetadata:Object.fromEntries(Object.values(T).map(t=>[t.type,(t.fields||[]).map(f=>f.k).filter(k=>k&&k.startsWith("@")&&!k.startsWith("@@")).map(k=>k.slice(1))]).filter(x=>x[1].length)),
-        guide:"https://dat-2k2.github.io/cloudlab/learn.html#gemini"})},
+    {name:"get_template",description:DS("get_template","Lấy template (YAML) của sơ đồ hiện tại, gồm cả phần dùng cho mô phỏng."),inputSchema:{type:"object",properties:{}},execute:async()=>out(toYaml())},
+    {name:"get_format_guide",description:DS("get_format_guide","Hướng dẫn viết template CloudLab đọc được. Đọc trước khi gọi load_template."),
+      inputSchema:{type:"object",properties:{}},execute:async()=>out(D.guide?D.guide():{})},
     {name:"list_lessons",description:"Liệt kê các bài học (id, tiêu đề, mục tiêu, chặng) và bài nào đã đạt.",inputSchema:{type:"object",properties:{}},
       execute:async()=>out(LESSONS.map(l=>({id:l.id,step:l.step,title:l.title,goal:l.goal,phase:l.phase,done:DONE.has(l.id)})))},
     {name:"get_lesson",description:"Chi tiết bài đang mở: tình huống, bối cảnh ngân hàng, nhiệm vụ và kết quả Kiểm tra gần nhất, giải thích từng khối.",inputSchema:{type:"object",properties:{}},
       execute:async()=>{const L=L_();if(!L)return fail("Đang ở sandbox, không có bài nào mở. Dùng open_lesson.");const R=UI.result;
         return out({id:L.id,title:L.title,goal:L.goal,scenario:L.scenario,bank:L.bank||null,tasks:L.tasks.map((t,i)=>({task:t.t,criteria:t.c,passed:R?!!R.res[i]:null})),blocks:L.explain,concepts:L.concepts})}},
-    {name:"explain_component",description:"Giải thích một khối hoặc một loại thành phần AWS bằng ngôn ngữ đơn giản (ví dụ ngân hàng) và mô tả kỹ thuật.",
-      inputSchema:{type:"object",properties:{idOrType:{type:"string",description:"Id khối trên sơ đồ (ví dụ Db) hoặc loại (ví dụ AWS::RDS::DBInstance)"}},required:["idOrType"]},
+    {name:"explain_component",description:DS("explain_component","Giải thích một khối hoặc một loại thành phần bằng ngôn ngữ đơn giản (ví dụ ngân hàng) và mô tả kỹ thuật."),
+      inputSchema:{type:"object",properties:{idOrType:{type:"string",description:DS("explain_component.idOrType","Id khối trên sơ đồ hoặc loại thành phần")}},required:["idOrType"]},
       execute:async({idOrType})=>{const ty=T[idOrType]?idOrType:typeOf(idOrType);if(!ty)return fail(`Không có khối hay loại “${idOrType}”.`);const L=L_();
-        return out({type:ty,label:T[ty].label,simple:typeof eli5Of==="function"?eli5Of(ty):"",doc:T[ty].doc||"",inThisLesson:L&&L.explain?L.explain[idOrType]||null:null,block:nodeOf(idOrType)?blockSummary(nodeOf(idOrType)):null})}},
+        return out({type:ty,label:T[ty].label,simple:DOMAIN.eli5?DOMAIN.eli5(ty)||"":"",doc:T[ty].doc||"",inThisLesson:L&&L.explain?L.explain[idOrType]||null:null,block:nodeOf(idOrType)?blockSummary(nodeOf(idOrType)):null})}},
     {name:"open_lesson",description:"Mở một bài học theo id (xem list_lessons). Thay sơ đồ hiện tại bằng template của bài.",inputSchema:{type:"object",properties:{id:{type:"string"}},required:["id"]},
       execute:async({id})=>{const i=LESSONS.findIndex(l=>l.id===id);if(i<0)return fail(`Không có bài “${id}”.`);startLesson(i);render();return out({ok:true,opened:LESSONS[i].title,goal:LESSONS[i].goal})}},
     {name:"open_sandbox",description:"Mở sandbox tự do (giữ sơ đồ sandbox đã lưu trước đó).",inputSchema:{type:"object",properties:{}},execute:async()=>{startSandbox();render();return out({ok:true,blocks:allNodes().length})}},
-    {name:"load_template",description:"Mở một template CloudFormation YAML vào sandbox (thay sơ đồ sandbox hiện tại). Dùng để dựng tình huống của người dùng. Trả về lỗi YAML kèm số dòng, hoặc danh sách khối và vấn đề.",
-      inputSchema:{type:"object",properties:{yaml:{type:"string",description:"Template CloudFormation YAML; xem get_format_guide"}},required:["yaml"]},
-      execute:async({yaml})=>{const r=fromYaml(String(yaml||""),{name:"sandbox"});if(!r.ok)return fail(`YAML lỗi${r.line?` ở dòng ${r.line}`:""}: ${r.err}`);
-        startSandbox(r.model);gs().zoom=null;render();log("CloudLab","webmcp","load_template",`Agent mở template · ${Object.keys(r.model.res).length} tài nguyên`,"ok");
+    {name:"load_template",description:DS("load_template","Mở một template YAML vào sandbox (thay sơ đồ sandbox hiện tại). Dùng để dựng tình huống của người dùng. Trả về lỗi YAML kèm số dòng, hoặc danh sách khối và vấn đề."),
+      inputSchema:{type:"object",properties:{yaml:{type:"string",description:DS("load_template.yaml","Template YAML; xem get_format_guide")}},required:["yaml"]},
+      execute:async({yaml})=>{const r=fromYaml(String(yaml||""),{name:"sandbox"});if(!r.ok)return fail(`${r.line?`YAML lỗi ở dòng ${r.line}`:"Không mở được"}: ${r.err}`);
+        startSandbox(r.model);gs().zoom=null;render();log("CloudLab","webmcp","load_template",`Agent mở template · ${Object.keys(r.model.res).length} ${DS("unitRes","tài nguyên")}`,"ok");
         return out({ok:true,blocks:allNodes().map(n=>n.id),problems:problems().map(p=>p.sev+": "+p.msg)})}},
-    {name:"add_component",description:"Thêm một khối mới lên sơ đồ.",inputSchema:{type:"object",properties:{type:{type:"string",description:"Loại, ví dụ AWS::S3::Bucket (xem get_format_guide)"}},required:["type"]},
+    {name:"add_component",description:"Thêm một khối mới lên sơ đồ.",inputSchema:{type:"object",properties:{type:{type:"string",description:DS("add_component.type","Loại thành phần (xem get_format_guide)")}},required:["type"]},
       execute:async({type})=>{if(!T[type]||T[type].edge)return fail(`Loại “${type}” không thêm được thành khối.`);let id;const[x,y]=freeSpot(...viewCenter());edit("add "+type,()=>{id=addNode(type,x,y)});UI.sel={node:id};return out({...after("add "+id),id})}},
-    {name:"connect",description:"Nối khối from tới khối to, giống kéo mũi tên trên canvas (ví dụ Lambda → bucket thêm biến môi trường và quyền). Trả lý do nếu không nối được.",
-      inputSchema:{type:"object",properties:{from:{type:"string"},to:{type:"string"},grant:{type:"boolean",description:"Khi phép nối kèm cấp quyền IAM hoặc mở security group: true để làm luôn (mặc định true)"}},required:["from","to"]},
+    {name:"connect",description:DS("connect","Nối khối from tới khối to, giống kéo mũi tên trên canvas. Trả lý do nếu không nối được."),
+      inputSchema:{type:"object",properties:{from:{type:"string"},to:{type:"string"},grant:{type:"boolean",description:DS("connect.grant","Khi phép nối kèm cấp quyền: true để làm luôn (mặc định true)")}},required:["from","to"]},
       execute:async({from,to,grant})=>{if(!nodeOf(from)||!nodeOf(to))return fail("Không tìm thấy khối from hoặc to.");const r=connectRule(from,to);if(!r)return fail(whyNot(from,to));
         edit(`${from} → ${to}`,()=>r.apply(grant!==false));return out({...after(`${from} → ${to}: ${r.label}`),connected:r.label})}},
-    {name:"set_property",description:"Đổi một thuộc tính của khối (đường dẫn theo Properties, ví dụ MemorySize hoặc PublicAccessBlockConfiguration.BlockPublicAcls). Đường dẫn bắt đầu bằng @ là Metadata.CloudLab (ví dụ @WorkMs).",
+    {name:"set_property",description:DS("set_property","Đổi một thuộc tính của khối (đường dẫn có dấu chấm, ví dụ a.b.c)."),
       inputSchema:{type:"object",properties:{id:{type:"string"},path:{type:"string"},value:{description:"Giá trị mới (chuỗi, số, boolean, object hoặc mảng)"}},required:["id","path","value"]},
       execute:async({id,path,value})=>{const raw=M.res[id]||M.ext[id]||M.manual[id];if(!raw)return fail(`Không có khối “${id}”.`);
-        edit(`${id}.${path}`,()=>{if(String(path).startsWith("@"))setP(raw,"Metadata.CloudLab."+String(path).slice(1),value);else{raw.Properties=raw.Properties||{};setP(raw.Properties,String(path),value)}});return out(after(`${id}.${path}`))}},
+        edit(`${id}.${path}`,()=>{if(D.setProp&&D.setProp(raw,String(path),value))return;raw.Properties=raw.Properties||{};setP(raw.Properties,String(path),value)});return out(after(`${id}.${path}`))}},
     {name:"remove_component",description:"Xóa một khối khỏi sơ đồ (gỡ luôn các tham chiếu tới nó).",inputSchema:{type:"object",properties:{id:{type:"string"}},required:["id"]},
       execute:async({id})=>{if(!nodeOf(id))return fail(`Không có khối “${id}”.`);edit("rm "+id,()=>removeNode(id));if(UI.sel&&UI.sel.node===id)UI.sel=null;return out(after("remove "+id))}},
     {name:"run_simulation",description:"Chạy mô phỏng trong một khoảng thời gian giả lập (deploy nếu chưa deploy) rồi trả kết quả: số liệu từng khối, lỗi trên từng mũi tên, chi phí và vấn đề cấu hình.",
@@ -59,9 +59,9 @@
     {name:"check_lesson",description:"Bấm Kiểm tra cho bài đang mở: chấm từng nhiệm vụ và trả kết quả.",inputSchema:{type:"object",properties:{}},
       execute:async()=>{const L=L_();if(!L)return fail("Đang ở sandbox, không có bài để kiểm tra.");check();render();const R=UI.result;
         return out({passed:R.ok,message:R.msg,tasks:L.tasks.map((t,i)=>({task:t.t,passed:!!R.res[i]}))})}},
-    {name:"export_iac",description:"Xuất sơ đồ hiện tại ra code hạ tầng: cfn (CloudFormation có metadata CloudLab), aws (CloudFormation sạch để deploy), tf (Terraform), cdk (AWS CDK TypeScript).",
-      inputSchema:{type:"object",properties:{format:{type:"string",enum:["cfn","aws","tf","cdk"]}},required:["format"]},
-      execute:async({format})=>{const e=EXPORTS[format];if(!e)return fail("format phải là cfn, aws, tf hoặc cdk");return out(e.gen?e.gen():toYaml())}}];
+    {name:"export_iac",description:DS("export_iac","Xuất sơ đồ hiện tại ra code hạ tầng: "+FMT.map(k=>`${k} (${EXPORTS[k].label})`).join(", ")+"."),
+      inputSchema:{type:"object",properties:{format:{type:"string",enum:FMT}},required:["format"]},
+      execute:async({format})=>{const e=EXPORTS[format];if(!e)return fail("format phải là "+FMT.join(", "));return out(e.gen?e.gen():toYaml())}}];
   if(window.CloudLab)window.CloudLab.tools=Object.fromEntries(TOOLS.map(t=>[t.name,t]));
   /* setup dialog behind the ✦ button in the top bar: status in this browser, how to turn WebMCP on, what the agent can do */
   const supported=()=>!!((typeof document!=="undefined"&&document.modelContext)||(typeof navigator!=="undefined"&&navigator.modelContext));
@@ -74,7 +74,7 @@
         <li>Mở địa chỉ ${copy("chrome://flags/#enable-webmcp-testing","địa chỉ flag")} trong thanh địa chỉ (trình duyệt không cho mở bằng link), chọn <b>Enabled</b>, rồi bấm <b>Relaunch</b>.</li>
         <li>Để thử công cụ: cài tiện ích <a href="https://chromewebstore.google.com/detail/model-context-tool-inspec/gbpdfapgefenggkahomfgkhfehlcenpd" target="_blank" rel="noopener">Model Context Tool Inspector ↗</a>, mở lại CloudLab, bấm biểu tượng tiện ích, chọn công cụ và bấm Execute Tool.</li>
         <li>Mở lại hộp thoại này: dòng trạng thái phía trên sẽ chuyển sang “Đã bật”.</li></ol>`}
-      <p class="note">Gemini trong Chrome hiện chưa dùng công cụ WebMCP; Google cho biết sẽ hỗ trợ. Trong lúc chờ, bạn có thể nhờ Gemini viết template rồi dán vào CloudLab: xem <a href="learn.html#gemini" target="_blank" rel="noopener">hướng dẫn dùng với Gemini</a>.</p>
+      <p class="note">Gemini trong Chrome hiện chưa dùng công cụ WebMCP; Google cho biết sẽ hỗ trợ. Trong lúc chờ, bạn có thể nhờ Gemini viết ${esc(DS("artifact","template"))} rồi dán vào CloudLab: xem <a href="${esc(D.guideHref||"learn.html#gemini")}" target="_blank" rel="noopener">hướng dẫn dùng với Gemini</a>.</p>
       <details class="more"><summary>${TOOLS.length} công cụ CloudLab cung cấp</summary><ul class="mcp-tools">${TOOLS.map(t=>`<li><code>${esc(t.name)}</code>: ${esc(t.description.split(". ")[0])}</li>`).join("")}</ul></details>`};render()}
   document.addEventListener("click",e=>{const c=e.target.closest&&e.target.closest("[data-mcp-copy]");if(c){const t=c.dataset.mcpCopy;try{navigator.clipboard.writeText(t).then(()=>{c.textContent="Đã chép"},()=>{c.textContent="Chép tay giúp"})}catch(_){c.textContent="Chép tay giúp"}return}
     if(e.target.closest&&e.target.closest("#mcpBtn"))mcpDialog()});

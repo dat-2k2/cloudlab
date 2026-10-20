@@ -5,15 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="cloudlab-app" content="k8s">
 <title>CloudLab · Kubernetes</title>
-<meta name="description" content="Học Kubernetes trong trình duyệt: kéo thả hoặc viết manifest, mô phỏng pod, Service, Ingress, HPA, NetworkPolicy và chi phí cluster. Mười bài học đặt trong bối cảnh ngân hàng, mỗi bài là một cluster có lỗi cài sẵn.">
+<meta name="description" content="Học Kubernetes trong trình duyệt: kéo thả hoặc viết manifest, mô phỏng pod, Service, Ingress, HPA, NetworkPolicy và chi phí cluster. 14 bài học đặt trong bối cảnh ngân hàng, mỗi bài là một cluster có lỗi cài sẵn.">
 <link rel="preload" href="../fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="../fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <script>try{var t=localStorage.getItem("cloudlab:theme");if(t)document.documentElement.dataset.theme=JSON.parse(t)}catch(_){}</script>
+<link rel="canonical" href="https://dat-2k2.github.io/cloudlab/k8s/">
+<link rel="alternate" type="text/markdown" href="llms-full.txt" title="Toàn bộ nội dung CloudLab Kubernetes dạng văn bản">
+<link rel="alternate" type="text/html" href="learn.html" title="Nội dung bài học Kubernetes (HTML tĩnh)">
 <link rel="stylesheet" href="../../kit/layout.css">
 <link rel="stylesheet" href="../style.css">
 </head>
 <body>
-<noscript><p>CloudLab Kubernetes cần JavaScript để chạy editor và mô phỏng.</p></noscript>
+<noscript><p>CloudLab Kubernetes cần JavaScript để chạy editor và mô phỏng. Nội dung bài học dạng văn bản: <a href="learn.html">learn.html</a> · <a href="llms-full.txt">llms-full.txt</a>.</p></noscript>
 <div class="shell app" data-shell>
   <header class="shell-top">
     <button class="icon-btn" data-shell-toggle aria-controls="side" aria-label="Thu gọn / mở thanh bên">☰</button>
@@ -23,6 +26,7 @@
       <span class="chip live ok hide-s">cluster anphat-prod · mô phỏng</span>
       <a class="hide-s" href="../" title="CloudLab cho AWS">CloudLab AWS</a>
       <a class="hide-s" href="https://github.com/dat-2k2/cloudlab" target="_blank" rel="noopener">GitHub ↗</a>
+      <button class="icon-btn" id="mcpBtn" aria-label="Kết nối trợ lý AI của trình duyệt (WebMCP)" title="Trợ lý AI trong trình duyệt (WebMCP)">✦</button>
       <button class="icon-btn" id="tourBtn" aria-label="Xem hướng dẫn sử dụng" title="Hướng dẫn">?</button>
       <button class="icon-btn" id="theme" aria-label="Đổi giao diện sáng / tối" title="Sáng / tối">☾</button>
     </div>
@@ -40,7 +44,7 @@
   <div class="lesson-resize" id="lessonResize" role="separator" aria-orientation="vertical" aria-controls="lesson" aria-label="Kéo để đổi độ rộng khung bài học (phím ← →)" tabindex="0"></div>
   <aside class="lesson" id="lesson" aria-label="Bài học" aria-live="polite"></aside>
   <footer class="shell-foot">
-    <span class="foot-l">© 2026 Nguyen Quoc Dat · <a href="../credits.html">Nguồn và bản quyền</a><span class="hide-s"> · <a href="../">← CloudLab AWS</a> · <a href="https://dat-2k2.github.io/">dat-2k2.github.io</a></span></span>
+    <span class="foot-l">© 2026 Nguyen Quoc Dat · <a href="../credits.html">Nguồn và bản quyền</a><span class="hide-s"> · <a href="learn.html">Bản văn bản</a> · <a href="learn.html#gemini">Dùng với Gemini</a> · <a href="../">← CloudLab AWS</a> · <a href="https://dat-2k2.github.io/">dat-2k2.github.io</a></span></span>
     <span class="foot-r">Kubernetes® là nhãn hiệu của The Linux Foundation; CloudLab không liên kết · mô phỏng, giá tham khảo</span>
   </footer>
 </div>
@@ -52,6 +56,6 @@
 <script src="../src/shell/core.js"></script><script src="../src/shell/model.js"></script><script src="../src/shell/sim.js"></script>
 <script src="src/catalog.js"></script><script src="src/edge.js"></script><script src="src/rbac.js"></script><script src="src/ops.js"></script><script src="src/model.js"></script><script src="src/sim.js"></script>
 <script src="src/lessons.js"></script><script src="src/bank.js"></script><script src="src/views.js"></script><script src="src/views-more.js"></script><script src="src/lint.js"></script>
-<script src="../src/shell/editor.js"></script><script src="../src/shell/ui.js"></script><script src="../src/shell/tour.js"></script>
+<script src="../src/shell/editor.js"></script><script src="../src/shell/ui.js"></script><script src="../src/shell/webmcp.js"></script><script src="../src/shell/tour.js"></script>
 </body>
 </html>

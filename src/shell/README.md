@@ -17,7 +17,7 @@ All files are classic scripts sharing globals. A page loads, in order:
 1. `vendor/js-yaml.min.js`
 2. `src/shell/core.js`, `src/shell/model.js`, `src/shell/sim.js`
 3. the pack: catalog → model → simulation → lessons → lint / exports → views
-4. `src/shell/editor.js`, `src/shell/ui.js`, then optional pack extras (WebMCP, changelog), then `src/shell/tour.js`
+4. `src/shell/editor.js`, `src/shell/ui.js`, then optional extras (`src/shell/webmcp.js`, the AWS changelog), then `src/shell/tour.js`
 
 `<meta name="cloudlab-app" content="k8s">` gives a page its own localStorage namespace (`cloudlab:k8s:*`), so each app
 keeps its own sandbox, progress and tour flag. The AWS page has no meta and keeps the original `cloudlab:*` keys.
@@ -73,3 +73,15 @@ Optional hooks: `view(n, rows, cx)` · `rt(n, {r, m, p})` (runtime panel HTML) �
 `redeploy(label, cli)` (an edit while deployed) · `runtime()` (extra `RT` fields) · `onNewMonth()` ·
 `manualStatus(n)` · `lessonRef(L)` · `eli5(type)` · `fmt(value)` · `idValue(n)` (what the name field shows; `renameNode` may return `{ok, id}` with the new id) · `relDoc` · `keepNull` · `api` (added to
 `window.CloudLab`).
+
+`DOMAIN.mcp` feeds `src/shell/webmcp.js` (the 16 browser-agent tools and the ✦ dialog): `d` (tool and parameter
+descriptions keyed `tool` or `tool.param`, e.g. `load_template.yaml`), `guide()` (what `get_format_guide` returns),
+`guideHref` (the page's `learn.html#gemini`), `artifact` (“template” / “manifest”), `unitRes`, and
+`setProp(raw, path, value)` (return `true` when it handled a path itself; otherwise the path is set under `Properties`).
+`export_iac` offers the keys of `EXPORTS`.
+
+## Text versions
+
+`tools/export-text.js` (AWS: `llms.txt`, `llms-full.txt`, `learn.html`, `credits.html`) and `tools/export-k8s.js`
+(`k8s/llms.txt`, `k8s/llms-full.txt`, `k8s/learn.html`) load the pack in Node and write the lessons, the component
+explanations and the Gemini guide as plain files. `build.py` runs both.
