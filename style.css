@@ -679,3 +679,5 @@ body:has(.shell[data-fs]) .drawer{--drawer-top:12px;--drawer-bottom:12px;right:1
 /* full screen keeps the same layers */
 .shell[data-fs]>.main{background:var(--canvas)}
 .shell[data-fs] .lesson{background:color-mix(in srgb,var(--paper) 96%,transparent)}
+/* the lesson panel's first tier is class "ltier main": keep the editor-area .main rules off it */
+.lesson .ltier.main{background:none;overflow:visible;grid-area:auto;min-height:auto}
