@@ -661,3 +661,21 @@ body:has(.shell[data-fs]) .drawer{--drawer-top:12px;--drawer-bottom:12px;right:1
 .news-g li{display:grid;grid-template-columns:40px minmax(0,1fr);gap:8px;font-size:13.5px;line-height:20px}
 .news-d{font:400 11.5px/20px var(--font-mono);color:var(--subtle)}
 .news-g .side-ic{--cat:var(--accent);background:var(--accent);color:#fff}
+/* ---------- palette v3: layered surfaces instead of all white ----------
+   frame (top bar, sidebar, footer, editor bars) recedes on a cool slate tint; the canvas is a deeper blue-gray
+   so white blocks stand out; the lesson panel is the brightest "paper" surface to read on. */
+:root{--frame:#e8ecf2;--frame-ink:#1f2937;--frame-line:#d3d9e2;--canvas:#dce2eb;--canvas-dot:#aeb8c6;--paper:#ffffff;--paper-shadow:-8px 0 24px -12px rgba(15,23,42,.18);--side-on:#ffffff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--frame:#0e121a;--frame-ink:#d5dae3;--frame-line:#1f2633;--canvas:#090c12;--canvas-dot:#263042;--paper:#151a24;--paper-shadow:-8px 0 24px -12px rgba(0,0,0,.6);--side-on:#1b2130}}
+:root[data-theme="dark"]{--frame:#0e121a;--frame-ink:#d5dae3;--frame-line:#1f2633;--canvas:#090c12;--canvas-dot:#263042;--paper:#151a24;--paper-shadow:-8px 0 24px -12px rgba(0,0,0,.6);--side-on:#1b2130}
+.shell-top,.shell-side,.shell-foot{background:var(--frame);border-color:var(--frame-line)}
+.shell.app>.main{background:var(--frame)}
+.stackbar,.simbar{background:var(--frame);border-color:var(--frame-line)}
+.shell-side .side-item[aria-current="page"]{background:var(--side-on);box-shadow:0 1px 2px rgba(15,23,42,.08)}
+.shell-side .side-group{color:var(--subtle)}
+.gx{background-color:var(--canvas);background-image:radial-gradient(var(--canvas-dot) 1px,transparent 1.3px);border:1px solid var(--frame-line)}
+.gpicker.glib{background:var(--surface);border-color:var(--frame-line)}
+.shell.app .lesson{background:var(--paper);box-shadow:var(--paper-shadow);border-left-color:var(--frame-line);position:relative;z-index:1}
+.pane-code .yaml,.pane-code{background:transparent}
+/* full screen keeps the same layers */
+.shell[data-fs]>.main{background:var(--canvas)}
+.shell[data-fs] .lesson{background:color-mix(in srgb,var(--paper) 96%,transparent)}
