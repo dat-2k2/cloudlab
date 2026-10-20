@@ -388,7 +388,11 @@ function gEnd(cancel){if(!GD)return;const d=GD;GD=null;if(!d.moved)return;GSUP=D
   if(d.kind==="box")saveSandbox();
   if(d.kind==="connect"){const over=!cancel&&UI.gdrag&&UI.gdrag.over;UI.gdrag=null;if(over&&over!==d.id){if(connectRule(d.id,over))doConnect(d.id,over);else{const why=whyNot(d.id,over);gNote(`Không nối được ${d.id} → ${over}. ${why}.`,"warn");log("CloudLab","editor","connect",`${d.id} → ${over}: ${why}`,"warn")}}render()}}
 document.addEventListener("pointerup",()=>gEnd(false));document.addEventListener("pointercancel",()=>gEnd(true));
-document.addEventListener("wheel",e=>{const gx=e.target.closest&&e.target.closest(".gx");if(!gx||!(e.ctrlKey||e.metaKey))return;e.preventDefault();const r=gx.getBoundingClientRect();gZoomAt(GCUR.z*Math.exp(-e.deltaY*.0025),e.clientX-r.left,e.clientY-r.top)},{passive:false});
+/* wheel on the canvas: scroll zooms at the cursor (pinch on a trackpad too); Shift + scroll or a sideways swipe pans */
+document.addEventListener("wheel",e=>{const gx=e.target.closest&&e.target.closest(".gx");if(!gx||e.target.closest(".gmenu"))return;e.preventDefault();
+  const k=e.deltaMode===1?33:e.deltaMode===2?400:1,dx=e.deltaX*k,dy=e.deltaY*k;
+  if(e.shiftKey||(!e.ctrlKey&&!e.metaKey&&Math.abs(dx)>Math.abs(dy))){gFreeze();const h=e.shiftKey&&!dx?dy:dx,v=e.shiftKey&&!dx?0:dy;GCUR.pan=[GCUR.pan[0]-h,GCUR.pan[1]-(Math.abs(dx)>Math.abs(dy)?v:0)];gs().pan=[...GCUR.pan];gApply();return}
+  const r=gx.getBoundingClientRect(),step=Math.max(-120,Math.min(120,dy));gZoomAt(GCUR.z*Math.exp(-step*(e.ctrlKey||e.metaKey?.01:.0025)),e.clientX-r.left,e.clientY-r.top)},{passive:false});
 window.addEventListener("keydown",e=>{const tag=(e.target.tagName||"").toLowerCase(),typing=tag==="input"||tag==="textarea"||tag==="select";
   if(UI.picker&&e.target.id==="pkq"){const P=UI.picker,n=(P.flat||[]).length;
     if(e.key==="Escape"){e.preventDefault();e.stopPropagation();UI.picker=null;libSave(false);gs().zoom=null;renderCanvas();return}
