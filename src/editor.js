@@ -26,7 +26,7 @@ function nodeView(n){const r=RT.n[n.id]||{m:{},tk:{},series:[]},m=r.m,p=n.props,
       if(st0.some(s=>matchAny(arr(s.Action),"iam:CreateUser")&&s.Effect==="Allow"&&arr(resolve(s.Resource)).includes("*")))st=["warn","Quyền admin"];break}
     case"AWS::S3::Bucket":{const o=RT.obj[n.id]||{},cnt=Object.values(o).reduce((a,x)=>a+x.n,0),gb=Object.values(o).reduce((a,x)=>a+x.kb*x.n,0);const nc=arr(getP(p,"NotificationConfiguration.LambdaConfigurations")).length;
       rows.push(["Object",num(cnt),""],["Dung lượng",kb(gb),""]);if(nc)rows.push(["Trigger",nc+" → Lambda",""]);
-      const c=p.PublicAccessBlockConfiguration||{};if(!(c.BlockPublicPolicy&&c.RestrictPublicBuckets))st=["warn","BPA chưa bật đủ"];if(m.leak)st=["bad","Đang bị đọc công khai"];break}
+      const c=p.PublicAccessBlockConfiguration||{};if(!(c.BlockPublicPolicy&&c.RestrictPublicBuckets))st=["warn","BPA tắt"];if(m.leak)st=["bad","Đang bị đọc công khai"];break}
     case"AWS::S3::BucketPolicy":{const S=arr(getP(p,"PolicyDocument.Statement"));rows.push(["Statement",String(S.length),""]);if(S.some(s=>s.Effect==="Allow"&&isPublicPrincipal(s.Principal)))st=["bad",'Principal "*"'];break}
     case"AWS::DynamoDB::Table":rows.push(["Item",num(RT.items[n.id]||0),""],["Ghi",perS("wr"),""]);break;
     case"AWS::SNS::Topic":{const S=arr(p.Subscription),pend=S.filter(s=>s&&s.Protocol==="email"&&RT.subs[n.id+"|"+s.Endpoint]==="PendingConfirmation").length;rows.push(["Subscription",String(S.length),S.length?"":"warn"],["Đã publish",num(m.pub||0),"none"]);if(pend)st=["warn",`${pend} chờ xác nhận`];break}

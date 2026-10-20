@@ -28,7 +28,7 @@ Nhóm: Phase 1 · Explore · Chủ đề: Budgets + SNS · Theo FCAJ workshop 00
 
 **Khái niệm:** AWS Budgets, SNS topic, subscription email, xác nhận subscription, GB-giây của Lambda
 
-**Gợi ý:** Budget chỉ báo ở ngưỡng có trong NotificationsWithSubscribers, và SNS chỉ gửi tới email đã xác nhận. MonthlyBudget → thêm ngưỡng 80 và 100. MyInbox → thư xác nhận → Confirm. Rồi ▶ chạy ở tốc độ 1 ngày/giây.
+**Gợi ý:** Budget chỉ báo ở ngưỡng có trong NotificationsWithSubscribers, và SNS chỉ gửi tới email đã xác nhận. MonthlyBudget → thêm ngưỡng 80 và 100. MyInbox → thư xác nhận → Confirm subscription. Rồi bấm ▶ Chạy ở tốc độ 1 ngày mỗi giây.
 
 **Sau khi đạt:** Budget theo dõi cả account → publish vào SNS → chỉ email đã xác nhận mới nhận. Đồng hồ chi phí cho thấy tiền đến từ đâu: phần lớn là GB-giây của Lambda.
 
@@ -135,7 +135,7 @@ Nhóm: Phase 1 · Explore · Chủ đề: S3 + CloudFront · Theo FCAJ workshop 
 
 **Khái niệm:** S3 static website, Block Public Access, CloudFront origin, cache hit ratio
 
-**Gợi ý:** CloudFront đọc bucket bằng quyền riêng (OAC), nên bucket không cần public. + Thêm → CloudFront. Nối CloudFront → SiteBucket, Visitors → CloudFront. Xóa SitePolicy, bật 4 ô Block Public Access.
+**Gợi ý:** CloudFront đọc bucket bằng quyền riêng (OAC), nên bucket không cần public. ＋ Thêm → CloudFront. Nối CloudFront → SiteBucket, Visitors → CloudFront. Xóa SitePolicy, bật cả 4 tùy chọn Block Public Access.
 
 **Sau khi đạt:** CloudFront cache ở edge nên 90% request không chạm tới S3, và bucket quay về private. Public bucket chỉ hợp cho demo.
 
@@ -190,7 +190,7 @@ Nhóm: Phase 1 · Explore · Chủ đề: ALB + Auto Scaling · Theo FCAJ worksh
 
 **Khái niệm:** Application Load Balancer, target group, health check, high availability, capacity
 
-**Gợi ý:** Load balancer chia tải và loại target hỏng; nhiều instance ở nhiều AZ thì vừa chịu tải vừa sống khi một AZ hỏng. Nối Alb → PublicB. + Thêm EC2 vào PrivateB, gắn WebSg, nối Alb → EC2 mới (tự vào target group).
+**Gợi ý:** Load balancer chia tải và loại target hỏng. Nhiều instance ở nhiều AZ thì vừa chịu được tải, vừa chạy tiếp khi một AZ hỏng. Nối Alb → PublicB. ＋ Thêm EC2 vào PrivateB, gắn WebSg, rồi nối Alb → EC2 mới (EC2 tự vào target group).
 
 **Sau khi đạt:** ALB trải 2 AZ, target ở 2 AZ: thêm máy là thêm sức chịu tải, mất một AZ vẫn chạy. Lab thật dùng Auto Scaling group để tự thêm/bớt máy theo CPU.
 
@@ -296,7 +296,7 @@ Nhóm: Hạ tầng dưới dạng code · Chủ đề: CloudFormation / CDK · T
 
 **Khái niệm:** CloudFormation stack, DeletionPolicy, bucket phải rỗng mới xóa được, tài nguyên ngoài stack
 
-**Gợi ý:** Stack chỉ xóa thứ nó tạo. DeletionPolicy: Retain giữ bucket lại; bucket còn object thì CloudFormation không xóa được. ImagesBucket: DeletionPolicy Delete + Empty. Xóa stack. Rồi lab-scratch: Empty → Xóa bucket.
+**Gợi ý:** Stack chỉ xóa những gì nó tạo ra. DeletionPolicy: Retain giữ bucket lại; bucket còn object thì CloudFormation không xóa được. ImagesBucket: DeletionPolicy Delete, rồi Empty. Xóa stack. Rồi lab-scratch: Empty → Xóa khỏi account.
 
 **Sau khi đạt:** Stack xóa sạch bằng một lệnh, nhưng chỉ thứ nó tạo, và tôn trọng DeletionPolicy. Thứ tạo tay phải tự dọn — đồng hồ chi phí là nơi kiểm tra cuối cùng.
 

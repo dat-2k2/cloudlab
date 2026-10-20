@@ -159,10 +159,10 @@ ${ASSUME_LAMBDA}
     {t:"Email đã xác nhận",c:"subscription Confirmed",test:()=>Object.entries(RT.subs).some(([k,v])=>k.endsWith("|"+EMAIL)&&v==="Confirmed")},
     {t:"Chạy cả tháng: 3 email cảnh báo về hộp thư",c:"50%, 80%, 100% → SNS → email",test:()=>probe(()=>{if(!stackUp())deploy();const ib=firstOf("CloudLab::Inbox");if(!ib)return false;RT.inbox={};RT.budgets={};RT.total=0;runFor(MONTH,21600);return(RT.inbox[ib.id]||[]).filter(m=>m.kind==="alert").length>=3})}],
   diagnose(n){const b=firstOf("AWS::Budgets::Budget"),conf=Object.entries(RT.subs).some(([k,v])=>k.endsWith("|"+EMAIL)&&v==="Confirmed");
-    if(!b)return["Không còn budget nào.","Kéo AWS Budget từ palette vào.","Budget $20, nối tới billing-alerts."][Math.min(n,2)];
-    if(!conf)return["Hộp thư chưa nhận cảnh báo nào, dù chi tiêu đã vượt 50%. Bấm ▶ rồi xem cạnh topic → hộp thư.","Cạnh billing-alerts → MyInbox báo ✕. Mở MyInbox.","Subscription vẫn PendingConfirmation. Mở thư xác nhận trong MyInbox → Confirm."][Math.min(n,2)];
+    if(!b)return["Không còn budget nào.","Kéo AWS Budget từ thanh bên vào canvas.","Đặt budget $20, rồi nối nó tới billing-alerts."][Math.min(n,2)];
+    if(!conf)return["Hộp thư chưa nhận cảnh báo nào, dù chi tiêu đã vượt 50%. Bấm ▶ Chạy rồi xem mũi tên topic → hộp thư.","Mũi tên billing-alerts → MyInbox báo ✕. Mở MyInbox.","Subscription vẫn PendingConfirmation. Mở thư xác nhận trong MyInbox, bấm Confirm subscription."][Math.min(n,2)];
     return["50% có email, 80% và 100% thì không.","Xem ngưỡng của MonthlyBudget.","Thêm notification 80 và 100% (lab 000007), cùng subscriber billing-alerts."][Math.min(n,2)]},
-  hints:()=>["Budget chỉ báo ở ngưỡng có trong NotificationsWithSubscribers, và SNS chỉ gửi tới email đã xác nhận.","MonthlyBudget → thêm ngưỡng 80 và 100. MyInbox → thư xác nhận → Confirm. Rồi ▶ chạy ở tốc độ 1 ngày/giây."],
+  hints:()=>["Budget chỉ báo ở ngưỡng có trong NotificationsWithSubscribers, và SNS chỉ gửi tới email đã xác nhận.","MonthlyBudget → thêm ngưỡng 80 và 100. MyInbox → thư xác nhận → Confirm subscription. Rồi bấm ▶ Chạy ở tốc độ 1 ngày mỗi giây."],
   solve(){const b=firstOf("AWS::Budgets::Budget");edit("budget 80/100",()=>{const tp=firstOf("AWS::SNS::Topic");b.props.NotificationsWithSubscribers=[50,80,100].map(x=>({Notification:{NotificationType:"ACTUAL",ComparisonOperator:"GREATER_THAN",Threshold:x},Subscribers:[{SubscriptionType:"SNS",Address:{Ref:tp.id}}]}))});
     for(const k of Object.keys(RT.subs))if(k.endsWith("|"+EMAIL))confirmSub(k.split("|")[0],EMAIL)},
   pass:"Budget theo dõi cả account → publish vào SNS → chỉ email đã xác nhận mới nhận. Đồng hồ chi phí cho thấy tiền đến từ đâu: phần lớn là GB-giây của Lambda."},
@@ -237,9 +237,9 @@ ${ASSUME_ACCOUNT}
     {t:"Lan không ghi được",c:"s3:PutObject → Deny",test:()=>!evalS3({role:"ReadOnlyRole"},"DataBucket","s3:PutObject","notes.txt").allow},
     {t:"Lan không xóa được",c:"s3:DeleteObject → Deny",test:()=>!evalS3({role:"ReadOnlyRole"},"DataBucket","s3:DeleteObject","report.csv").allow}],
   diagnose(n){const g=evalS3({role:"ReadOnlyRole"},"DataBucket","s3:GetObject","report.csv");
-    if(!nodeOf("ReadOnlyRole")||!nodeOf("DataBucket"))return["Thiếu role hoặc bucket.","Undo để lấy lại.","Bấm Reset bài."][Math.min(n,2)];
-    if(!g.allow)return["Đọc report.csv vẫn 403. Bấm ▶ và xem cạnh LanReads → DataBucket.","Lý do nằm trên cạnh ✕ và trong inspector của ReadOnlyRole.",`Bị chặn bởi ${g.by} (${g.kind==="explicit"?"explicit deny":"không có Allow"}).`][Math.min(n,2)];
-    return["Role ghi hoặc xóa được: mở quá rộng.","Xem lại statement Deny.","Deny phải vẫn chặn s3:PutObject và s3:DeleteObject."][Math.min(n,2)]},
+    if(!nodeOf("ReadOnlyRole")||!nodeOf("DataBucket"))return["Thiếu role hoặc bucket.","Bấm Hoàn tác (Ctrl+Z) để lấy lại.","Bấm Từ đầu để mở lại bài như lúc đầu."][Math.min(n,2)];
+    if(!g.allow)return["Đọc report.csv vẫn bị 403. Bấm ▶ Chạy và xem mũi tên LanReads → DataBucket.","Lý do nằm trên mũi tên ✕ và trong khung chi tiết của ReadOnlyRole.",`Bị chặn bởi ${g.by} (${g.kind==="explicit"?"explicit deny":"không có Allow"}).`][Math.min(n,2)];
+    return["Role ghi hoặc xóa được: quyền đang mở quá rộng.","Xem lại statement Deny.","Deny vẫn phải chặn s3:PutObject và s3:DeleteObject."][Math.min(n,2)]},
   hints:()=>["Explicit Deny luôn thắng Allow. s3:*Object khớp cả GetObject.","ReadOnlyRole → lab-guardrail → đổi Action thành s3:PutObject, s3:DeleteObject."],
   solve(){edit("narrow deny",()=>{const r=nodeOf("ReadOnlyRole");const p=r.props.Policies.find(x=>x.PolicyName==="lab-guardrail");p.PolicyDocument.Statement[0].Action=["s3:PutObject","s3:DeleteObject"]})},
   pass:"Deny khớp → chặn ngay. Không thì cần một Allow. Không có Allow → chặn ngầm. Wildcard như s3:*Object dễ chặn quá tay."},
@@ -314,10 +314,10 @@ ${ASSUME_ACCOUNT}
     {t:"Block Public Access bật cả 4",c:"BlockPublicAcls, IgnorePublicAcls, BlockPublicPolicy, RestrictPublicBuckets",test:()=>{const b=nodeOf("ShareBucket");const c=b&&b.props.PublicAccessBlockConfiguration||{};return["BlockPublicAcls","BlockPublicPolicy","IgnorePublicAcls","RestrictPublicBuckets"].every(k=>c[k]===true)}},
     {t:"Lan vẫn tải được invoice",c:"GetObject qua lan-accounting → Allow",test:()=>evalS3({role:"LanRole"},"ShareBucket","s3:GetObject","invoice-0925.pdf").allow}],
   diagnose(n){const leak=["invoice-0925.pdf","internal-notes.txt"].some(k=>evalS3({anon:true},"ShareBucket","s3:GetObject",k).allow);
-    if(leak)return["Người lạ vẫn đọc được invoice. Bấm ▶ và xem cạnh Stranger → ShareBucket.","Quyền công khai đến từ resource policy gắn vào bucket.","SharePolicy cho Principal \"*\", và Block Public Access đang tắt."][Math.min(n,2)];
+    if(leak)return["Người lạ vẫn đọc được invoice. Bấm ▶ Chạy và xem mũi tên Stranger → ShareBucket.","Quyền công khai đến từ resource policy gắn vào bucket.","SharePolicy cho Principal \"*\", trong khi Block Public Access đang tắt."][Math.min(n,2)];
     if(!evalS3({role:"LanRole"},"ShareBucket","s3:GetObject","invoice-0925.pdf").allow)return["Đã chặn người ngoài, nhưng Lan cũng mất quyền.","Xem policy của LanRole.","LanRole cần s3:GetObject trên invoice-*."][Math.min(n,2)];
     return["Block Public Access chưa bật đủ.","Mở ShareBucket.","Bật cả 4 tùy chọn Block Public Access."][Math.min(n,2)]},
-  hints:()=>["Principal \"*\" nghĩa là ai cũng đọc được. Lan không cần nó vì đã có quyền qua role.","Xóa node SharePolicy (hoặc statement PublicRead), rồi bật cả 4 tùy chọn Block Public Access trên ShareBucket."],
+  hints:()=>["Principal \"*\" nghĩa là ai cũng đọc được. Lan không cần nó vì đã có quyền qua role.","Xóa khối SharePolicy (hoặc statement PublicRead), rồi bật cả 4 tùy chọn Block Public Access trên ShareBucket."],
   solve(){edit("private bucket",()=>{removeNode("SharePolicy");const b=nodeOf("ShareBucket");b.props.PublicAccessBlockConfiguration={BlockPublicAcls:true,BlockPublicPolicy:true,IgnorePublicAcls:true,RestrictPublicBuckets:true}})},
   pass:"Bucket private + quyền qua identity policy là cách chia sẻ trong công ty. Cần gửi cho người ngoài thì dùng presigned URL có hạn. BPA chặn việc lỡ tay public lại."},
 
@@ -408,11 +408,11 @@ ${ASSUME_LAMBDA}
     {t:"Có log trong CloudWatch",c:"/aws/lambda/extract có dòng REPORT",test:()=>probe(()=>{if(!stackUp())deploy();const c=firstOf("CloudLab::Client"),fn=firstOf("AWS::Lambda::Function");if(!c||!fn)return false;RT.logs={};RT.q=[];fire(c,1,RT.t);runFor(30,1,true);return(RT.logs[logName(fn.id)]||[]).some(l=>l.m.startsWith("REPORT"))})},
     {t:"Role không thừa quyền",c:"không xóa được object, không động được IAM",test:()=>{const r=refId((firstOf("AWS::Lambda::Function")||{props:{}}).props.Role);return!!r&&!evalRole(r,"s3:DeleteObject","arn:aws:s3:::lab-images-111122223333/x.jpg").allow&&!evalRole(r,"iam:CreateUser","*").allow}}],
   diagnose(n){const fn=firstOf("AWS::Lambda::Function"),r=fn&&refId(fn.props.Role);
-    if(r&&(evalRole(r,"iam:CreateUser","*").allow||evalRole(r,"s3:DeleteObject","arn:aws:s3:::lab-images-111122223333/x.jpg").allow))return["Role mở quá rộng.","Xem ManagedPolicyArns của extract-role.","Bỏ AdministratorAccess, chỉ gắn AWSLambdaBasicExecutionRole."][Math.min(n,2)];
+    if(r&&(evalRole(r,"iam:CreateUser","*").allow||evalRole(r,"s3:DeleteObject","arn:aws:s3:::lab-images-111122223333/x.jpg").allow))return["Role đang mở quá rộng.","Xem AWS managed policy của extract-role.","Bỏ AdministratorAccess, chỉ gắn AWSLambdaBasicExecutionRole."][Math.min(n,2)];
     const la=`arn:aws:logs:${REGION}:${ACCT}:log-group:/aws/lambda/extract:*`;
     if(r&&!["logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"].every(a=>evalRole(r,a,la).allow))return["Không thấy log nào của extract.","Lambda ghi log bằng quyền nào?","extract-role thiếu logs:*. Gắn AWSLambdaBasicExecutionRole."][Math.min(n,2)];
-    if(fn){const need=+(getP(fn.raw,"Metadata.CloudLab.WorkMs")||300)*128/(+fn.props.MemorySize||128);if(need>(+fn.props.Timeout||3)*1000)return["Có log rồi: Task timed out.","So Duration trong dòng REPORT với Timeout.",`Cần ~${Math.round(need)} ms nhưng timeout ${fn.props.Timeout}s. Tăng Timeout lên 10 hoặc Memory lên 256.`][Math.min(n,2)]}
-    return["Gần xong.","Bấm ▶ hoặc Gửi 1 request ở Tester.","Check lại."][Math.min(n,2)]},
+    if(fn){const need=+(getP(fn.raw,"Metadata.CloudLab.WorkMs")||300)*128/(+fn.props.MemorySize||128);if(need>(+fn.props.Timeout||3)*1000)return["Có log rồi: Task timed out.","So Duration trong dòng REPORT với Timeout.",`Code cần ~${Math.round(need)} ms nhưng Timeout chỉ ${fn.props.Timeout} s. Tăng Timeout lên 10 hoặc Memory lên 256.`][Math.min(n,2)]}
+    return["Gần xong.","Bấm ▶ Chạy, hoặc chọn Tester rồi bấm Gửi 1 request.","Bấm Kiểm tra lại."][Math.min(n,2)]},
   hints:()=>["Lambda ghi log bằng chính execution role. Thiếu quyền logs:* thì log biến mất, không báo lỗi.","ExtractRole → thêm managed policy AWSLambdaBasicExecutionRole. ExtractFn → Timeout 10 (hoặc Memory 256)."],
   solve(){edit("fix extract",()=>{const r=nodeOf("ExtractRole");r.props.ManagedPolicyArns=[BASIC];const f=nodeOf("ExtractFn");f.props.Timeout=10;f.props.MemorySize=256})},
   pass:"Execution role quyết định Lambda làm được gì, kể cả ghi log. Monitor + alarm cho bạn biết có lỗi; log cho bạn biết vì sao."},
@@ -490,10 +490,10 @@ ${ASSUME_LAMBDA}
     {t:"Kết quả nằm ở processed/",c:"output .json bắt đầu bằng processed/",test:()=>{const p=uploadProbe();return p.outs.length>0&&p.outs.every(k=>k.startsWith("processed/"))}},
     {t:"Dọn file rác trong incoming/",c:"incoming/ không còn .json",test:()=>junk().length===0}],
   diagnose(n){const p=uploadProbe(),f=firstOf("AWS::Lambda::Function");const pre=f?getP(f.props,"Environment.Variables.OUTPUT_PREFIX"):"";
-    if(p.n>1)return[`1 upload chạy Lambda ${num(p.n)} lần. Bấm ▶ và nhìn cạnh ImagesBucket ↔ extract.`,"Lambda ghi kết quả vào đâu, và trigger bắt những object nào?",`Ghi vào ${pre||"(trống)"}, trigger bắt mọi object mới → kết quả lại kích hoạt Lambda.`][Math.min(n,2)];
-    if(p.n===0)return["Upload ảnh vào incoming/ không chạy Lambda nào.","Xem filter của event notification.","Prefix incoming/, suffix .jpg."][Math.min(n,2)];
-    if(!p.outs.every(k=>k.startsWith("processed/")))return["Hết lặp, nhưng kết quả chưa ra processed/.","Xem biến môi trường của extract.","OUTPUT_PREFIX = processed/."][Math.min(n,2)];
-    return[`incoming/ còn ${junk().length} file .json rác.`,"Mở ImagesBucket trong inspector.","Bấm “Xóa .json trong incoming/”."][Math.min(n,2)]},
+    if(p.n>1)return[`1 upload làm Lambda chạy ${num(p.n)} lần. Bấm ▶ Chạy và nhìn hai mũi tên giữa ImagesBucket và extract.`,"Lambda ghi kết quả vào đâu, và trigger bắt những object nào?",`Lambda ghi vào ${pre||"(prefix trống)"}, trigger bắt mọi object mới → kết quả lại kích hoạt Lambda.`][Math.min(n,2)];
+    if(p.n===0)return["Upload ảnh vào incoming/ không làm Lambda chạy.","Xem filter của event notification trên ImagesBucket.","Filter cần prefix incoming/ và suffix .jpg."][Math.min(n,2)];
+    if(!p.outs.every(k=>k.startsWith("processed/")))return["Hết lặp, nhưng kết quả chưa nằm ở processed/.","Xem biến môi trường của extract.","Đặt OUTPUT_PREFIX = processed/."][Math.min(n,2)];
+    return[`incoming/ còn ${junk().length} file .json rác.`,"Mở khung chi tiết của ImagesBucket.",`Bấm nút “Xóa ${junk().length} file .json trong incoming/”.`][Math.min(n,2)]},
   hints:()=>["Trigger bắt mọi ObjectCreated, kể cả file Lambda vừa ghi. Ghi ra prefix khác và lọc trigger.","ImagesBucket: filter prefix incoming/, suffix .jpg. ExtractFn: OUTPUT_PREFIX = processed/. Rồi xóa .json rác."],
   solve(){edit("fix loop",()=>{const b=nodeOf("ImagesBucket");b.props.NotificationConfiguration.LambdaConfigurations[0].Filter={S3Key:{Rules:[{Name:"prefix",Value:"incoming/"},{Name:"suffix",Value:".jpg"}]}};nodeOf("ExtractFn").props.Environment.Variables.OUTPUT_PREFIX="processed/"});
     const st=RT.obj.ImagesBucket||{};for(const k of Object.keys(st))if(k.startsWith("incoming/")&&k.endsWith(".json"))delete st[k]},
@@ -559,10 +559,10 @@ ${ASSUME_LAMBDA}
     {t:"Đồng hồ chi phí về 0",c:"không còn GB nào đang lưu",test:()=>!stackUp()&&!Object.keys(M.manual).length}],
   diagnose(n){const st=RT.stack.status;
     if(st==="DELETE_FAILED")return["Xóa stack lỗi ở ImagesBucket.","Đọc dòng DELETE_FAILED trong Event log.","Bucket còn object. Mở ImagesBucket → Empty, rồi xóa stack lại."][Math.min(n,2)];
-    if((RT.stack.kept||[]).length)return["Stack xóa xong nhưng bucket vẫn còn (node “Retained”).","Xem DeletionPolicy của ImagesBucket trong YAML.","DeletionPolicy: Retain. Xóa bucket bị giữ lại (Empty → Xóa), hoặc Deploy lại với Delete rồi làm lại."][Math.min(n,2)];
-    if(stackUp())return["Stack vẫn đang chạy, đồng hồ vẫn nhảy.","Xóa bằng một lệnh.","Thanh stack → Xóa stack."][Math.min(n,2)];
-    return[`Còn ${Object.keys(M.manual).length} tài nguyên ngoài stack.`,"Xóa stack chỉ xóa thứ stack tạo.","Mở lab-scratch → Empty → Xóa bucket."][Math.min(n,2)]},
-  hints:()=>["Stack chỉ xóa thứ nó tạo. DeletionPolicy: Retain giữ bucket lại; bucket còn object thì CloudFormation không xóa được.","ImagesBucket: DeletionPolicy Delete + Empty. Xóa stack. Rồi lab-scratch: Empty → Xóa bucket."],
+    if((RT.stack.kept||[]).length)return["Stack xóa xong nhưng bucket vẫn còn (khối “Retained”).","Xem DeletionPolicy của ImagesBucket trong YAML.","DeletionPolicy: Retain. Xóa bucket bị giữ lại (Empty → Xóa khỏi account), hoặc deploy lại với Delete rồi xóa stack lần nữa."][Math.min(n,2)];
+    if(stackUp())return["Stack vẫn đang chạy, đồng hồ chi phí vẫn tăng.","Cả stack xóa được bằng một lệnh.","Trên thanh stack, bấm Xóa stack."][Math.min(n,2)];
+    return[`Còn ${Object.keys(M.manual).length} tài nguyên ngoài stack.`,"Xóa stack chỉ xóa những gì stack tạo ra.","Mở lab-scratch → Empty → Xóa khỏi account."][Math.min(n,2)]},
+  hints:()=>["Stack chỉ xóa những gì nó tạo ra. DeletionPolicy: Retain giữ bucket lại; bucket còn object thì CloudFormation không xóa được.","ImagesBucket: DeletionPolicy Delete, rồi Empty. Xóa stack. Rồi lab-scratch: Empty → Xóa khỏi account."],
   solve(){if(stackUp()){edit("deletion policy",()=>{nodeOf("ImagesBucket").raw.DeletionPolicy="Delete"});RT.obj.ImagesBucket={};deleteStack()}
     for(const id of Object.keys(M.manual)){RT.obj[id]={};edit("delete manual",()=>{removeNode(id)})}},
   pass:"Stack xóa sạch bằng một lệnh, nhưng chỉ thứ nó tạo, và tôn trọng DeletionPolicy. Thứ tạo tay phải tự dọn — đồng hồ chi phí là nơi kiểm tra cuối cùng."},
@@ -826,9 +826,9 @@ ${EC2("PublicEc2","PublicA","PublicSg")}${EC2("PrivateEc2","PrivateB","PrivateSg
     {t:"Khách vào được web",c:"IGW gắn VPC → public subnet có đường Internet",test:()=>{const S=simStats(600);return okOf(S,"Visitors")>0&&!errOf(S,"Visitors")}},
     {t:"SSH chỉ từ IP của bạn",c:"You vào được, ScanBot bị chặn",test:()=>{const S=simStats(600);return okOf(S,"You")>0&&!errOf(S,"You")&&!okOf(S,"ScanBot")}},
     {t:"Private chỉ nhận SSH từ public SG",c:"không có 0.0.0.0/0 trên PrivateSg",test:()=>{const g=nodeOf("PrivateSg");const L=arr(g&&g.props.SecurityGroupIngress);return L.length>0&&L.every(r=>refId(r.SourceSecurityGroupId)==="PublicSg"||(r.CidrIp&&r.CidrIp!=="0.0.0.0/0"&&r.CidrIp.startsWith("10.10.")))}}],
-  diagnose(n){if(!igwOf("Vpc"))return["Khách vẫn không vào được web.","Bấm ▶ và đọc lý do trên cạnh Visitors → PublicEc2.","Internet gateway chưa gắn vào VPC: nối Igw → Vpc."][Math.min(n,2)];
+  diagnose(n){if(!igwOf("Vpc"))return["Khách vẫn không vào được web.","Bấm ▶ Chạy và đọc lý do trên mũi tên Visitors → PublicEc2.","Internet gateway chưa gắn vào VPC: nối Igw → Vpc."][Math.min(n,2)];
     if(arr(getP(nodeOf("PublicSg")||{props:{}},"props.SecurityGroupIngress")).some(r=>+r.FromPort===22&&r.CidrIp==="0.0.0.0/0"))return["Bot quét vẫn SSH vào được PublicEc2.","Xem rule cổng 22 của PublicSg.","Đổi nguồn của rule SSH thành 203.0.113.10/32 (IP của bạn)."][Math.min(n,2)];
-    return["PrivateSg vẫn mở SSH cho Internet.","Ai nên SSH được vào private?","Rule 22 của PrivateSg: nguồn = SG PublicSg."][Math.min(n,2)]},
+    return["PrivateSg vẫn mở SSH cho Internet.","Ai nên SSH được vào máy private?","Rule 22 của PrivateSg: nguồn = SG PublicSg."][Math.min(n,2)]},
   hints:()=>["Subnet chỉ public khi VPC có internet gateway gắn vào. Security group: mở đúng cổng cho đúng nguồn.","Nối Igw → Vpc. PublicSg: rule 22 nguồn 203.0.113.10/32. PrivateSg: rule 22 nguồn SG PublicSg."],
   solve(){edit("fix vpc",()=>{M.res.IgwAttach={Type:"AWS::EC2::VPCGatewayAttachment",Properties:{VpcId:{Ref:"Vpc"},InternetGatewayId:{Ref:"Igw"}}};
     nodeOf("PublicSg").props.SecurityGroupIngress=[{IpProtocol:"tcp",FromPort:80,ToPort:80,CidrIp:"0.0.0.0/0"},{IpProtocol:"tcp",FromPort:22,ToPort:22,CidrIp:"203.0.113.10/32"}];
@@ -875,8 +875,8 @@ ${EC2("AppEc2",null,"AppSg","!Ref UploadsBucket")}  UploadsBucket:
     {t:"EC2 có instance role",c:"IamInstanceProfile → AppRole",test:()=>{const p=nodeOf(refId(nodeOf("AppEc2").props.IamInstanceProfile));return!!p&&refId(arr(p.props.Roles)[0])==="AppRole"}},
     {t:"App ghi được vào bucket",c:"request → PutObject 200",test:()=>{const S=simStats(300);return okOf(S,"Users")>0&&!errOf(S,"Users")}},
     {t:"Role chỉ có quyền cần thiết",c:"không xóa bucket, không ghi bucket khác",test:()=>!evalRole("AppRole","s3:DeleteBucket",arnOf("UploadsBucket")).allow&&!evalRole("AppRole","s3:PutObject","arn:aws:s3:::other-bucket/x").allow}],
-  diagnose(n){if(!refId(nodeOf("AppEc2").props.IamInstanceProfile))return["App báo lỗi mỗi request. Bấm ▶ và xem cạnh AppEc2 → UploadsBucket.","Máy lấy credential từ đâu để gọi S3?","Gắn AppRole vào AppEc2 (nối AppEc2 → AppRole tạo instance profile)."][Math.min(n,2)];
-    if(evalRole("AppRole","s3:DeleteBucket",arnOf("UploadsBucket")).allow)return["Role vẫn làm được mọi thứ với S3.","Xem policy s3-everything.","Chỉ cho s3:PutObject (và GetObject nếu cần) trên ${UploadsBucket.Arn}/*."][Math.min(n,2)];return["Gần xong.","Bấm ▶ thử.","Check lại."][Math.min(n,2)]},
+  diagnose(n){if(!refId(nodeOf("AppEc2").props.IamInstanceProfile))return["App báo lỗi ở mọi request. Bấm ▶ Chạy và xem mũi tên AppEc2 → UploadsBucket.","Máy lấy credential từ đâu để gọi S3?","Gắn AppRole vào AppEc2: nối AppEc2 → AppRole, CloudLab tạo instance profile."][Math.min(n,2)];
+    if(evalRole("AppRole","s3:DeleteBucket",arnOf("UploadsBucket")).allow)return["Role vẫn làm được mọi thứ với S3.","Xem policy s3-everything.","Chỉ cho s3:PutObject (và GetObject nếu cần) trên !Sub ${UploadsBucket.Arn}/*."][Math.min(n,2)];return["Gần xong.","Bấm ▶ Chạy thử.","Bấm Kiểm tra lại."][Math.min(n,2)]},
   hints:()=>["EC2 nhận credential tạm từ instance profile, không cần access key nằm trên máy.","Nối AppEc2 → AppRole. Trong AppRole, thay statement s3:* bằng s3:PutObject trên !Sub ${UploadsBucket.Arn}/*."],
   solve(){edit("fix role",()=>{M.res.AppRoleProfile={Type:"AWS::IAM::InstanceProfile",Properties:{Roles:[{Ref:"AppRole"}]}};nodeOf("AppEc2").props.IamInstanceProfile={Ref:"AppRoleProfile"};
     nodeOf("AppRole").props.Policies=[{PolicyName:"uploads-write",PolicyDocument:{Version:"2012-10-17",Statement:[{Sid:"WriteUploads",Effect:"Allow",Action:"s3:PutObject",Resource:{"Fn::Sub":"${UploadsBucket.Arn}/*"}}]}}]})},
@@ -916,9 +916,9 @@ Resources:
     {t:"Khách đi qua CloudFront",c:"Visitors → CloudFront → SiteBucket, không lỗi",test:()=>{const v=nodeOf("Visitors"),t=v&&nodeOf(refId(v.props.Target));if(!t||t.type!=="AWS::CloudFront::Distribution")return false;const S=simStats(300);return okOf(S,"Visitors")>0&&!errOf(S,"Visitors")}},
     {t:"Bucket không còn đọc công khai",c:"GET ẩn danh index.html → 403",test:()=>!evalS3({anon:true},"SiteBucket","s3:GetObject","index.html").allow},
     {t:"Block Public Access bật cả 4",c:"4 tùy chọn = true",test:()=>{const c=(nodeOf("SiteBucket").props.PublicAccessBlockConfiguration)||{};return["BlockPublicAcls","IgnorePublicAcls","BlockPublicPolicy","RestrictPublicBuckets"].every(k=>c[k]===true)}}],
-  diagnose(n){const v=nodeOf("Visitors"),t=v&&nodeOf(refId(v.props.Target));if(!t||t.type!=="AWS::CloudFront::Distribution")return["Khách vẫn đọc thẳng từ S3.","Thêm CloudFront từ thanh Thành phần.","Thêm CloudFront → nối CloudFront → SiteBucket (origin) → nối Visitors → CloudFront."][Math.min(n,2)];
-    if(evalS3({anon:true},"SiteBucket","s3:GetObject","index.html").allow)return["Bucket vẫn public.","Ai đang cho phép Principal \"*\"?","Xóa SitePolicy và bật Block Public Access."][Math.min(n,2)];return["Block Public Access chưa bật đủ.","Mở SiteBucket.","Bật cả 4 tùy chọn."][Math.min(n,2)]},
-  hints:()=>["CloudFront đọc bucket bằng quyền riêng (OAC), nên bucket không cần public.","+ Thêm → CloudFront. Nối CloudFront → SiteBucket, Visitors → CloudFront. Xóa SitePolicy, bật 4 ô Block Public Access."],
+  diagnose(n){const v=nodeOf("Visitors"),t=v&&nodeOf(refId(v.props.Target));if(!t||t.type!=="AWS::CloudFront::Distribution")return["Khách vẫn đọc thẳng từ S3.","Thêm CloudFront từ tab Thành phần.","Thêm CloudFront, nối CloudFront → SiteBucket (origin), rồi nối Visitors → CloudFront."][Math.min(n,2)];
+    if(evalS3({anon:true},"SiteBucket","s3:GetObject","index.html").allow)return["Bucket vẫn public.","Ai đang cho phép Principal \"*\"?","Xóa SitePolicy và bật Block Public Access."][Math.min(n,2)];return["Block Public Access chưa bật đủ.","Mở SiteBucket.","Bật cả 4 tùy chọn Block Public Access."][Math.min(n,2)]},
+  hints:()=>["CloudFront đọc bucket bằng quyền riêng (OAC), nên bucket không cần public.","＋ Thêm → CloudFront. Nối CloudFront → SiteBucket, Visitors → CloudFront. Xóa SitePolicy, bật cả 4 tùy chọn Block Public Access."],
   solve(){edit("cloudfront",()=>{M.res.Cdn={Type:"AWS::CloudFront::Distribution",Metadata:{CloudLab:{HitRatio:0.9}},Properties:{DistributionConfig:{Enabled:true,DefaultRootObject:"index.html",Origins:[{Id:"SiteBucket",DomainName:{"Fn::GetAtt":["SiteBucket","RegionalDomainName"]},S3OriginConfig:{OriginAccessIdentity:""}}],DefaultCacheBehavior:{TargetOriginId:"SiteBucket",ViewerProtocolPolicy:"redirect-to-https",CachePolicyId:"658327ea-f89d-4fab-a63d-7e88639e58f6"}}}};M.pos.Cdn=[400,120];
     nodeOf("Visitors").props.Target={Ref:"Cdn"};delete nodeOf("Visitors").props.Action;delete nodeOf("Visitors").props.Key;removeNode("SitePolicy");nodeOf("SiteBucket").props.PublicAccessBlockConfiguration={BlockPublicAcls:true,BlockPublicPolicy:true,IgnorePublicAcls:true,RestrictPublicBuckets:true}})},
   pass:"CloudFront cache ở edge nên 90% request không chạm tới S3, và bucket quay về private. Public bucket chỉ hợp cho demo."};
@@ -974,9 +974,9 @@ ${EC2("AppEc2","PublicA","Ec2Sg","!Ref Db")}  DbSubnets:
     {t:"DB không public",c:"PubliclyAccessible false, rds-sg chỉ nhận từ Ec2Sg",test:()=>{const d=nodeOf("Db"),L=arr(getP(nodeOf("RdsSg")||{props:{}},"props.SecurityGroupIngress"));return d.props.PubliclyAccessible!==true&&L.length>0&&L.every(r=>refId(r.SourceSecurityGroupId)==="Ec2Sg")}},
     {t:"2 AZ private + Multi-AZ",c:"DB subnet group gồm 2 private subnet khác AZ, MultiAZ true",test:()=>{const d=nodeOf("Db"),ss=subnetsOf(d);return d.props.MultiAZ===true&&ss.length>=2&&ss.every(s=>!isPublicSubnet(s))&&new Set(ss.map(s=>nodeOf(s).props.AvailabilityZone)).size>=2}}],
   diagnose(n){const d=nodeOf("Db"),L=arr(getP(nodeOf("RdsSg")||{props:{}},"props.SecurityGroupIngress"));const S=simStats(120);
-    if(errOf(S,"Users"))return["App lỗi kết nối database.","Xem lý do trên cạnh AppEc2 → Db.","rds-sg phải có rule tcp/3306 nguồn SG Ec2Sg."][Math.min(n,2)];
+    if(errOf(S,"Users"))return["App không kết nối được database.","Xem lý do trên mũi tên AppEc2 → Db.","rds-sg phải có rule tcp/3306 với nguồn là SG Ec2Sg."][Math.min(n,2)];
     if(d.props.PubliclyAccessible===true||L.some(r=>r.CidrIp==="0.0.0.0/0"))return["Database vẫn với tới được từ Internet.","Xem tab Vấn đề.","Db: Public = Không. rds-sg: bỏ 0.0.0.0/0, thêm 3306 từ SG Ec2Sg."][Math.min(n,2)];
-    return["DB chỉ ở một AZ.","Xem DB subnet group và Multi-AZ.","Kéo Db vào PrivateA rồi nối Db → PrivateB; bật Multi-AZ."][Math.min(n,2)]},
+    return["Database chỉ ở một AZ.","Xem DB subnet group và Multi-AZ.","Kéo Db vào PrivateA rồi nối Db → PrivateB; bật Multi-AZ."][Math.min(n,2)]},
   hints:()=>["Database nên ở private subnet, không public, và security group chỉ nhận từ security group của app.","Db: Public = Không, Multi-AZ = Có, subnet group = PrivateA + PrivateB. rds-sg: 3306 từ SG Ec2Sg."],
   solve(){edit("fix rds",()=>{const d=nodeOf("Db");d.props.PubliclyAccessible=false;d.props.MultiAZ=true;nodeOf("DbSubnets").props.SubnetIds=[{Ref:"PrivateA"},{Ref:"PrivateB"}];
     nodeOf("RdsSg").props.SecurityGroupIngress=[{IpProtocol:"tcp",FromPort:3306,ToPort:3306,SourceSecurityGroupId:{"Fn::GetAtt":["Ec2Sg","GroupId"]}}]})},
@@ -1022,8 +1022,8 @@ ${EC2("Web1","PrivateA","WebSg")}`,
     {t:"Target ở 2 AZ",c:"target group có instance ở 2 AZ",test:()=>{const azs=new Set(arr(nodeOf("WebTargets").props.Targets).map(t=>nodeOf(refId(t.Id))).filter(Boolean).map(n=>(nodeOf(subnetsOf(n)[0])||{props:{}}).props.AvailabilityZone).filter(Boolean));return azs.size>=2}}],
   diagnose(n){const ss=subnetsOf(nodeOf("Alb"));if(ss.length<2)return["Tab Vấn đề báo lỗi ở Alb.","ALB cần mấy subnet?","Nối Alb → PublicB."][Math.min(n,2)];
     const S=simStats(300),o=okOf(S,"Users"),e=errOf(S,"Users");if(e/(o+e||1)>=0.01)return[`${Math.round(e/(o+e)*100)}% request lỗi 5xx.`,"Nhìn CPU của Web1.","Thêm Web2 (EC2, WebSg) vào PrivateB rồi nối Alb → Web2."][Math.min(n,2)];
-    return["Hai target nhưng cùng một AZ.","AZ hỏng thì sao?","Đặt instance thứ hai ở PrivateB."][Math.min(n,2)]},
-  hints:()=>["Load balancer chia tải và loại target hỏng; nhiều instance ở nhiều AZ thì vừa chịu tải vừa sống khi một AZ hỏng.","Nối Alb → PublicB. + Thêm EC2 vào PrivateB, gắn WebSg, nối Alb → EC2 mới (tự vào target group)."],
+    return["Có hai target nhưng cùng một AZ.","AZ đó hỏng thì sao?","Đặt instance thứ hai ở PrivateB."][Math.min(n,2)]},
+  hints:()=>["Load balancer chia tải và loại target hỏng. Nhiều instance ở nhiều AZ thì vừa chịu được tải, vừa chạy tiếp khi một AZ hỏng.","Nối Alb → PublicB. ＋ Thêm EC2 vào PrivateB, gắn WebSg, rồi nối Alb → EC2 mới (EC2 tự vào target group)."],
   solve(){edit("scale out",()=>{nodeOf("Alb").props.Subnets=[{Ref:"PublicA"},{Ref:"PublicB"}];M.res.Web2=clone(M.res.Web1);M.res.Web2.Properties.SubnetId={Ref:"PrivateB"};M.res.Web2.Properties.Tags=[{Key:"Name",Value:"web-2"}];M.pos.Web2=[840,610];nodeOf("WebTargets").props.Targets.push({Id:{Ref:"Web2"}})})},
   pass:"ALB trải 2 AZ, target ở 2 AZ: thêm máy là thêm sức chịu tải, mất một AZ vẫn chạy. Lab thật dùng Auto Scaling group để tự thêm/bớt máy theo CPU."};
 const L_API={id:"apiddb",lab:"000079",step:9,title:"API → Lambda → DynamoDB",tag:"API Gateway + DynamoDB",who:["L","Lan · dev"],speed:1,
@@ -1073,8 +1073,8 @@ ${ASSUME_LAMBDA}
     {t:"API trả 200",c:"Frontend → API → Lambda không lỗi",test:()=>{const S=simStats(120);return okOf(S,"Frontend")>0&&!errOf(S,"Frontend")}},
     {t:"Sách vào bảng",c:"DynamoDB có item mới",test:()=>probe(()=>{if(!stackUp())deploy();RT.items={};RT.q=[];runFor(120,10);return(RT.items.BooksTable||0)>0})},
     {t:"Role chỉ ghi đúng bảng",c:"PutItem bảng books; không xóa bảng, không ghi bảng khác",test:()=>evalRole("BooksRole","dynamodb:PutItem",arnOf("BooksTable")).allow&&!evalRole("BooksRole","dynamodb:DeleteTable",arnOf("BooksTable")).allow&&!evalRole("BooksRole","dynamodb:PutItem",`arn:aws:dynamodb:${REGION}:${ACCT}:table/other`).allow}],
-  diagnose(n){if(!evalRole("BooksRole","dynamodb:PutItem",arnOf("BooksTable")).allow)return["API trả 502.","Bấm ▶ và đọc lỗi trên cạnh BooksFn → BooksTable.","books-role thiếu dynamodb:PutItem trên bảng books."][Math.min(n,2)];
-    return["Role mở quá rộng.","Xem statement vừa thêm.","Resource = !GetAtt BooksTable.Arn, Action = dynamodb:PutItem."][Math.min(n,2)]},
+  diagnose(n){if(!evalRole("BooksRole","dynamodb:PutItem",arnOf("BooksTable")).allow)return["API trả 502.","Bấm ▶ Chạy và đọc lỗi trên mũi tên BooksFn → BooksTable.","books-role thiếu dynamodb:PutItem trên bảng books."][Math.min(n,2)];
+    return["Role đang mở quá rộng.","Xem statement vừa thêm.","Resource = !GetAtt BooksTable.Arn, Action = dynamodb:PutItem."][Math.min(n,2)]},
   hints:()=>["Lambda chạy bằng role của nó; gọi DynamoDB cần quyền đúng action trên đúng bảng.","Nối BooksRole → BooksTable (cho phép GetItem, PutItem) hoặc thêm statement dynamodb:PutItem trên !GetAtt BooksTable.Arn."],
   solve(){edit("grant",()=>addStmt("BooksRole",["dynamodb:PutItem"],{"Fn::GetAtt":["BooksTable","Arn"]},"PutBooks"))},
   pass:"API Gateway → Lambda → DynamoDB là xương sống serverless: không máy nào chạy khi không có request, và quyền gói trong role của từng function."};

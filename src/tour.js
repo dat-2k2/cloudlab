@@ -4,16 +4,16 @@
    The "?" button in the top bar replays it. The spotlight never blocks the page: only the card takes clicks. */
 const TOUR_VERSION="v1",TOUR_KEY="cloudlab:tour";
 const TOUR_STEPS=[
-  {t:"Chào mừng đến CloudLab",b:"Ở đây bạn học AWS bằng cách sửa một hệ thống mẫu có lỗi, rồi chạy thử xem nó hoạt động thế nào. Không gọi AWS thật, không tốn tiền. Mất khoảng 1 phút để xem qua màn hình."},
+  {t:"Chào mừng đến CloudLab",b:"Ở đây bạn học AWS bằng cách sửa một hệ thống mẫu có lỗi, rồi chạy thử xem nó hoạt động thế nào. Không gọi AWS thật, không tốn tiền. Xem qua màn hình mất khoảng 1 phút."},
   {sel:"#lesson",place:"left",t:"Bắt đầu từ khung này",b:"Mục tiêu và nhiệm vụ của bài nằm trên cùng. Bên dưới là bối cảnh: tình huống và ví dụ trong ngân hàng. Phần Tham khảo thu gọn sẵn, khi cần mới mở."},
-  {sel:"#lessonResize",place:"left",t:"Kéo để mở rộng khung đọc",b:"Kéo mép này sang trái (hoặc bấm ⇤ Mở rộng) để đọc thoải mái. Sơ đồ bên cạnh khi đó chỉ để tham khảo."},
-  {sel:".gx",place:"right",t:"Sơ đồ hệ thống",b:"Mỗi khối là một thành phần AWS, mũi tên là cách chúng gọi nhau. Bấm một khối để đọc phần Hiểu nhanh, giải thích bằng ví dụ ngân hàng."},
-  {sel:"#side",place:"right",t:"Bài học và thành phần",b:"Tab Bài học là lộ trình. Tab Thành phần có mọi khối AWS: kéo một khối vào sơ đồ để thêm. Nút « ở dưới cùng thu gọn thanh này."},
-  {sel:'[data-act="simToggle"]',place:"top",t:"Chạy mô phỏng",b:"Bấm Chạy để giả lập khách hàng gửi yêu cầu. Mũi tên đổi màu theo kết quả: chạy được, bị chặn, hay lỗi, kèm lý do."},
-  {sel:".meter",place:"top",t:"Đồng hồ chi phí",b:"Tiền cộng dồn theo thời gian mô phỏng, theo giá tham khảo. Một cấu hình sai có thể làm nó chạy rất nhanh."},
-  {sel:'[data-act="panel"][data-arg="problems"]',place:"top",t:"Vấn đề",b:"Danh sách lỗi cấu hình và rủi ro, như một người kiểm tra soát lại hồ sơ. Bấm một dòng để tới đúng khối."},
-  {sel:'[data-act="check"]',place:"left",t:"Sửa xong thì Check",b:"Check chấm từng nhiệm vụ. Bí thì bấm Gợi ý: gợi ý mở dần từ triệu chứng tới nguyên nhân."},
-  {sel:'[data-act="vMode"][data-arg="code"]',place:"bottom",t:"Xem dạng code",b:"Sơ đồ cũng là một file CloudFormation. Tab YAML cho xem và xuất ra Terraform hoặc CDK. Người không làm kỹ thuật có thể bỏ qua."},
+  {sel:"#lessonResize",place:"left",t:"Kéo để mở rộng khung đọc",b:"Kéo mép này sang trái (hoặc bấm ⇤ Mở rộng) để đọc thoải mái. Canvas bên cạnh thu nhỏ lại để tham khảo."},
+  {sel:".gx",place:"right",t:"Canvas: sơ đồ hệ thống",b:"Mỗi khối là một thành phần AWS, mũi tên cho biết khối nào gọi khối nào. Bấm một khối để mở khung chi tiết, có phần Hiểu nhanh giải thích bằng ví dụ ngân hàng."},
+  {sel:"#side",place:"right",t:"Bài học và thành phần",b:"Tab Bài học là lộ trình. Tab Thành phần liệt kê mọi thành phần AWS: kéo một thành phần vào canvas để thêm khối. Nút « ở dưới cùng thu gọn thanh này."},
+  {sel:'[data-act="simToggle"]',place:"top",t:"Chạy mô phỏng",b:"Bấm ▶ Chạy để giả lập khách hàng gửi request. Mũi tên đổi màu theo kết quả: chạy được, bị chặn hay lỗi, kèm lý do."},
+  {sel:".meter",place:"top",t:"Đồng hồ chi phí",b:"Chi phí cộng dồn theo thời gian mô phỏng, tính theo giá tham khảo. Một cấu hình sai có thể làm con số tăng rất nhanh."},
+  {sel:'[data-act="panel"][data-arg="problems"]',place:"top",t:"Vấn đề",b:"Danh sách lỗi cấu hình và rủi ro, giống kiểm soát viên rà lại hồ sơ. Bấm một dòng để tới đúng khối."},
+  {sel:'[data-act="check"]',place:"left",t:"Sửa xong thì bấm Kiểm tra",b:"Kiểm tra chấm từng nhiệm vụ. Nếu bí, bấm Gợi ý: gợi ý đi dần từ triệu chứng tới nguyên nhân."},
+  {sel:'[data-act="vMode"][data-arg="code"]',place:"bottom",t:"Xem dạng code",b:"Canvas cũng là một file CloudFormation. Chế độ YAML cho xem template và xuất ra Terraform hoặc CDK. Nếu không làm kỹ thuật, bạn có thể bỏ qua."},
   {sel:"#tourBtn",place:"bottom",t:"Xem lại lúc nào cũng được",b:"Nút ? mở lại hướng dẫn này. Chúc bạn học vui."}];
 let TOUR=null;
 const tourSeen=()=>{try{return localStorage.getItem(TOUR_KEY)===TOUR_VERSION}catch(_){return true}};

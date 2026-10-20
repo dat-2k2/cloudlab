@@ -76,7 +76,7 @@ ${OU("Legacy","Legacy")}${OU("Workloads","Workloads")}${SCP_DENY}${ACC("LegacyBi
     {t:"Không SCP nào chặn baseline",c:"không OU nào có SCP deny config:*",test:()=>orgNodes("AWS::Organizations::OrganizationalUnit").every(o=>!blockingScps(o.id).length)},
     {t:"Cả 4 account qua precheck",c:"có execution role, không còn Config recorder cũ",test:()=>accs().every(a=>!acctBlockers(a).length)}],
   diagnose(n){if((orgNode()||{props:{}}).props.FeatureSet!=="ALL")return["Landing zone sẽ không set up được.","Xem khối Org.","Đổi FeatureSet sang All features. Account được mời phải chấp thuận handshake."][Math.min(n,2)];
-    if(orgNodes("AWS::Organizations::OrganizationalUnit").some(o=>blockingScps(o.id).length))return["Mọi account trong OU Legacy sẽ fail khi register.","Có policy nào trên OU chặn AWS Config?","Gỡ DenyConfigChanges khỏi Legacy (nút trên OU hoặc xóa cạnh “áp lên”)."][Math.min(n,2)];
+    if(orgNodes("AWS::Organizations::OrganizationalUnit").some(o=>blockingScps(o.id).length))return["Mọi account trong OU Legacy sẽ fail khi register.","Có policy nào trên OU chặn AWS Config?","Gỡ DenyConfigChanges khỏi Legacy (nút Gỡ SCP trong khung chi tiết của OU, hoặc xóa mũi tên “áp lên”)."][Math.min(n,2)];
     const a=accs().find(x=>acctBlockers(x).length);return[`${physName(a)} vẫn sẽ fail precheck.`,"Mở tab Vấn đề hoặc chọn account để xem lý do.",acctBlockers(a)[0].fix][Math.min(n,2)]},
   hints:()=>["Enroll fail vì ba lý do: thiếu role AWSControlTowerExecution, Config recorder cũ (mỗi region chỉ một recorder), SCP chặn config:*. Org phải bật All features.","Org: All features. Gỡ DenyConfigChanges khỏi Legacy. acquired-startup: tạo execution role. legacy-billing và app-prod: xóa recorder cũ."],
   solve(){edit("prep",()=>{M.res.Org.Properties.FeatureSet="ALL";M.res.DenyConfigChanges.Properties.TargetIds=[];
@@ -137,7 +137,7 @@ ${OU("Legacy","Legacy")}${OU("Workloads","Workloads")}${OU("Security","Security"
     {t:"Không còn log ghi hai nơi",c:"account đã enroll không còn trail riêng",test:()=>dualTrails().length===0&&orgCoverage().enrolled===orgCoverage().total},
     {t:"Bật preventive control trên Workloads",c:"sau khi enroll xong mới cưỡng chế",test:()=>controlsOf("Workloads").some(c=>/RESTRICT_ROOT_USER|REGION_DENY/.test(String(c.props.ControlIdentifier)))}],
   diagnose(n){if(lzState().st==="drift")return["Landing zone đang drift.","Đừng sửa tay thêm.","Chọn LandingZone, bấm Repair landing zone."][Math.min(n,2)];
-    if(dualTrails().length)return[`${dualTrails().map(a=>physName(a)).join(", ")} vẫn ghi log hai nơi.`,"Xem đồng hồ chi phí: dòng “trail trùng”.","Xóa trail riêng của từng account (nút trong inspector)."][Math.min(n,2)];
+    if(dualTrails().length)return[`${dualTrails().map(a=>physName(a)).join(", ")} vẫn ghi log hai nơi.`,"Chọn account đó, xem dòng “Chi phí · trail trùng” trong khung chi tiết.","Xóa trail riêng của từng account (nút Xóa trail riêng trong khung chi tiết)."][Math.min(n,2)];
     return["Chưa có preventive control.","Detective đã đo đủ, giờ cưỡng chế.","Nối LandingZone → Workloads để bật control RESTRICT_ROOT_USER."][Math.min(n,2)]},
   hints:()=>["Contract là bước có chủ đích: xóa trail riêng, recorder cũ, SCP thừa sau khi đường mới đã chạy. Mọi thay đổi sau rollout đi qua Control Tower.","LandingZone: Repair. acquired-startup và app-prod: Xóa trail riêng. Nối LandingZone → Workloads (đã register) để bật control."],
   solve(){edit("contract",()=>{delete M.res.LandingZone.Metadata.CloudLab.Drift;for(const id of["AcquiredStartup","AppProd"])M.res[id].Metadata.CloudLab.LegacyTrail=false;
