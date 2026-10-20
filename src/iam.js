@@ -8,7 +8,7 @@ function roleStatements(roleId){const r=nodeOf(roleId);if(!r||r.type!=="AWS::IAM
 function stmtHits(s,action,res){return matchAny(arr(s.Action),action)&&arr(resolve(s.Resource)).some(p=>glob(p).test(res))}
 function evalRole(roleId,action,res){if(!nodeOf(roleId))return{allow:false,kind:"implicit",by:"role không tồn tại"};let allowBy=null;
   for(const s of roleStatements(roleId)){if(!stmtHits(s,action,res))continue;if(s.Effect==="Deny")return{allow:false,kind:"explicit",by:s._by};allowBy=allowBy||s._by}
-  return allowBy?{allow:true,kind:"allow",by:allowBy}:{allow:false,kind:"implicit",by:"không statement nào cho phép"}}
+  return allowBy?{allow:true,kind:"allow",by:allowBy}:{allow:false,kind:"implicit",by:"không có statement nào cho phép"}}
 function trusts(roleId,who){const r=nodeOf(roleId);if(!r)return false;
   return arr(getP(r.props,"AssumeRolePolicyDocument.Statement")).some(s=>s.Effect==="Allow"&&(who==="lambda"?arr(s.Principal&&s.Principal.Service).includes("lambda.amazonaws.com"):!!(s.Principal&&(s.Principal.AWS||s.Principal==="*"))))}
 const isPublicPrincipal=p=>p==="*"||(p&&(p.AWS==="*"||arr(p.AWS).includes("*")));
@@ -20,7 +20,7 @@ function evalS3(who,bucketId,action,key){const b=nodeOf(bucketId);if(!b)return{a
   const pols=bucketPolicies(bucketId).flatMap(p=>arr(getP(p.props,"PolicyDocument.Statement")).map(s=>({...s,_by:`${p.id} · ${s.Sid||"(không Sid)"}`})));
   for(const s of pols)if(s.Effect==="Deny"&&stmtHits(s,action,res)&&(isPublicPrincipal(s.Principal)||who.role))return{allow:false,kind:"explicit",by:s._by};
   if(who.anon){const pub=pols.find(s=>s.Effect==="Allow"&&isPublicPrincipal(s.Principal)&&stmtHits(s,action,res));
-    if(!pub)return{allow:false,kind:"implicit",by:"không có quyền công khai"};
+    if(!pub)return{allow:false,kind:"implicit",by:"bucket không cho truy cập công khai"};
     if(bpa(b).RestrictPublicBuckets||bpa(b).BlockPublicPolicy)return{allow:false,kind:"bpa",by:"Block Public Access chặn policy public"};
     return{allow:true,kind:"public",by:`${pub._by} (Principal "*")`,leak:true}}
   const e=evalRole(who.role,action,res);if(e.allow)return e;

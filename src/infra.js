@@ -99,7 +99,7 @@ const appPort=n=>n.type==="AWS::EC2::Instance"?+(getP(n.raw,"Metadata.CloudLab.A
 /* is traffic from `src` ({internet:true} or {node:id}) allowed into dst on port? returns {ok, why} */
 function sgAllows(dstId,port,src){const dst=nodeOf(dstId),sgs=sgsOf(dstId),srcSgs=src.node?sgsOf(src.node):[];
   const label=x=>src.internet?"Internet (0.0.0.0/0)":x;
-  if(!sgs.length)return src.internet?{ok:false,why:`${dstId} không có security group nào cho Internet vào`}:{ok:true};
+  if(!sgs.length)return src.internet?{ok:false,why:`${dstId} chưa gắn security group nên Internet không vào được`}:{ok:true};
   for(const g of sgs){for(const r of arr(getP(nodeOf(g)||{props:{}},"props.SecurityGroupIngress"))){const proto=String(r.IpProtocol);
       if(!(proto==="-1"||((proto==="tcp"||proto==="6")&&port>=+r.FromPort&&port<=+(r.ToPort??r.FromPort))))continue;
       if(r.CidrIp==="0.0.0.0/0")return{ok:true,by:`${g} · ${proto}/${portOfRule(r)} từ 0.0.0.0/0`,open:true};
@@ -108,9 +108,9 @@ function sgAllows(dstId,port,src){const dst=nodeOf(dstId),sgs=sgsOf(dstId),srcSg
       const s=refId(r.SourceSecurityGroupId);if(s&&srcSgs.includes(s))return{ok:true,by:`${g} · từ ${s}`}}}
   return{ok:false,why:`Security group ${sgs.join(", ")} không cho phép tcp/${port} từ ${src.internet?(src.ip?"IP "+src.ip:"Internet"):(srcSgs.join(", ")||src.node||"?")}`}}
 function reachFromInternet(id){const n=nodeOf(id);
-  if(n.type==="AWS::ElasticLoadBalancingV2::LoadBalancer"){if(n.props.Scheme==="internal")return{ok:false,why:"Load balancer là internal, không nhận traffic Internet"};const ss=subnetsOf(n);
-    if(!ss.length)return{ok:false,why:"Load balancer chưa có subnet"};if(!ss.some(isPublicSubnet))return{ok:false,why:"Subnet của load balancer không phải public (cần MapPublicIpOnLaunch + internet gateway gắn vào VPC)"};return{ok:true}}
-  if(n.type==="AWS::EC2::Instance"){const s=subnetsOf(n)[0];if(!s)return{ok:true,note:"default VPC"};if(!isPublicSubnet(s))return{ok:false,why:`${id} ở private subnet ${s}: không có IP public`};return{ok:true}}
+  if(n.type==="AWS::ElasticLoadBalancingV2::LoadBalancer"){if(n.props.Scheme==="internal")return{ok:false,why:"Load balancer là internal nên không nhận traffic từ Internet (đổi Scheme sang internet-facing)"};const ss=subnetsOf(n);
+    if(!ss.length)return{ok:false,why:"Load balancer chưa có subnet (nối nó tới 2 public subnet ở 2 AZ)"};if(!ss.some(isPublicSubnet))return{ok:false,why:"Subnet của load balancer không phải public (cần chọn Public subnet và gắn internet gateway vào VPC)"};return{ok:true}}
+  if(n.type==="AWS::EC2::Instance"){const s=subnetsOf(n)[0];if(!s)return{ok:true,note:"default VPC"};if(!isPublicSubnet(s))return{ok:false,why:`${id} ở private subnet ${s} nên không có IP public (đặt vào public subnet, hoặc cho traffic đi qua load balancer)`};return{ok:true}}
   return{ok:true}}
 function targetsOf(albId){const out=[];for(const id of Object.keys(M.res)){const r=M.res[id];if(r.Type!=="AWS::ElasticLoadBalancingV2::Listener"||refId(r.Properties.LoadBalancerArn)!==albId)continue;
     for(const a of arr(r.Properties.DefaultActions)){const tg=refId(a&&a.TargetGroupArn),tn=nodeOf(tg);if(!tn)continue;for(const t of arr(tn.props.Targets)){const x=refId(t&&t.Id);if(x)out.push({tg,id:x,port:+(t.Port||tn.props.Port||80)})}}}return out}
@@ -156,7 +156,7 @@ function newSubnetIn(vpc){const v=nodeOf(vpc),vc=ip4(v&&v.props.CidrBlock)||ip4(
   let cidr=null;for(let k=1;k<256&&!cidr;k++){const net=vc.net+k*256;if(net+256>vc.net+vc.size)break;const c=`${net>>>24}.${(net>>16)&255}.${(net>>8)&255}.0/24`;if(!used.some(s=>cidrOverlap(ip4(c),ip4(s.props.CidrBlock))))cidr=c}
   const id=freeId("Subnet"),az=AZS[used.length%2];
   M.res[id]={Type:"AWS::EC2::Subnet",Properties:{VpcId:{Ref:vpc},CidrBlock:cidr||"10.0.1.0/24",AvailabilityZone:az,MapPublicIpOnLaunch:false,Tags:[{Key:"Name",Value:kebab(id)}]}};return id}
-const WHY_X={"AWS::EC2::VPC":"(nối subnet / security group vào VPC)","AWS::EC2::Subnet":"VPC","AWS::EC2::InternetGateway":"VPC","AWS::EC2::SecurityGroup":"VPC hoặc security group khác",
+const WHY_X={"AWS::EC2::VPC":"(hãy nối subnet hoặc security group tới VPC)","AWS::EC2::Subnet":"VPC","AWS::EC2::InternetGateway":"VPC","AWS::EC2::SecurityGroup":"VPC hoặc security group khác",
   "AWS::EC2::Instance":"subnet, security group, role, RDS, ElastiCache, S3, DynamoDB, SNS, SQS","AWS::ElasticLoadBalancingV2::LoadBalancer":"EC2, target group, subnet, security group",
   "AWS::ElasticLoadBalancingV2::TargetGroup":"EC2 hoặc VPC","AWS::RDS::DBInstance":"subnet, security group","AWS::ElastiCache::CacheCluster":"security group","AWS::CloudFront::Distribution":"S3, load balancer hoặc API","AWS::Route53::RecordSet":"load balancer hoặc CloudFront"};
 Object.assign(BASE_ID,{"AWS::EC2::VPC":"Vpc","AWS::EC2::Subnet":"Subnet","AWS::EC2::InternetGateway":"Igw","AWS::EC2::SecurityGroup":"Sg","AWS::EC2::Instance":"Web","AWS::ElasticLoadBalancingV2::LoadBalancer":"Alb",

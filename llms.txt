@@ -34,3 +34,7 @@ Toàn bộ nội dung dạng văn bản: https://dat-2k2.github.io/cloudlab/llms
 ## Thành phần
 
 - [Giải thích từng thành phần AWS bằng ví dụ ngân hàng](https://dat-2k2.github.io/cloudlab/learn.html#components)
+
+## Nguồn và bản quyền
+
+- [Bản quyền, nhãn hiệu, nguồn tham khảo](https://dat-2k2.github.io/cloudlab/credits.html)

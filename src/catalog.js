@@ -27,19 +27,19 @@ def("CloudLab::Client",{label:"Client / người dùng",short:"⇢",cat:"ext",ex
     {k:"Port",label:"Cổng (khi gọi thẳng EC2)",type:"number",min:1,max:65535,when:p=>p.Target&&tgtType(p.Target)==="AWS::EC2::Instance",help:"80 = web, 22 = SSH."},
     {k:"SourceIp",label:"IP nguồn",type:"text",when:p=>p.Target&&tgtType(p.Target)==="AWS::EC2::Instance",help:"Để so với rule CIDR của security group, ví dụ 203.0.113.10."},
     {k:"As",label:"Danh tính (assume role)",type:"ref",to:["AWS::IAM::Role"],att:"Arn",help:"Để trống = ẩn danh (anonymous)."},
-    {k:"Expect",label:"Kỳ vọng",type:"select",options:[["","Nên thành công"],["Deny","Nên bị chặn"]],help:"Đánh dấu request lẽ ra phải bị chặn, để sơ đồ tô xanh khi bị chặn đúng."}],
+    {k:"Expect",label:"Kỳ vọng",type:"select",options:[["","Nên thành công"],["Deny","Nên bị chặn"]],help:"Chọn “Nên bị chặn” khi request này lẽ ra phải bị từ chối. Mũi tên sẽ tô xanh khi nó bị chặn đúng."}],
   rel:{Target:{kind:"calls",label:"gọi"},As:{kind:"assumes",label:"assume"}}});
 def("CloudLab::Uploader",{label:"Uploader",short:"⇪",cat:"ext",ext:true,src:true,
   doc:"Một nguồn đẩy file vào bucket theo lịch, như app di động hay máy quét tài liệu. Mỗi file là một s3:PutObject.",
   defaults:()=>({Target:null,PerHour:60,Prefix:"incoming/",Suffix:".jpg",SizeKB:240}),
   fields:[{k:"Target",label:"Bucket đích",type:"ref",to:["AWS::S3::Bucket"]},{k:"PerHour",label:"File mỗi giờ",type:"number",min:0,step:"any"},
-    {k:"Prefix",label:"Prefix key",type:"text"},{k:"Suffix",label:"Đuôi file",type:"text"},{k:"SizeKB",label:"Cỡ file (KB)",type:"number",min:1}],
+    {k:"Prefix",label:"Prefix của key",type:"text"},{k:"Suffix",label:"Đuôi file",type:"text"},{k:"SizeKB",label:"Cỡ file (KB)",type:"number",min:1}],
   rel:{Target:{kind:"uploads",label:"upload"}}});
 def("CloudLab::Inbox",{label:"Hộp thư email",short:"@",cat:"ext",ext:true,sink:true,
   doc:"Hộp thư của bạn. Nhận email từ SNS (thư xác nhận subscription, cảnh báo budget, alarm). Email chỉ tới khi subscription đã được xác nhận.",
   defaults:()=>({Address:EMAIL}),fields:[{k:"Address",label:"Địa chỉ email",type:"text"}]});
 def("CloudLab::Monitor",{label:"Monitor / dashboard",short:"▤",cat:"ext",ext:true,sink:true,
-  doc:"Bảng theo dõi nhận số liệu từ các tài nguyên được nối vào: request, lỗi, thời gian chạy, chi phí. Giống một CloudWatch dashboard đặt trên màn hình.",
+  doc:"Bảng theo dõi nhận số liệu từ các khối được nối vào: request, lỗi, thời gian chạy, chi phí. Giống một CloudWatch dashboard đặt trên màn hình.",
   defaults:()=>({Watch:[]}),fields:[{k:"Watch",label:"Theo dõi",type:"refs",to:"*"}],rel:{Watch:{kind:"reports",label:"số liệu",reverse:true}}});
 
 /* ---------------- AWS ---------------- */
@@ -55,8 +55,8 @@ def("AWS::Lambda::Function",{label:"Lambda function",short:"λ",cat:"comp",
   fields:[{k:"FunctionName",label:"Tên function",type:"text"},{k:"Runtime",label:"Runtime",type:"select",options:RUNTIMES},
     {k:"MemorySize",label:"Memory (MB)",type:"select",options:[128,256,512,1024,2048],num:true,help:"Thêm memory thì thêm CPU, chạy nhanh hơn."},
     {k:"Timeout",label:"Timeout (giây)",type:"number",min:1,max:900},{k:"Role",label:"Execution role",type:"ref",to:["AWS::IAM::Role"],att:"Arn"},
-    {k:"Environment.Variables",label:"Biến môi trường",type:"env",help:"Giá trị là !Ref tới bucket / table / topic / queue = code dùng tài nguyên đó (ghi file, ghi item, publish, gửi message)."},
-    {k:"@WorkMs",label:"Code cần bao lâu ở 128 MB (ms)",type:"number",min:1,help:"Giả lập độ nặng của code. Ở 256 MB nhanh gấp đôi."}],
+    {k:"Environment.Variables",label:"Biến môi trường",type:"env",help:"Đặt giá trị là !Ref tới một bucket, table, topic hoặc queue thì code sẽ dùng tài nguyên đó (ghi file, ghi item, publish, gửi message)."},
+    {k:"@WorkMs",label:"Thời gian code chạy ở 128 MB (ms)",type:"number",min:1,help:"Giả lập độ nặng của code. Ở 256 MB chạy nhanh gấp đôi."}],
   rel:{Role:{kind:"assumes",label:"role"},"Environment.Variables.*":{kind:"uses"}}});
 def("AWS::IAM::Role",{label:"IAM role",short:"IAM",cat:"sec",
   doc:"Một bộ quyền mà dịch vụ (Lambda) hoặc người (qua STS AssumeRole) mượn để gọi AWS API. Trust policy nói ai được mượn; các policy nói được làm gì. Deny luôn thắng Allow.",
@@ -91,7 +91,7 @@ def("AWS::SQS::Queue",{label:"SQS queue",short:"SQS",cat:"notify",
   defaults:id=>({QueueName:kebab(id),VisibilityTimeout:30}),name:p=>p.QueueName,
   fields:[{k:"QueueName",label:"Tên queue",type:"text"},{k:"VisibilityTimeout",label:"Visibility timeout (giây)",type:"number",min:0}]});
 def("AWS::Lambda::EventSourceMapping",{label:"Event source mapping",short:"ESM",cat:"comp",edge:true,edgeOf:p=>[{from:refId(p.EventSourceArn),to:refId(p.FunctionName),kind:"polls",label:"poll"}],
-  doc:"Lambda tự đọc message từ queue theo lô rồi gọi function. Là một tài nguyên trong template nhưng hiện như một cạnh.",
+  doc:"Lambda tự đọc message từ queue theo lô rồi gọi function. Là một tài nguyên trong template nhưng hiện trên canvas như một mũi tên.",
   defaults:()=>({EventSourceArn:null,FunctionName:null,BatchSize:10}),
   fields:[{k:"BatchSize",label:"Batch size",type:"number",min:1,max:10000}]});
 def("AWS::Events::Rule",{label:"EventBridge schedule",short:"⏱",cat:"notify",src:true,

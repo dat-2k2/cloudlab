@@ -135,7 +135,7 @@ function CONNECT_ORG(a,b,A,B,say){const ta=A.type,tb=B.type,R=x=>({Ref:x});
     return say(slot==="centralizedLogging"?"làm account log archive":"làm account audit",()=>{setP(A.props,`Manifest.${slot}.accountId`,{"Fn::GetAtt":[b,"AccountId"]})})}
   return null}
 Object.assign(WHY_X,{"AWS::Organizations::Account":"OU","AWS::Organizations::OrganizationalUnit":"organization","AWS::Organizations::Policy":"OU, account hoặc organization (root)",
-  "AWS::ControlTower::LandingZone":"OU (register / control) hoặc account (log archive, audit)","AWS::Organizations::Organization":"(nối OU vào organization)"});
+  "AWS::ControlTower::LandingZone":"OU (register / control) hoặc account (log archive, audit)","AWS::Organizations::Organization":"(hãy nối OU tới organization)"});
 function moveAcctTo(id,ou){const n=nodeOf(id);if(!n||n.type!=="AWS::Organizations::Account"||parentOu(n)===ou)return false;
   edit(`chuyển ${id} vào OU ${ouName(ou)}`,()=>{nodeOf(id).props.ParentIds=[{Ref:ou}]});log("CloudLab","organizations","MoveAccount",`${physName(n)} → OU ${ouName(ou)}`,"ok");return true}
 

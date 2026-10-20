@@ -128,7 +128,8 @@ function whyNot(a,b){const A=nodeOf(a),B=nodeOf(b);if(!A||!B)return"";
   const can={"CloudLab::Client":"API, bucket hoặc role","CloudLab::Uploader":"S3 bucket","AWS::ApiGatewayV2::Api":"Lambda, EC2 hoặc load balancer","AWS::S3::Bucket":"Lambda (event notification)",
     "AWS::Lambda::Function":"role, bucket, table, topic, queue, log group","AWS::SNS::Topic":"hộp thư, Lambda hoặc SQS","AWS::SQS::Queue":"Lambda","AWS::Events::Rule":"Lambda",
     "AWS::CloudWatch::Alarm":"SNS topic hoặc Lambda","AWS::Budgets::Budget":"SNS topic","AWS::S3::BucketPolicy":"S3 bucket","AWS::IAM::Role":"bucket, table, topic, queue, log group"}[A.type];
-  const c2=can||(typeof WHY_X!=="undefined"&&WHY_X[A.type]);return c2?`${A.def.label} chỉ nối tới ${c2}`:`${A.def.label} không có quan hệ đi ra`}
+  const c2=can||(typeof WHY_X!=="undefined"&&WHY_X[A.type]);if(c2&&c2[0]==="(")return`${A.def.label} chỉ nhận mũi tên đi vào, không nối đi đâu ${c2}`;
+  return c2?`${A.def.label} chỉ nối tới ${c2}`:`${A.def.label} không nối đi đâu được`}
 
 /* ---------------- YAML (CloudFormation short-form intrinsics) ---------------- */
 const CFN=(()=>{if(typeof jsyaml==="undefined")return null;

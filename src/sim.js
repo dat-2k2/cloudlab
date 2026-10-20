@@ -3,7 +3,7 @@
    events flow along relations; every hop checks configuration and IAM, updates metrics and charges cost.
    Batched: an event carries a weight w (how many real requests it stands for), so high traffic stays cheap to simulate. */
 const MONTH=30*86400;
-const SPEEDS=[["1 giây / giây",1],["1 phút / giây",60],["1 giờ / giây",3600],["6 giờ / giây",21600],["1 ngày / giây",86400]];
+const SPEEDS=[["Thời gian thật",1],["1 phút mỗi giây",60],["1 giờ mỗi giây",3600],["6 giờ mỗi giây",21600],["1 ngày mỗi giây",86400]];
 /* list prices, USD. Overwritten by the researched Sydney table in pricing below if present. */
 /* list prices USD, ap-southeast-2 where a source was found (API Gateway HTTP, S3, DynamoDB: third-party 2026 pages),
    us-east-1 otherwise (Lambda, SNS, SQS, CloudWatch). No free tier. Reference values for learning, not a quote. */
@@ -32,7 +32,7 @@ function syncRuntime(){if(!stackUp())return;
       if(RT.subs[k]==="PendingConfirmation"){log("Sự kiện","sns","Subscribe",`${s.Endpoint} → PendingConfirmation, đã gửi thư xác nhận`,"");mail(s.Endpoint,{kind:"confirm",subject:"AWS Notification - Subscription Confirmation",topic:n.id,body:`You have chosen to subscribe to the topic ${arnOf(n.id)}. To confirm this subscription, click the link below.`})}})}}
 function deploy(){const clash=Object.values(M.res).filter(r=>r.Type==="AWS::S3::Bucket").map(r=>(r.Properties||{}).BucketName).find(nm=>Object.values(M.manual).some(m=>(m.Properties||{}).BucketName===nm));
   const cli="aws cloudformation deploy \\\n  --stack-name "+M.name+" \\\n  --template-file template.yaml \\\n  --capabilities CAPABILITY_IAM";
-  if(clash){RT.stack={status:"ROLLBACK_COMPLETE"};log("CLI","cloudformation","deploy",`${M.name} · ROLLBACK_COMPLETE`,"bad",cli);log("Sự kiện","cloudformation","CREATE_FAILED",`${clash} already exists (bucket tạo ngoài stack hoặc bị giữ lại)`,"bad");return false}
+  if(clash){RT.stack={status:"ROLLBACK_COMPLETE"};log("CLI","cloudformation","deploy",`${M.name} · ROLLBACK_COMPLETE`,"bad",cli);log("Sự kiện","cloudformation","CREATE_FAILED",`${clash} already exists (bucket cùng tên đã có ngoài stack: xóa bucket đó hoặc đổi BucketName)`,"bad");return false}
   const was=stackUp();RT.stack={status:was?"UPDATE_COMPLETE":"CREATE_COMPLETE"};syncRuntime();
   log("CLI","cloudformation","deploy",`${M.name} · ${RT.stack.status} · ${Object.keys(M.res).length} tài nguyên`,"ok",cli);return true}
 function deleteStack(){if(!stackUp()){log("CLI","cloudformation","delete-stack","Stack chưa được deploy","bad");return}
@@ -46,14 +46,14 @@ function deleteStack(){if(!stackUp()){log("CLI","cloudformation","delete-stack",
   RT.stack=left.length?{status:"DELETE_FAILED",left}:{status:"DELETE_COMPLETE",kept};
   log("CLI","cloudformation","delete-stack",`${M.name} · ${RT.stack.status}`,left.length?"bad":kept.length?"warn":"ok",cli);
   kept.forEach(id=>log("Sự kiện","cloudformation","DELETE_SKIPPED",`${id} · DeletionPolicy: Retain → bucket vẫn còn, vẫn tính tiền`,"warn"));
-  left.forEach(id=>log("Sự kiện","cloudformation","DELETE_FAILED",`${id} · The bucket you tried to delete is not empty`,"bad"))}
+  left.forEach(id=>log("Sự kiện","cloudformation","DELETE_FAILED",`${id} · The bucket you tried to delete is not empty (Empty bucket rồi xóa stack lại)`,"bad"))}
 /* ---------------- email ---------------- */
 function mail(addr,m){for(const id of Object.keys(M.ext))if(M.ext[id].Type==="CloudLab::Inbox"&&(M.ext[id].Properties||{}).Address===addr){const L=RT.inbox[id]||(RT.inbox[id]=[]);L.unshift({id:"m"+(++RT.seq),t:stamp(),read:false,...m,n:(m.n||1)});if(L.length>50)L.length=50;bump(id,"mail",1)}}
 function confirmSub(topicId,addr){const k=topicId+"|"+addr;if(RT.subs[k]!=="PendingConfirmation")return false;RT.subs[k]="Confirmed";
   log("API","sns","ConfirmSubscription",`${addr} → Confirmed`,"ok",`aws sns confirm-subscription \\\n  --topic-arn ${arnOf(topicId)} \\\n  --token <token-trong-email>`);return true}
 /* ---------------- handlers ---------------- */
 function lambdaRun(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,d=ev.data||{};
-  if(!exists(id)){if(ev.from)flow(ev.from,id,ev.kind||"invokes",w,"ResourceNotFound: function chưa deploy");return{ok:false,err:"ResourceNotFound"}}
+  if(!exists(id)){if(ev.from)flow(ev.from,id,ev.kind||"invokes",w,"ResourceNotFound: function chưa được deploy");return{ok:false,err:"ResourceNotFound"}}
   const p=n.props,mem=+p.MemorySize||128,to=(+p.Timeout||3)*1000,work=+(metaOf(n).WorkMs||300),need=Math.round(work*128/mem),timed=need>to,dur=timed?to:need,role=refId(p.Role);
   /* a self-feeding S3 loop at its fixed point: fold the hops that fit in this tick into one batch */
   let k=1,delay=dur/1000;const vars=getP(p,"Environment.Variables")||{},outBucket=Object.values(vars).map(refId).find(x=>x&&(nodeOf(x)||{}).type==="AWS::S3::Bucket");
@@ -62,7 +62,7 @@ function lambdaRun(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,d=ev.data||{};
   const W=w*k;if(d.src==="s3"&&outBucket===d.bucket&&/\.json$/.test(d.key||"")){bump(id,"loop",W);RT.loop[id]=(RT.loop[id]||0)+W}bump(id,"inv",W);charge(id,W*PRICE.lambdaReq,"request");charge(id,W*mem/1024*Math.ceil(dur)/1000*PRICE.lambdaGBs,"GB-giây");bump(id,"dur",W*dur);
   if(ev.from)flow(ev.from,id,ev.kind||"invokes",W);
   const rq=(Math.random().toString(16)+"00000000").slice(2,10),lines=[`START RequestId: ${rq} Version: $LATEST`];let err=null;
-  if(!role){err="Function chưa có execution role"}
+  if(!role){err="Function chưa có execution role (nối function tới một IAM role)"}
   else if(timed){err=`Task timed out after ${(to/1000).toFixed(2)} seconds`;lines.push(`${rq} ${err}`)}
   else{if(role)flow(id,role,"assumes",W);
     if(d.src==="s3"){const e=evalRole(role,"s3:GetObject",arnOf(d.bucket)+"/"+d.key);lines.push(`[INFO] đọc s3://${refValue(d.bucket)}/${d.key}`);if(!e.allow){err=`AccessDenied: s3:GetObject trên ${d.key} (${e.by})`;lines.push("[ERROR] "+err)}}
@@ -82,7 +82,7 @@ function lambdaRun(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,d=ev.data||{};
   const lg=logName(id),la=`arn:aws:logs:${REGION}:${ACCT}:log-group:${lg}:*`,declared=allNodes().find(x=>x.type==="AWS::Logs::LogGroup"&&resolve(x.props.LogGroupName)===lg&&exists(x.id));
   const can=role&&["logs:CreateLogStream","logs:PutLogEvents"].every(a=>evalRole(role,a,la).allow)&&(declared||RT.logs[lg]||evalRole(role,"logs:CreateLogGroup",la).allow);
   if(can){logLine(id,lines);const gid=declared?declared.id:id;charge(gid,W*0.6/1048576*PRICE.logsGB,"log");if(declared){flow(id,declared.id,"logs",W);bump(declared.id,"lines",W*lines.length)}}
-  else{nrt(id).noLogs=role?`role thiếu quyền logs:*`:"không có role";if(declared)flow(id,declared.id,"logs",W,"Role thiếu quyền logs:CreateLogStream / PutLogEvents")}
+  else{nrt(id).noLogs=role?"execution role thiếu quyền logs:*. Gắn managed policy AWSLambdaBasicExecutionRole vào role":"function chưa có execution role";if(declared)flow(id,declared.id,"logs",W,"Role thiếu quyền ghi log (cần logs:CreateLogStream và logs:PutLogEvents)")}
   nrt(id).last={ok:!err,err,dur,timed};return{ok:!err,err}}
 const depthCap=k=>{const m=k.match(/(\.json)+$/);return m&&m[0].length>6*5?k.slice(0,k.length-m[0].length)+".json".repeat(6):k};
 function s3Op(ev){const id=ev.to,b=nodeOf(id),w=ev.w,d=ev.data,who=d.who||{admin:true};
@@ -102,11 +102,11 @@ function s3Op(ev){const id=ev.to,b=nodeOf(id),w=ev.w,d=ev.data,who=d.who||{admin
     if(d.key.startsWith(pre)&&d.key.endsWith(suf))push({at:ev.at+0.3,to:fn,from:id,kind:"invokes",w,type:"inv",data:{src:"s3",bucket:id,key:d.key}})}
   return{ok:true}}
 function publish(ev){const id=ev.to,t=nodeOf(id),w=ev.w,d=ev.data||{};
-  if(!exists(id)){if(ev.from)flow(ev.from,id,ev.kind,w,"NotFound: topic không tồn tại");return}
+  if(!exists(id)){if(ev.from)flow(ev.from,id,ev.kind,w,"NotFound: topic chưa được deploy");return}
   bump(id,"pub",w);charge(id,w*PRICE.snsPub,"publish");if(ev.from)flow(ev.from,id,ev.kind,w);
   arr(t.props.Subscription).forEach(s=>{if(!s)return;
     if(s.Protocol==="email"){const st=RT.subs[id+"|"+s.Endpoint],inb=Object.keys(M.ext).find(x=>M.ext[x].Type==="CloudLab::Inbox"&&(M.ext[x].Properties||{}).Address===s.Endpoint);
-      if(st!=="Confirmed"){if(inb)flow(id,inb,"delivers",w,"PendingConfirmation: email chưa xác nhận nên SNS bỏ qua");return}
+      if(st!=="Confirmed"){if(inb)flow(id,inb,"delivers",w,"PendingConfirmation: email chưa xác nhận nên SNS không gửi (mở thư xác nhận trong hộp thư, bấm Confirm subscription)");return}
       charge(id,w*PRICE.snsEmail,"email");if(inb)flow(id,inb,"delivers",w);mail(s.Endpoint,{kind:d.kind||"msg",subject:d.subject||"SNS message",body:d.body||"",n:w})}
     else if(s.Protocol==="lambda"){const f=refId(s.Endpoint);if(f)push({at:ev.at+0.1,to:f,from:id,kind:"delivers",w,type:"inv",data:{src:"sns"}})}
     else if(s.Protocol==="sqs"){const q=refId(s.Endpoint);if(q)push({at:ev.at+0.1,to:q,from:id,kind:"delivers",w,type:"sqs"})}})}
@@ -114,43 +114,43 @@ let TICK_DT=1;
 /* an HTTP request arriving at a node: API Gateway, Route 53 alias, CloudFront, load balancer or EC2 directly */
 function request(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,kind=ev.kind||"calls",inet=!!(ev.data&&ev.data.internet);
   const fail=msg=>{if(ev.from)flow(ev.from,id,kind,w,msg);bump(id,"err",w);nrt(id).lastErr=msg;return{ok:false,err:msg}};
-  if(!n||!exists(id))return fail("chưa deploy");
+  if(!n||!exists(id))return fail("Chưa được deploy (bấm Deploy để tạo stack)");
   switch(n.type){
     case"AWS::ApiGatewayV2::Api":{bump(id,"req",w);charge(id,w*PRICE.apiReq,"request");if(ev.from)flow(ev.from,id,kind,w);const fn=targetOf(n.props.Target),tn=nodeOf(fn);
-      if(!fn||!tn)return fail("404: API chưa có integration");
+      if(!fn||!tn)return fail("404: API chưa có integration (nối API tới một Lambda)");
       if(tn.type!=="AWS::Lambda::Function"){const r=request({...ev,to:fn,from:id,kind:"invokes",data:{internet:true}},T1);if(!r.ok){bump(id,"err",r.errW||w);return{ok:false,err:"502 · "+r.err,errW:r.errW}}return{ok:true}}
       const r=lambdaRun({...ev,to:fn,from:id,kind:"invokes",data:{src:"api"}},T1);if(!r.ok){bump(id,"err",w);return{ok:false,err:"502 · "+r.err}}return{ok:true}}
-    case"AWS::Route53::RecordSet":{bump(id,"req",w);if(ev.from)flow(ev.from,id,kind,w);const t=refId(getP(n.props,"AliasTarget.DNSName"));if(!t)return fail("Record chưa trỏ tới đâu (NXDOMAIN)");
+    case"AWS::Route53::RecordSet":{bump(id,"req",w);if(ev.from)flow(ev.from,id,kind,w);const t=refId(getP(n.props,"AliasTarget.DNSName"));if(!t)return fail("NXDOMAIN: record chưa trỏ tới đâu (nối record tới load balancer hoặc CloudFront)");
       return request({...ev,to:t,from:id,kind:"alias"},T1)}
-    case"AWS::CloudFront::Distribution":{if(getP(n.props,"DistributionConfig.Enabled")===false)return fail("Distribution đang tắt");bump(id,"req",w);charge(id,w*PRICE.cfReq,"request");charge(id,w*20/1048576*PRICE.cfGB,"truyền ra");if(ev.from)flow(ev.from,id,kind,w);
+    case"AWS::CloudFront::Distribution":{if(getP(n.props,"DistributionConfig.Enabled")===false)return fail("Distribution đang tắt (bật lại trong khung chi tiết của CloudFront)");bump(id,"req",w);charge(id,w*PRICE.cfReq,"request");charge(id,w*20/1048576*PRICE.cfGB,"truyền ra");if(ev.from)flow(ev.from,id,kind,w);
       const h=Math.max(0,Math.min(1,+(getP(n.raw,"Metadata.CloudLab.HitRatio")??0.9))),miss=w*(1-h);bump(id,"hit",w*h);const o=arr(getP(n.props,"DistributionConfig.Origins"))[0],oid=o&&refId(o.DomainName);
-      if(!oid)return fail("Chưa có origin");if(miss<=0)return{ok:true};const on=nodeOf(oid);
+      if(!oid)return fail("CloudFront chưa có origin (nối CloudFront tới S3, load balancer hoặc API)");if(miss<=0)return{ok:true};const on=nodeOf(oid);
       if(on&&on.type==="AWS::S3::Bucket"){const r=s3Op({to:oid,from:id,kind:"origin",w:miss,at:ev.at,data:{action:"s3:GetObject",key:"index.html",who:{admin:true}}});return r.ok?{ok:true}:{ok:false,err:r.err}}
       return request({...ev,to:oid,from:id,kind:"origin",w:miss,data:{internet:true}},T1)}
     case"AWS::ElasticLoadBalancingV2::LoadBalancer":{if(inet){const rr=reachFromInternet(id);if(!rr.ok)return fail(rr.why);const sg=sgAllows(id,80,{internet:true});if(!sg.ok)return fail(sg.why)}
       bump(id,"req",w);if(ev.from)flow(ev.from,id,kind,w);charge(id,w*20/1048576*PRICE.dtoGB,"truyền ra");
-      const ts=targetsOf(id);if(!ts.length)return fail("503: load balancer chưa có target");
-      const ok=[];for(const t of ts){let why=null;if(!exists(t.id))why="target không tồn tại";else{const s=sgAllows(t.id,t.port,{node:id});if(!s.ok)why="Health check fail: "+s.why}
+      const ts=targetsOf(id);if(!ts.length)return fail("503: load balancer chưa có target (nối load balancer tới EC2)");
+      const ok=[];for(const t of ts){let why=null;if(!exists(t.id))why="Target chưa được deploy";else{const s=sgAllows(t.id,t.port,{node:id});if(!s.ok)why="Health check fail: "+s.why}
         if(why){flow(t.tg,t.id,"forwards",0.0001,why);RT.why[t.tg+">"+t.id+">forwards"]=why}else ok.push(t)}
-      nrt(id).healthy=[ok.length,ts.length];if(!ok.length)return fail("503: không target nào vượt health check");
+      nrt(id).healthy=[ok.length,ts.length];if(!ok.length)return fail("503: không target nào qua health check (security group của target phải cho load balancer vào)");
       let errs=0;const share=w/ok.length;for(const t of ok){flow(id,t.tg,"listens",share);flow(t.tg,t.id,"forwards",share);const r=appRun(t.id,share,T1);errs+=r.errW||0}
-      if(errs>0){bump(id,"err",errs);return{ok:errs<w,err:"5xx từ target",errW:errs}}return{ok:true}}
+      if(errs>0){bump(id,"err",errs);return{ok:errs<w,err:"Target trả lỗi 5xx",errW:errs}}return{ok:true}}
     case"AWS::EC2::Instance":{const port=(ev.data&&ev.data.port)||appPort(n);if(inet){const rr=reachFromInternet(id);if(!rr.ok)return fail(rr.why);const s=sgAllows(id,port,{internet:true,ip:ev.data&&ev.data.ip});if(!s.ok)return fail(s.why)}if(ev.from)flow(ev.from,id,kind,w);
       if(port!==appPort(n)){bump(id,"conn",w);return{ok:true}}const r=appRun(id,w,T1);return r.ok?{ok:true}:{ok:false,err:r.err,errW:r.errW}}}
   return fail(`${n.def.label} không nhận HTTP request`)}
 /* the app on an EC2 instance: capacity by instance type, then whatever it uses */
 function appRun(id,w,T1){const n=nodeOf(id),cap=(EC2_TYPES[n.props.InstanceType]||{cap:40}).cap,r=nrt(id);bump(id,"req",w);
-  const rate=(r.tk.req||0)/TICK_DT,over=rate>cap?(rate-cap)/rate:0;r.cpu=Math.min(100,Math.round(rate/cap*100));let errW=w*over,why=over?`quá tải: ${num(rate)} req/s > ${cap} req/s của ${n.props.InstanceType}`:null;
+  const rate=(r.tk.req||0)/TICK_DT,over=rate>cap?(rate-cap)/rate:0;r.cpu=Math.min(100,Math.round(rate/cap*100));let errW=w*over,why=over?`Quá tải: ${num(rate)} request/giây, ${n.props.InstanceType} chỉ chịu ${cap} (thêm instance sau load balancer hoặc chọn loại lớn hơn)`:null;
   const okW=w-errW,uses=arr(getP(n.raw,"Metadata.CloudLab.Uses")).map(u=>refId(u)||u).filter(x=>nodeOf(x));
   const cache=uses.find(u=>nodeOf(u).type==="AWS::ElastiCache::CacheCluster");let hit=0;
-  if(cache&&okW>0){const c=nodeOf(cache),s=exists(cache)?sgAllows(cache,6379,{node:id}):{ok:false,why:"chưa deploy"};if(s.ok){hit=Math.max(0,Math.min(1,+(getP(c.raw,"Metadata.CloudLab.HitRatio")??0.8)));bump(cache,"req",okW);bump(cache,"hit",okW*hit);flow(id,cache,"uses",okW)}else flow(id,cache,"uses",okW,s.why)}
+  if(cache&&okW>0){const c=nodeOf(cache),s=exists(cache)?sgAllows(cache,6379,{node:id}):{ok:false,why:"ElastiCache chưa được deploy"};if(s.ok){hit=Math.max(0,Math.min(1,+(getP(c.raw,"Metadata.CloudLab.HitRatio")??0.8)));bump(cache,"req",okW);bump(cache,"hit",okW*hit);flow(id,cache,"uses",okW)}else flow(id,cache,"uses",okW,s.why)}
   for(const u of uses){const un=nodeOf(u);if(okW<=0)break;
-    if(un.type==="AWS::RDS::DBInstance"){const q=okW*(cache?1-hit:1);if(!exists(u)){errW=w;why="Database chưa deploy";flow(id,u,"uses",okW,why);continue}const s=sgAllows(u,dbPort(un),{node:id});
+    if(un.type==="AWS::RDS::DBInstance"){const q=okW*(cache?1-hit:1);if(!exists(u)){errW=w;why="Database chưa được deploy";flow(id,u,"uses",okW,why);continue}const s=sgAllows(u,dbPort(un),{node:id});
       if(!s.ok){errW=w;why="Không kết nối được database: "+s.why;flow(id,u,"uses",okW,s.why);continue}flow(id,u,"uses",q);bump(u,"q",q);const qps=(nrt(u).tk.q||0)/TICK_DT,qc=(RDS_TYPES[un.props.DBInstanceClass]||{qps:300}).qps;nrt(u).cpu=Math.min(100,Math.round(qps/qc*100));
-      if(qps>qc){const e=okW*(qps-qc)/qps;errW+=e;why=`database quá tải: ${num(qps)} truy vấn/s > ${qc}`}}
+      if(qps>qc){const e=okW*(qps-qc)/qps;errW+=e;why=`Database quá tải: ${num(qps)} truy vấn/giây, ${un.props.DBInstanceClass} chỉ chịu ${qc} (thêm ElastiCache hoặc chọn class lớn hơn)`}}
     else if(USE_ENV[un.type]){const prof=nodeOf(refId(n.props.IamInstanceProfile)),role=prof&&refId(arr(prof.props.Roles)[0]);
       const act={"AWS::S3::Bucket":"s3:PutObject","AWS::DynamoDB::Table":"dynamodb:PutItem","AWS::SNS::Topic":"sns:Publish","AWS::SQS::Queue":"sqs:SendMessage"}[un.type],res=un.type==="AWS::S3::Bucket"?arnOf(u)+"/uploads/item.json":arnOf(u);
-      const e=role?evalRole(role,act,res):{allow:false,by:"instance chưa có IAM role (instance profile)"};if(!e.allow){errW=w;why=`AccessDenied: ${act} (${e.by})`;flow(id,u,"uses",okW,why);continue}
+      const e=role?evalRole(role,act,res):{allow:false,by:"instance chưa có IAM role, hãy nối EC2 tới một role"};if(!e.allow){errW=w;why=`AccessDenied: ${act} (${e.by})`;flow(id,u,"uses",okW,why);continue}
       if(role)flow(id,role,"assumes",okW);if(un.type==="AWS::S3::Bucket")push({at:RT.t,to:u,from:id,kind:"uses",w:okW,type:"s3",data:{action:"s3:PutObject",key:"uploads/item-"+(++RT.seq)+".json",kb:2,who:{role}}});
       else push({at:RT.t,to:u,from:id,kind:"uses",w:okW,type:un.type==="AWS::DynamoDB::Table"?"ddb":un.type==="AWS::SNS::Topic"?"pub":"sqs"})}}
   errW=Math.min(w,errW);if(errW>0){bump(id,"err",errW);r.lastErr=why}else bump(id,"ok",w);return{ok:errW<w,err:why,errW}}
@@ -194,7 +194,7 @@ function periodic(t0,dt){const t1=t0+dt,h=dt/3600,zones=new Set();
     if(n.type==="AWS::Budgets::Budget"){const lim=+getP(n.props,"Budget.BudgetLimit.Amount")||0,b=RT.budgets[n.id]||(RT.budgets[n.id]={fired:[]});if(!lim)continue;
       for(const ns of arr(n.props.NotificationsWithSubscribers)){const th=+getP(ns,"Notification.Threshold")||0;if(!th||b.fired.includes(th)||RT.total<lim*th/100)continue;b.fired.push(th);
         const subj=`AWS Budgets: ${getP(n.props,"Budget.BudgetName")} has exceeded your alert threshold (${th}%)`,body=`ACTUAL cost ${money(RT.total)} > ${th}% of ${money(lim)}.`;
-        const subs=arr(ns.Subscribers);if(!subs.length)log("Sự kiện","budgets","alert",`${getP(n.props,"Budget.BudgetName")} vượt ${th}% nhưng không có nơi gửi`,"bad");else log("Sự kiện","budgets","alert",`vượt ${th}% (${money(RT.total)} / ${money(lim)})`,"warn");
+        const subs=arr(ns.Subscribers);if(!subs.length)log("Sự kiện","budgets","alert",`${getP(n.props,"Budget.BudgetName")} vượt ${th}% nhưng chưa có nơi nhận cảnh báo (nối budget tới một SNS topic)`,"bad");else log("Sự kiện","budgets","alert",`vượt ${th}% (${money(RT.total)} / ${money(lim)})`,"warn");
         for(const s of subs){const tp=refId(s.Address);if(tp)push({at:t1,to:tp,from:n.id,kind:"notifies",w:1,type:"pub",data:{kind:"alert",subject:subj,body}});else if(s.SubscriptionType==="EMAIL")mail(s.Address,{kind:"alert",subject:subj,body})}}}}}
 /* advance the clock by dt simulated seconds */
 function step(dt,noSources){TICK_DT=dt;const t0=RT.t,t1=t0+dt;for(const k in RT.n)RT.n[k].tk={};for(const k in RT.flow){RT.flow[k].tk=0;RT.flow[k].tke=0}RT.ops=0;

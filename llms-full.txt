@@ -474,7 +474,7 @@ Hộp thư của bạn. Nhận email từ SNS (thư xác nhận subscription, c�
 
 Màn hình giám sát ở phòng vận hành: vẽ số request, lỗi, chi phí của các khối nối vào nó.
 
-Bảng theo dõi nhận số liệu từ các tài nguyên được nối vào: request, lỗi, thời gian chạy, chi phí. Giống một CloudWatch dashboard đặt trên màn hình.
+Bảng theo dõi nhận số liệu từ các khối được nối vào: request, lỗi, thời gian chạy, chi phí. Giống một CloudWatch dashboard đặt trên màn hình.
 
 ### API Gateway (HTTP API) (AWS::ApiGatewayV2::Api)
 
@@ -528,7 +528,7 @@ Hàng đợi message: bên gửi và bên xử lý không cần chạy cùng lú
 
 Người chuyển hồ sơ từ khay chờ sang nhân viên xử lý.
 
-Lambda tự đọc message từ queue theo lô rồi gọi function. Là một tài nguyên trong template nhưng hiện như một cạnh.
+Lambda tự đọc message từ queue theo lô rồi gọi function. Là một tài nguyên trong template nhưng hiện trên canvas như một mũi tên.
 
 ### EventBridge schedule (AWS::Events::Rule)
 
