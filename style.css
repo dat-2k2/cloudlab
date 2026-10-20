@@ -550,3 +550,22 @@ div.gl{cursor:default}
 body.pal-dragging,body.pal-dragging *{cursor:grabbing!important;user-select:none!important}
 .gx.pal-over{outline:2px dashed var(--accent);outline-offset:-2px}
 .side-item.pal,[data-ptype]{touch-action:pan-y}
+:root{--c-org:#0f766e}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--c-org:#2dd4bf}}:root[data-theme="dark"]{--c-org:#2dd4bf}
+.gbox.ou{border:1.5px dashed color-mix(in srgb,var(--c-org) 55%,transparent);background:color-mix(in srgb,var(--c-org) 5%,transparent)}
+.gbox.ou.reg{border-style:solid;border-color:color-mix(in srgb,var(--c-org) 70%,transparent)}
+.reading-body{font-size:13.5px;line-height:21px;color:var(--text)}.reading-body h4{margin:14px 0 4px;font-size:13px}.reading-body p{margin:0 0 8px}.reading-body ul{margin:0 0 8px;padding-left:18px}.reading-body li{margin:0 0 4px}
+.reading-body table{width:100%;border-collapse:collapse;font-size:12.5px;margin:4px 0 10px}.reading-body th,.reading-body td{border-top:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}.reading-body a{color:var(--accent)}
+/* sidebar: collapse button always reachable, and a usable icon rail when collapsed */
+.stabs .st-ic{display:none}
+.side-collapse{position:sticky;bottom:0;margin-top:auto;background:var(--surface);z-index:1;box-shadow:0 -8px 12px -8px var(--surface)}
+.shell[data-collapsed] .side-collapse>span[aria-hidden]{display:inline-block;transform:scaleX(-1)}
+@media (min-width:901px){
+  .shell[data-collapsed] .side-item.lsn .side-label{display:none}
+  .shell[data-collapsed] .stabs{display:flex;flex-direction:column;border-radius:14px;padding:3px;gap:2px;width:40px}
+  .shell[data-collapsed] .stabs button{padding:6px 0}
+  .shell[data-collapsed] .stabs .st-ic{display:inline;font-size:15px;line-height:20px}
+  .shell[data-collapsed] .stabs .st-tx{display:none}
+  .shell[data-collapsed] .side-item .side-badge{display:none}
+}
+@media (min-width:901px){.shell[data-collapsed] .side-item.tpl .side-label{display:none}}

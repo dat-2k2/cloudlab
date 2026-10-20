@@ -93,6 +93,7 @@ const roleOfFn=f=>refId((nodeOf(f)||{props:{}}).props.Role);
 function connectRule(a,b){const A=nodeOf(a),B=nodeOf(b);if(!A||!B||a===b)return null;const ta=A.type,tb=B.type,Bn=physName(B);
   const say=(label,apply,grant)=>({label,apply,grant});
   if(typeof CONNECT_X==="function"){const x=CONNECT_X(a,b,A,B,say);if(x)return x}
+  if(typeof CONNECT_ORG==="function"){const x=CONNECT_ORG(a,b,A,B,say);if(x)return x}
   if(tb==="CloudLab::Monitor")return say("gửi số liệu tới monitor",()=>{B.props.Watch=arr(B.props.Watch);if(!B.props.Watch.some(x=>refId(x)===a))B.props.Watch.push(R(a))});
   switch(ta){
     case"CloudLab::Client":if(tb==="AWS::ApiGatewayV2::Api")return say("gửi request tới API",()=>{A.props.Target=R(b);delete A.props.Action;delete A.props.Key});

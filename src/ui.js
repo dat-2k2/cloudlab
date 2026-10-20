@@ -24,10 +24,10 @@ function palScore(t,q){if(!q)return 1;q=q.toLowerCase().trim();const L=t.label.t
 function palItems(q,flat){const all=Object.values(T).filter(t=>!t.edge),grp=g=>GROUPS.find(x=>x[0]===g)||[g,g];
   if(q&&flat){const r=all.map(t=>[t,palScore(t,q)]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);return r.length?[["","Kết quả",r]]:[]}
   return GROUPS.map(([g,name])=>[g,name,all.filter(t=>t.cat===g&&palScore(t,q)>0)]).filter(x=>x[2].length)}
-function renderSide(){const tab=UI.sideTab||(UI.mode==="lesson"?"learn":"comp"),q=UI.psearch||"";let h=`<div class="stabs" role="tablist" aria-label="Thanh bên"><button role="tab" class="${tab==="comp"?"on":""}" aria-selected="${tab==="comp"}" data-act="sideTab" data-arg="comp">Thành phần</button><button role="tab" class="${tab==="learn"?"on":""}" aria-selected="${tab==="learn"}" data-act="sideTab" data-arg="learn">Bài học</button></div>`;
+function renderSide(){const tab=UI.sideTab||(UI.mode==="lesson"?"learn":"comp"),q=UI.psearch||"";let h=`<div class="stabs" role="tablist" aria-label="Thanh bên"><button role="tab" class="${tab==="comp"?"on":""}" aria-selected="${tab==="comp"}" data-act="sideTab" data-arg="comp" title="Thành phần"><span class="st-ic" aria-hidden="true">⊞</span><span class="st-tx">Thành phần</span></button><button role="tab" class="${tab==="learn"?"on":""}" aria-selected="${tab==="learn"}" data-act="sideTab" data-arg="learn" title="Bài học"><span class="st-ic" aria-hidden="true">◎</span><span class="st-tx">Bài học</span></button></div>`;
   if(tab==="learn"){h+=`<p class="side-group">Không gian</p><button class="side-item" data-act="openSandbox" data-cat="learn"${UI.mode==="sandbox"?' aria-current="page"':""}><span class="side-ic" aria-hidden="true">✎</span><span class="side-label">Sandbox tự do</span></button>`;
-    let ph="";LESSONS.forEach((l,i)=>{if(l.phase!==ph){ph=l.phase;h+=`<p class="side-group">FCAJ ${esc(ph)}</p>`}
-      h+=`<button class="side-item lsn" data-lesson="${i}" data-cat="learn" title="${esc(l.title)}"${UI.mode==="lesson"&&UI.lesson===i?' aria-current="page"':""}><span class="side-ic" aria-hidden="true">${l.step}</span><span class="side-label">${esc(l.tag)}<small>lab ${esc(l.lab||"")}</small></span>${DONE.has(l.id)?'<span class="side-badge chip ok">✓</span>':""}</button>`})}
+    let ph="";LESSONS.forEach((l,i)=>{if(l.phase!==ph){ph=l.phase;h+=`<p class="side-group">${l.lab?"FCAJ ":""}${esc(ph)}</p>`}
+      h+=`<button class="side-item lsn" data-lesson="${i}" data-cat="learn" title="${esc(l.title)}"${UI.mode==="lesson"&&UI.lesson===i?' aria-current="page"':""}><span class="side-ic" aria-hidden="true">${l.step}</span><span class="side-label">${esc(l.tag)}<small>${l.lab?"lab "+esc(l.lab):esc(l.sub||"")}</small></span>${DONE.has(l.id)?'<span class="side-badge chip ok">✓</span>':""}</button>`})}
   else{h+=`<label class="psearch"><span class="sr">Tìm thành phần</span><input id="psearch" type="search" placeholder="Tìm: ec2, vpc, s3, lambda…" value="${esc(q)}" autocomplete="off"></label>`;
     if(!q)h+=`<p class="side-group">Bắt đầu từ mẫu</p>`+Object.entries(STARTERS).map(([k,t])=>`<button class="side-item tpl" data-act="loadTpl" data-arg="${k}" data-cat="learn" title="${esc(t.desc)}"><span class="side-ic" aria-hidden="true">▦</span><span class="side-label">${esc(t.title)}<small>${esc(t.tag)}</small></span></button>`).join("");
     const groups=palItems(q);
@@ -75,7 +75,7 @@ function renderLesson(){const el=document.getElementById("lesson"),L=L_();
     <div class="sect"><span class="lab">Bắt đầu từ</span><div class="acts">${Object.entries(STARTERS).map(([k,t])=>`<button class="sm" data-act="loadTpl" data-arg="${k}">${esc(t.title)}</button>`).join("")}<button class="sm" data-act="askClear">Canvas trống</button></div>${LESSONS.map((l,i)=>`<button class="tplrow" data-act="copyLesson" data-arg="${i}"><b>${esc(l.tag)}</b><small>${esc(l.title)}</small></button>`).join("")}<p class="note">Mở template của một bài vào sandbox (không chấm điểm).</p></div>`;return}
   const R=UI.result,hs=L.hints(),passed=R?R.res.filter(Boolean).length:0,nT=L.tasks.length;
   let h=`<div class="lh"><span class="lab">${esc(L.phase||"FCAJ")}</span><div class="ldots">${LESSONS.map((x,i)=>`<button class="ldot${DONE.has(x.id)?" done":""}${i===UI.lesson?" cur":""}" data-lesson="${i}" aria-label="Bài ${x.step}: ${esc(x.title)}${DONE.has(x.id)?" (đã đạt)":""}"><span>${x.step}</span></button>`).join("")}</div></div>
-  <div><span class="cap eyebrow">Bài ${L.step} · ${esc(L.tag)}</span><h1>${esc(L.title)}</h1><p class="goal">${esc(L.goal)}</p>${L.lab?`<p class="labref">Theo FCAJ workshop ${L.lab.split(" · ").map(x=>`<a href="https://${x}.awsstudygroup.com/" target="_blank" rel="noopener">${x} ↗</a>`).join(" · ")}</p>`:""}</div>
+  <div><span class="cap eyebrow">Bài ${L.step} · ${esc(L.tag)}</span><h1>${esc(L.title)}</h1><p class="goal">${esc(L.goal)}</p>${L.ref?`<p class="labref">${L.ref}</p>`:""}${L.lab?`<p class="labref">Theo FCAJ workshop ${L.lab.split(" · ").map(x=>`<a href="https://${x}.awsstudygroup.com/" target="_blank" rel="noopener">${x} ↗</a>`).join(" · ")}</p>`:""}</div>
   <details class="scn"><summary><span class="av">${L.who[0]}</span><span class="q">${esc(L.who[1].split(" · ")[0])}: “${esc(L.scenario)}”</span></summary><p>“${esc(L.scenario)}”</p><small class="muted">${esc(L.who[1])}</small></details>
   <div class="sect"><div class="th"><span class="lab">Trong template này</span><button class="link" data-act="tour">${UI.tour>=0?"Dừng giới thiệu":"Giới thiệu từng khối →"}</button></div><div class="comps">${Object.keys(L.explain||{}).filter(id=>nodeOf(id)).map(id=>{const n=nodeOf(id);return`<button class="comp${UI.sel&&UI.sel.node===id?" on":""}" data-act="selNode" data-arg="${id}" title="${esc(L.explain[id])}"><span class="side-ic" style="--cat:var(--c-${n.def.cat})" aria-hidden="true">${esc(n.def.short)}</span>${esc(id)}</button>`}).join("")}</div></div>
   <div class="sect"><div class="th"><span class="lab">Nhiệm vụ</span><span class="cnt">${passed}/${nT}</span><span class="pbar"><i style="width:${passed/nT*100}%"></i></span></div>${L.tasks.map((t,i)=>{const c=R?(R.res[i]?"pass":"fail"):"";return`<div class="task ${c}"><span class="tm2">${R?(R.res[i]?"✓":"✕"):i+1}</span><div><b>${esc(t.t)}</b>${R&&R.res[i]?`<small>${esc(t.c)}</small>`:""}</div></div>`}).join("")}
@@ -84,7 +84,7 @@ function renderLesson(){const el=document.getElementById("lesson"),L=L_();
   if(UI.hints)h+=hs.slice(0,UI.hints).map((x,i)=>`<div class="callout warn"><b>Gợi ý ${i+1}/${hs.length}</b>${esc(x)}</div>`).join("");
   if(R&&R.ok&&!R.skipped){const nx=UI.lesson+1<LESSONS.length;h+=`<div class="lacts">${nx?`<button class="primary" data-lesson="${UI.lesson+1}">Bài tiếp: ${esc(LESSONS[UI.lesson+1].tag)} →</button>`:`<button class="primary" data-act="openSandbox">Ra sandbox tự do →</button>`}</div>`}
   else h+=`<div class="lacts"><button class="primary" data-act="check">Check</button><button data-act="hint" ${UI.hints>=hs.length?"disabled":""}>Gợi ý ${UI.hints}/${hs.length}</button><button class="ghost" data-act="askSkip">Làm hộ</button><button class="ghost" data-act="askReset">Reset</button></div>`;
-  h+=`<details class="more"><summary>Khái niệm (${L.concepts.length})</summary><div class="tags">${L.concepts.map(c=>`<span class="tag">${esc(c)}</span>`).join("")}</div></details>`;
+  h+=`<details class="more"><summary>Khái niệm (${L.concepts.length})</summary><div class="tags">${L.concepts.map(c=>`<span class="tag">${esc(c)}</span>`).join("")}</div></details>`+(L.reading?`<details class="more reading"><summary>Đọc thêm: ${esc(L.reading.title)}</summary><div class="reading-body">${L.reading.html}</div></details>`:"");
   el.innerHTML=h}
 /* ---------------- inspector: fields ---------------- */
 function fieldHtml(n,f){const id=n.id,p=n.props,k=f.k;if(f.when&&!f.when(p))return"";
@@ -149,6 +149,7 @@ function costRows(id){const r=RT.n[id];if(!r||!r.costBy)return"";return kvl(Obje
 const kvl=rows=>`<dl class="kv-list">${rows.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>`;
 function rtHtml(id){const n=nodeOf(id);if(!n)return"";const r=RT.n[id]||{m:{},series:[]},m=r.m,p=n.props;let h="";
   if(!exists(id)&&!n.ext)return`<div class="empty">Chưa có trên AWS (${esc(RT.stack.status)}). Bấm Deploy để tạo.</div>`;
+  if(typeof orgRt==="function")h+=orgRt(n);
   switch(n.type){
     case"AWS::Lambda::Function":{const lg=RT.logs[logName(id)]||[];h+=kvl([["Lần chạy",num(m.inv||0)],["Lỗi",num(m.err||0)],["Thời gian TB",m.inv?Math.round((m.dur||0)/m.inv)+" ms":"—"],["GB-giây / lần",((+p.MemorySize||128)/1024*Math.ceil((r.last||{dur:0}).dur)/1000).toFixed(3)]]);
       if(r.lastErr)h+=`<div class="callout"><b>Lỗi gần nhất</b>${esc(r.lastErr)}</div>`;
@@ -178,6 +179,7 @@ function nodeActs(n){const id=n.id,t=n.type;let a="";
   if(t==="CloudLab::Uploader"&&refId(n.props.Target))a+=`<button class="sm" data-act="inject" data-arg="${id}">Upload 1 file</button>`;
   if(t==="AWS::SNS::Topic"&&exists(id))a+=`<button class="sm" data-act="pubTest" data-arg="${id}">Gửi tin thử</button>`;
   if(t==="AWS::S3::Bucket"&&exists(id)&&Object.keys(RT.obj[id]||{}).length)a+=`<button class="sm" data-act="askEmpty" data-arg="${id}">Empty</button>`;
+  if(typeof orgActs==="function")a+=orgActs(n);
   a+=`<button class="sm" data-act="connectFrom" data-arg="${id}">Nối tới…</button><button class="sm danger" data-act="askDelNode" data-arg="${id}">${n.scope==="manual"?"Xóa (ngoài stack)":"Xóa"}</button>`;return a}
 let DRAWER_KEY=null;
 function renderDrawer(){const el=document.getElementById("drawer");if(!el)return;const S=UI.sel;let c=null;
@@ -265,9 +267,9 @@ document.addEventListener("click",e=>{
       submit:v=>{simPlay(false);deleteStack();if(sb&&+v.wipe&&RT.stack.status==="DELETE_COMPLETE"){edit("xóa canvas",()=>{M.res={};M.ext={}});RT.stack.status="NOT_DEPLOYED";log("CloudLab","editor","clear","Template trống · tài nguyên tạo tay và bucket Retain vẫn còn","ok")}return{ok:true}}}},
     vMode(){UI.code=arg!=="graph";UI.split=arg==="split";YAML_ERR=null},
     simToggle(){simPlay(!RT.running);return true},simReset(){const was=RT.running;simPlay(false);if(UI.mode==="lesson")startLesson(UI.lesson,true);else{RT=freshRuntime();if(Object.keys(M.res).length){QUIET++;deploy();QUIET--;RT.stack.status="CREATE_COMPLETE";syncRuntime()}}log("CloudLab","sim","reset","đặt lại thời gian, chi phí và dữ liệu mô phỏng","");if(was)simPlay(true)},
-    logToggle(){UI.panel=UI.panel?null:"log";UI.logOpen=!!UI.panel},sideTab(){UI.sideTab=arg},picker(){UI.picker=UI.picker?null:{q:"",active:0};UI.gfocus=UI.picker?"#pkq":null},
+    logToggle(){UI.panel=UI.panel?null:"log";UI.logOpen=!!UI.panel},sideTab(){const sh=document.querySelector("[data-shell]");if(sh&&sh.hasAttribute("data-collapsed")&&(UI.sideTab||(UI.mode==="lesson"?"learn":"comp"))===arg){const tg=document.querySelector("header [data-shell-toggle]");if(tg)tg.click()}UI.sideTab=arg},picker(){UI.picker=UI.picker?null:{q:"",active:0};UI.gfocus=UI.picker?"#pkq":null},
     loadTpl(){const t=STARTERS[arg];confirmModal(`Mở mẫu “${t.title}”?`,`${esc(t.desc)}<br><br>Canvas sandbox hiện tại sẽ được thay.`,"Mở mẫu",()=>{startSandbox(loadTemplate(t.yaml,t.layout,"sandbox"));UI.sideTab="comp";gs().zoom=null})},
-    gFit(){const G=gs();G.zoom=null},gNoteClose(){UI.gnote=null},gZoom(){gZoomAt(GCUR.z*(arg==="1"?1.2:1/1.2));return true},gTrace(){gs().trace=!gs().trace},gView(){gs().view=arg;UI.gmenu=null},
+    gFit(){const G=gs();G.zoom=null},gNoteClose(){UI.gnote=null},orgAct(){const k=arg.indexOf(":");ORG_ACTS[arg.slice(0,k)](arg.slice(k+1))},gZoom(){gZoomAt(GCUR.z*(arg==="1"?1.2:1/1.2));return true},gTrace(){gs().trace=!gs().trace},gView(){gs().view=arg;UI.gmenu=null},
     gMenu(){UI.gmenu=UI.gmenu&&UI.gmenu.from===arg?null:{from:arg,active:0};UI.gfocus=UI.gmenu?"#glist":`[data-gconnect="${arg}"]`},
     connectFrom(){UI.sel=null;UI.code=false;UI.gmenu={from:arg,active:0};UI.gfocus="#glist"},
     gPick(){if(!UI.gmenu||!connectRule(UI.gmenu.from,arg))return true;doConnect(UI.gmenu.from,arg);UI.gmenu=null},
@@ -315,7 +317,7 @@ document.addEventListener("input",e=>{if(e.target.id==="psearch"){UI.psearch=e.t
 /* drag a component from the menu (or the ＋ picker) onto the canvas. Pointer events, not HTML5 drag-and-drop:
    Chromium never starts a native drag from these buttons, and pointer events also work with touch and pen. */
 function dropComponent(type,cx,cy){const[x,y]=toWorld(cx,cy);let id;gFreeze();edit("add "+type,()=>{id=addNode(type,x-GW/2,y-30)});log("CloudLab","editor","add",`${id} (${T[type].label})`,"ok");
-  const sb=GLAST&&boxAt(GLAST.boxes,x,y,"subnet"),vb=GLAST&&boxAt(GLAST.boxes,x,y,"vpc");if(sb)placeIn(id,sb.id);else if(vb&&PLACEABLE.includes(type))autoSubnet(id,vb.id);
+  const ob=GLAST&&boxAt(GLAST.boxes,x,y,"ou");if(ob&&type==="AWS::Organizations::Account")moveAcctTo(id,ob.id);const sb=GLAST&&boxAt(GLAST.boxes,x,y,"subnet"),vb=GLAST&&boxAt(GLAST.boxes,x,y,"vpc");if(sb)placeIn(id,sb.id);else if(vb&&PLACEABLE.includes(type))autoSubnet(id,vb.id);
   else if(vb&&["AWS::EC2::Subnet","AWS::EC2::SecurityGroup","AWS::ElasticLoadBalancingV2::TargetGroup"].includes(type))edit("vpc",()=>{nodeOf(id).props.VpcId={Ref:vb.id}});
   UI.picker=null;UI.sel={node:id};UI.selRet=`[data-node="${id}"]`;saveSandbox();render();return id}
 let PD=null,PD_SUPPRESS=0;
@@ -363,11 +365,13 @@ document.addEventListener("pointermove",e=>{if(!GD||GD.kind==="edge")return;cons
   if(!GD.moved){GD.moved=true;gFreeze();UI.gmenu=null;if(GD.kind==="connect")UI.gdrag={from:GD.id}}const z=GCUR.z;
   if(GD.kind==="pan"){GCUR.pan=[GD.pan0[0]+dx,GD.pan0[1]+dy];gs().pan=[...GCUR.pan];gApply()}
   else if(GD.kind==="node"){M.pos[GD.id]=[Math.round(GD.pos0[0]+dx/z),Math.round(GD.pos0[1]+dy/z)];const n=nodeOf(GD.id);
+    if(n&&n.type==="AWS::Organizations::Account"){const c=[M.pos[GD.id][0]+GW/2,M.pos[GD.id][1]+40],b=boxAt(GD.boxes,c[0],c[1],"ou");UI.gdropBox=b?b.id:null}
     if(n&&PLACEABLE.includes(n.type)){const c=[M.pos[GD.id][0]+GW/2,M.pos[GD.id][1]+40],b=boxAt(GD.boxes.filter(x=>!x.members.includes(GD.id)||x.box==="subnet"),c[0],c[1],"subnet");UI.gdropBox=b?b.id:null}gRefresh()}
   else if(GD.kind==="box"){for(const k of Object.keys(GD.pos0))M.pos[k]=[Math.round(GD.pos0[k][0]+dx/z),Math.round(GD.pos0[k][1]+dy/z)];gRefresh()}
   else{const el=document.elementFromPoint&&document.elementFromPoint(e.clientX,e.clientY),on=el&&el.closest&&el.closest(".gnode");UI.gdrag.at=toWorld(e.clientX,e.clientY);UI.gdrag.over=on?on.dataset.gid:null;gRefresh();GD.gx.classList.add("connecting")}});
 function gEnd(cancel){if(!GD)return;const d=GD;GD=null;if(!d.moved)return;GSUP=Date.now();
-  if(d.kind==="node"){const n=nodeOf(d.id);if(n&&PLACEABLE.includes(n.type)){const c=[M.pos[d.id][0]+GW/2,M.pos[d.id][1]+40],sb=boxAt(d.boxes,c[0],c[1],"subnet"),cur=subnetsOf(n)[0]||null;
+  if(d.kind==="node"){const n=nodeOf(d.id);if(n&&n.type==="AWS::Organizations::Account"){const c=[M.pos[d.id][0]+GW/2,M.pos[d.id][1]+40],ob=boxAt(d.boxes,c[0],c[1],"ou");if(ob)moveAcctTo(d.id,ob.id)}
+    if(n&&PLACEABLE.includes(n.type)){const c=[M.pos[d.id][0]+GW/2,M.pos[d.id][1]+40],sb=boxAt(d.boxes,c[0],c[1],"subnet"),cur=subnetsOf(n)[0]||null;
       const vb=!sb&&boxAt(d.boxes,c[0],c[1],"vpc");
       if(sb&&sb.id!==cur)placeIn(d.id,sb.id);else if(vb&&!cur)autoSubnet(d.id,vb.id);else if(!sb&&cur&&!vb)placeIn(d.id,null)}UI.gdropBox=null;saveSandbox();render()}
   if(d.kind==="box")saveSandbox();

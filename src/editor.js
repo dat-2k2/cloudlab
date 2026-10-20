@@ -49,6 +49,7 @@ function nodeView(n){const r=RT.n[n.id]||{m:{},tk:{},series:[]},m=r.m,p=n.props,
     case"AWS::EC2::SecurityGroup":{const L=arr(p.SecurityGroupIngress),open=L.filter(x=>x.CidrIp==="0.0.0.0/0");rows.push(["Inbound",L.map(x=>(x.IpProtocol==="-1"?"*":portOfRule(x))).join(", ")||"không có",""],["Mở ra Internet",open.map(portOfRule).join(", ")||"không",open.length?"warn":"ok"]);
       if(open.some(x=>x.IpProtocol==="-1"||[22,3389,5432,3306,6379].some(pt=>pt>=+x.FromPort&&pt<=+(x.ToPort??x.FromPort))))st=["bad","Mở cổng nhạy cảm"];break}
     case"AWS::EC2::InternetGateway":if(!Object.values(M.res).some(x=>x.Type==="AWS::EC2::VPCGatewayAttachment"&&refId(x.Properties.InternetGatewayId)===n.id))st=["warn","Chưa gắn VPC"];rows.push(["Gắn vào",(Object.values(M.res).find(x=>x.Type==="AWS::EC2::VPCGatewayAttachment"&&refId(x.Properties.InternetGatewayId)===n.id)||{Properties:{}}).Properties.VpcId?refId(Object.values(M.res).find(x=>x.Type==="AWS::EC2::VPCGatewayAttachment"&&refId(x.Properties.InternetGatewayId)===n.id).Properties.VpcId):"—",""]);break}
+  if(n.def.view){const s2=n.def.view(n,rows);if(s2)st=s2}
   if(n.scope==="manual")st=(getP(n.raw,"Metadata.CloudLab.Retained")?["warn","Bị giữ lại"]:["warn","Ngoài stack"]);
   else if(!up&&!n.ext)st=["off",RT.stack.status==="DELETE_COMPLETE"?"Đã xóa":"Chưa deploy"];
   const cost=r.cost||0,out=rows.slice(0,cost>0?3:4);if(cost>0)out.push(["Chi phí",money(cost),"cost"]);return{st,rows:out,cost,ghost:!up&&!n.ext}}
@@ -76,6 +77,9 @@ function layoutModel(){const all=allNodes(),cont=all.filter(n=>n.def.container);
   for(const s of cont.filter(c=>c.def.container==="subnet")){const mem=nodes.filter(n=>subOf[n.id]===s.id);const b={...s,...bbox(mem,22,30,[300,170],s.id),members:mem.map(m=>m.id),box:"subnet",pub:isPublicSubnet(s.id)};boxes.push(b);by[s.id]=b}
   for(const v of cont.filter(c=>c.def.container==="vpc")){const subs=boxes.filter(b=>b.box==="subnet"&&refId(b.props.VpcId)===v.id),mem=nodes.filter(n=>vpcOf_[n.id]===v.id);
     const b={...v,...bbox([...subs,...mem],24,34,[400,260],v.id),members:[...mem.map(m=>m.id),...subs.flatMap(s=>[s.id,...s.members])],box:"vpc"};boxes.unshift(b);by[v.id]=b}
+  /* OU boxes wrap the accounts placed in them (Organizations) */
+  for(const o of cont.filter(c=>c.def.container==="ou")){const mem=nodes.filter(n=>n.type==="AWS::Organizations::Account"&&refId(arr(n.props.ParentIds)[0])===o.id);
+    const b={...o,...bbox(mem,22,34,[320,190],o.id),members:mem.map(m=>m.id),box:"ou",reg:typeof ouRegistered==="function"&&ouRegistered(o.id)};boxes.push(b);by[o.id]=b}
   const es=edges().filter(e=>!e.hidden&&by[e.from]&&by[e.to]);const ext=[...nodes,...boxes];
   const minX=Math.min(20,...ext.map(n=>n.x)),minY=Math.min(20,...ext.map(n=>n.y));
   if(minX<20||minY<20){const dx=20-minX,dy=20-minY;for(const k of Object.keys(M.pos))M.pos[k]=[M.pos[k][0]+dx,M.pos[k][1]+dy];return layoutModel()}
@@ -104,8 +108,8 @@ function gWorld(L){const G=gs(),sel=UI.sel||{},drag=UI.gdrag;let h="";
     if(v.label&&(v.st!=="idle"||v.style==="flow"||isSel)){const rev=L.edges.some(x=>x.from===e.to&&x.to===e.from),q=c.at(rev?.3:.5);chips+=`<span class="gchip s-${v.st}${isSel?" is-sel":""}${dim}" style="left:${q[0]}px;top:${q[1]}px">${esc(v.label)}</span>`}}
   if(drag&&drag.at){const A=L.by[drag.from],over=drag.over&&valid[drag.over]?L.by[drag.over]:null,p1=gAnchor(A,"r",0,1),p2=over?gAnchor(over,"l",0,1):drag.at,c=gCurve(p1,"r",p2,over?"l":null);
     svg+=`<path d="${c.d}" class="ge s-drag" marker-end="url(#ga-drag)"/>`;if(over){const q=c.at(.5);chips+=`<span class="gchip s-drag" style="left:${q[0]}px;top:${q[1]}px">thả để nối · ${esc(valid[drag.over].label)}</span>`}}
-  let bx="";for(const b of L.boxes){const p=b.props,label=b.box==="vpc"?`VPC · ${b.id} · ${p.CidrBlock||""}`:`${b.pub?"Public":"Private"} subnet · ${b.id} · ${p.AvailabilityZone||""} · ${p.CidrBlock||""}`;
-    bx+=`<div class="gbox ${b.box}${b.box==="subnet"?(b.pub?" pub":" priv"):""}${sel.node===b.id?" sel":""}${UI.gdropBox===b.id?" drop":""}" data-gid="${b.id}" data-box="${b.box}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px"><button class="gbox-h" data-node="${b.id}" aria-label="${esc(label)}"><span class="side-ic" style="--cat:var(--c-infra)" aria-hidden="true">${b.box==="vpc"?"VPC":"SN"}</span>${esc(label)}</button>${b.members.length?"":`<span class="gbox-empty">Kéo EC2 / RDS vào đây</span>`}</div>`}
+  let bx="";for(const b of L.boxes){const p=b.props,label=b.box==="ou"?`OU · ${p.Name||b.id} · ${b.reg?"đã register":"chưa register"}`:b.box==="vpc"?`VPC · ${b.id} · ${p.CidrBlock||""}`:`${b.pub?"Public":"Private"} subnet · ${b.id} · ${p.AvailabilityZone||""} · ${p.CidrBlock||""}`;
+    bx+=`<div class="gbox ${b.box}${b.box==="subnet"?(b.pub?" pub":" priv"):""}${b.box==="ou"&&b.reg?" reg":""}${sel.node===b.id?" sel":""}${UI.gdropBox===b.id?" drop":""}" data-gid="${b.id}" data-box="${b.box}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px"><button class="gbox-h" data-node="${b.id}" aria-label="${esc(label)}"><span class="side-ic" style="--cat:var(--c-${b.box==="ou"?"org":"infra"})" aria-hidden="true">${b.box==="vpc"?"VPC":b.box==="ou"?"OU":"SN"}</span>${esc(label)}</button>${b.members.length?"":`<span class="gbox-empty">${b.box==="ou"?"Kéo account vào đây":"Kéo EC2 / RDS vào đây"}</span>`}</div>`}
   h=bx+h+svg+"</svg>";
   for(const n of L.nodes){const v=n.v,isSel=sel.node===n.id,vt=valid?(n.id===drag.from?"":valid[n.id]?" valid":" invalid"):"",dim=trace&&!trace.has(n.id)?" dim":"";
     const desc=`${n.id}, ${n.def.label}${v.st?", "+v.st[1]:""}`;

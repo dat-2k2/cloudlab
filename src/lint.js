@@ -31,4 +31,5 @@ function problems(){const out=[],P=(sev,id,msg)=>out.push({sev,id,msg});if(!M)re
       case"AWS::SNS::Topic":for(const s of arr(p.Subscription))if(s&&s.Protocol==="email"&&RT&&RT.subs[n.id+"|"+s.Endpoint]==="PendingConfirmation")P("info",n.id,`${n.id}: ${s.Endpoint} chưa xác nhận subscription`);break;
       case"AWS::EC2::Instance":if(!refId(p.SubnetId))P("info",n.id,`${n.id}: chưa chọn subnet → chạy trong default VPC`);if(!sgsOf(n.id).length)P("info",n.id,`${n.id}: không có security group → dùng default SG`);break;
       case"CloudLab::Client":if(!refId(p.Target))P("info",n.id,`${n.id}: client chưa gọi tới đâu`);break}}
+  if(typeof orgProblems==="function")orgProblems(P);
   const order={error:0,warn:1,info:2};return out.sort((a,b)=>order[a.sev]-order[b.sev])}

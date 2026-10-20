@@ -177,7 +177,7 @@ function fire(n,c,at){const p=n.props,tg=refId(p.Target);bump(n.id,"sent",c);
   else if(n.type==="CloudLab::Uploader"){if(!tg)return;const key=(p.Prefix||"")+"photo-"+(++RT.seq)+(p.Suffix||"");push({at,to:tg,from:n.id,kind:"uploads",w:c,type:"s3",data:{action:"s3:PutObject",key,kb:+p.SizeKB||240,client:n.id}})}
   else if(n.type==="AWS::Events::Rule")for(const t of arr(p.Targets)){const f=refId(t&&t.Arn);if(f)push({at,to:f,from:n.id,kind:"invokes",w:c,type:"inv",data:{src:"rule"}})}}
 function periodic(t0,dt){const t1=t0+dt,h=dt/3600,zones=new Set();
-  for(const n of allNodes()){if(!exists(n.id))continue;const p=n.props;
+  for(const n of allNodes()){if(!exists(n.id))continue;const p=n.props;if(n.def.tick)n.def.tick(n,dt);
     if(n.type==="AWS::EC2::Instance"){charge(n.id,(PRICE.ec2[p.InstanceType]||0.0132)*h,"giờ chạy");const s=subnetsOf(n)[0];if(!s||isPublicSubnet(s))charge(n.id,PRICE.ipv4H*h,"IPv4 public")}
     if(n.type==="AWS::ElasticLoadBalancingV2::LoadBalancer"){charge(n.id,PRICE.albH*h,"giờ chạy");if(p.Scheme!=="internal")charge(n.id,PRICE.ipv4H*Math.max(2,subnetsOf(n).length)*h,"IPv4 public");const rate=(nrt(n.id).tk.req||0)/dt;charge(n.id,Math.max(rate/25,0)*PRICE.albLCU*h,"LCU")}
     if(n.type==="AWS::RDS::DBInstance"){charge(n.id,(PRICE.rds[p.DBInstanceClass]||0.028)*(p.MultiAZ===true?2:1)*h,"giờ chạy");charge(n.id,(+p.AllocatedStorage||20)*PRICE.rdsGB*dt/MONTH*(p.MultiAZ===true?2:1),"lưu trữ")}
