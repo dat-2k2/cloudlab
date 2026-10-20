@@ -26,6 +26,16 @@ spec:
   nodes: ${n||3}
   maxNodes: ${mx||n||3}
 `;
+const CTL=(scheme)=>`---
+apiVersion: cloudlab.dev/v1
+kind: IngressController
+metadata:
+  name: ingress-nginx
+spec:
+  controller: ingress-nginx
+  scheme: ${scheme||"internet-facing"}
+  rateLimitStatus: 503
+`;
 const CLIENT=(name,target,extra)=>`---
 apiVersion: cloudlab.dev/v1
 kind: Client
@@ -123,8 +133,8 @@ spec:
             pathType: Prefix
             backend:
               service: {name: ib-web, port: {number: 80}}
-`+CLIENT("customers","ing/public","  ratePerSecond: 40\n  host: ib.anphat.vn\n  path: /")+POOL(3),
-  layout:{"client/customers":[40,80],"nodepool/nodes":[40,420],"ing/public":[380,80],"svc/ib-web":[720,80],"deploy/ib-web":[1060,80],"cm/ib-config":[1400,80],"svc/payment-api":[1060,420],"deploy/payment-api":[1400,420]}};
+`+CTL()+CLIENT("customers","ing/public","  ratePerSecond: 40\n  host: ib.anphat.vn\n  path: /")+POOL(3),
+  layout:{"client/customers":[40,80],"nodepool/nodes":[40,420],"ingressctl/ingress-nginx":[380,420],"ing/public":[380,80],"svc/ib-web":[720,80],"deploy/ib-web":[1060,80],"cm/ib-config":[1400,80],"svc/payment-api":[1060,420],"deploy/payment-api":[1400,420]}};
 const STATEFUL={id:"ledger",title:"Database có ổ đĩa riêng",tag:"StatefulSet + PVC + Secret",desc:"API tra soát ghi vào PostgreSQL chạy bằng StatefulSet; mỗi pod database có PVC riêng, mật khẩu ở Secret.",
   yaml:`# CloudLab Kubernetes · sandbox · Database có ổ đĩa riêng
 apiVersion: v1
@@ -383,8 +393,8 @@ spec:
   pass:"Ba probe ba việc: startup chờ app khởi động, liveness khởi động lại app bị treo, readiness quyết định pod có nhận traffic không. Liveness quá vội biến app chậm thành app chết; thiếu readiness thì khách bị gửi vào app chưa sẵn sàng."};
 
 const L_ING={id:"ingress",phase:"Ra Internet",step:4,title:"Một cửa vào: Ingress",tag:"Ingress thay LoadBalancer",who:["T","Tuấn · bảo mật"],speed:1,
-  scenario:"Năm IP công khai.",goal:"Khách và đối tác vào qua một Ingress duy nhất; back-office không còn mở ra Internet; không còn Service kiểu LoadBalancer.",
-  concepts:["Ingress","ingress controller","host và đường dẫn","Service ClusterIP","LoadBalancer","bề mặt tấn công","chi phí load balancer"],
+  scenario:"Năm IP công khai.",goal:"Khách và đối tác vào qua một Ingress duy nhất; back-office chỉ vào được từ mạng nội bộ của ngân hàng; không còn load balancer nào của Service mở ra Internet.",
+  concepts:["Ingress","ingress controller","host và đường dẫn","Service ClusterIP","LoadBalancer internet-facing / internal","NLB và AWS Load Balancer Controller","bề mặt tấn công","chi phí load balancer"],
   yaml:`# CloudLab Kubernetes · lab-ingress · Mỗi dịch vụ một IP công khai
 apiVersion: apps/v1
 kind: Deployment
@@ -489,20 +499,22 @@ spec:
             pathType: Prefix
             backend:
               service: {name: payment-api, port: {number: 80}}
-`+CLIENT("customers","svc/ib-web","  ratePerSecond: 30")+CLIENT("partners","svc/payment-api","  ratePerSecond: 10")+CLIENT("internet-scanner","svc/admin-portal","  ratePerSecond: 0.2\n  expect: Deny")+POOL(3),
-  layout:{"client/customers":[40,60],"client/partners":[40,330],"client/internet-scanner":[40,620],"nodepool/nodes":[40,900],"ing/public":[400,330],"svc/ib-web":[760,60],"svc/payment-api":[760,330],"svc/admin-portal":[760,620],"deploy/ib-web":[1100,60],"deploy/payment-api":[1100,330],"deploy/admin-portal":[1100,620]},
+`+CTL()+CLIENT("customers","svc/ib-web","  ratePerSecond: 30")+CLIENT("partners","svc/payment-api","  ratePerSecond: 10")+CLIENT("internet-scanner","svc/admin-portal","  ratePerSecond: 0.2\n  expect: Deny")+CLIENT("branch-staff","svc/admin-portal","  ratePerSecond: 1\n  network: vpc")+POOL(3),
+  layout:{"client/customers":[40,60],"client/partners":[40,330],"client/internet-scanner":[40,620],"client/branch-staff":[40,880],"nodepool/nodes":[40,1150],"ingressctl/ingress-nginx":[400,60],"ing/public":[400,330],"svc/ib-web":[760,60],"svc/payment-api":[760,330],"svc/admin-portal":[760,620],"deploy/ib-web":[1100,60],"deploy/payment-api":[1100,330],"deploy/admin-portal":[1100,620]},
   explain:{"client/customers":"Khách vào web Internet Banking, hiện gọi thẳng IP của Service ib-web.","client/partners":"Đối tác (ví điện tử, sàn TMĐT) gọi API thanh toán, hiện gọi thẳng IP của Service payment-api.",
     "client/internet-scanner":"Một máy quét lạ trên Internet thử mở trang quản trị. Request này lẽ ra phải bị chặn.","ing/public":"Ingress đã được dựng sẵn: ib.anphat.vn/ → web, /api → API thanh toán, có TLS. Chưa ai dùng nó.",
-    "svc/admin-portal":"Back-office cho nhân viên duyệt hồ sơ. Kiểu LoadBalancer = có IP công khai, ai cũng mở được trang đăng nhập.","svc/ib-web":"Kiểu LoadBalancer: một load balancer riêng, tính tiền theo giờ.","svc/payment-api":"Kiểu LoadBalancer: thêm một load balancer và IP công khai nữa."},
+    "svc/admin-portal":"Back-office cho nhân viên duyệt hồ sơ. Kiểu LoadBalancer = có IP công khai, ai cũng mở được trang đăng nhập.","svc/ib-web":"Kiểu LoadBalancer: một load balancer riêng, tính tiền theo giờ.","svc/payment-api":"Kiểu LoadBalancer: thêm một load balancer và IP công khai nữa.","client/branch-staff":"Nhân viên ở chi nhánh, vào mạng nội bộ của ngân hàng (VPN / đường truyền riêng tới AWS). Họ vẫn phải mở được back-office.","ingressctl/ingress-nginx":"ingress-nginx: nhận traffic cho mọi Ingress class nginx qua một NLB internet-facing dùng chung."},
   tasks:[{t:"Khách và đối tác đi qua Ingress",c:"Hai client gọi Ingress public, và vẫn thành công.",test:()=>{const a=clientNamed("customers"),b=clientNamed("partners");return!!a&&!!b&&[a,b].every(x=>(nodeOf(getP(x.props,"spec.target"))||{}).type==="Ingress")&&String(getP(b.props,"spec.path")||"").startsWith("/api")&&kRun(60,()=>okShare(clientNamed("customers"))>0.95&&okShare(clientNamed("partners"))>0.95)}},
-    {t:"Không còn Service kiểu LoadBalancer",c:"Chỉ còn một load balancer (của ingress controller).",test:()=>!allNodes().some(n=>n.type==="Service"&&getP(n.props,"spec.type")==="LoadBalancer")},
-    {t:"Back-office không mở ra Internet",c:"Máy quét bị chặn; Ingress không có luật nào tới admin-portal.",test:()=>!allNodes().some(n=>n.type==="Ingress"&&arr(getP(n.props,"spec.rules")).some(r=>arr(getP(r||{},"http.paths")).some(x=>getP(x||{},"backend.service.name")==="admin-portal")))&&kRun(60,()=>{const s=clientNamed("internet-scanner");return!!s&&errOf(s)>0&&!((RT.n[s.id]||{m:{}}).m.ok)})}],
-  hints:()=>["Đếm số khối Service có pill “IP public”: mỗi cái là một load balancer, một IP công khai, và một cửa vào phải canh.","Kéo từ chấm của client customers sang Ingress public (đối tác cũng vậy, đặt đường dẫn /api). Ingress chia request theo đường dẫn tới đúng Service.","Khi khách đã đi qua Ingress, đổi kiểu cả ba Service về ClusterIP. Back-office thì không thêm vào Ingress: nhân viên vào qua mạng nội bộ / VPN."],
+    {t:"Không Service nào có load balancer mở ra Internet",c:"Service web và API là ClusterIP; nếu còn LoadBalancer thì là internal.",test:()=>!allNodes().some(n=>n.type==="Service"&&getP(n.props,"spec.type")==="LoadBalancer"&&!lbInfo(n).internal)},
+    {t:"Back-office chỉ vào được từ mạng nội bộ",c:"Máy quét ngoài Internet bị chặn, nhân viên chi nhánh vẫn vào được; Ingress không có luật nào tới admin-portal.",test:()=>!allNodes().some(n=>n.type==="Ingress"&&arr(getP(n.props,"spec.rules")).some(r=>arr(getP(r||{},"http.paths")).some(x=>getP(x||{},"backend.service.name")==="admin-portal")))&&kRun(60,()=>{const s=clientNamed("internet-scanner"),b=clientNamed("branch-staff");return!!s&&errOf(s)>0&&!((RT.n[s.id]||{m:{}}).m.ok)&&okShare(b)>0.95})}],
+  hints:()=>["Đếm số khối Service có pill “IP public”: mỗi cái là một load balancer, một IP công khai, và một cửa vào phải canh.","Kéo từ chấm của client customers sang Ingress public (đối tác cũng vậy, đặt đường dẫn /api). Ingress chia request theo đường dẫn tới đúng Service.","Khi khách đã đi qua Ingress, đổi ib-web và payment-api về ClusterIP. Back-office: nếu đổi về ClusterIP thì nhân viên chi nhánh cũng mất đường vào. Giữ LoadBalancer nhưng đổi Phạm vi thành internal (NLB nội bộ): chỉ mạng nội bộ tới được."],
   diagnose:i=>ladder([[()=>["customers","partners"].every(nm=>{const x=clientNamed(nm);return x&&(nodeOf(getP(x.props,"spec.target"))||{}).type==="Ingress"}),["Khách và đối tác vẫn gọi thẳng IP của từng Service.","Hai client đang trỏ tới Service, bỏ qua Ingress public đã dựng sẵn.","Nối customers → Ingress public (host ib.anphat.vn, đường dẫn /) và partners → Ingress public (đường dẫn /api)."]],
-    [()=>!allNodes().some(n=>n.type==="Service"&&getP(n.props,"spec.type")==="LoadBalancer"),["Vẫn còn Service kiểu LoadBalancer: vẫn có IP công khai mở thẳng vào app.","Xem pill “IP public” trên các khối Service.","Đổi Kiểu của từng Service thành ClusterIP. Ingress vẫn gọi được chúng từ bên trong cluster."]],
+    [()=>!allNodes().some(n=>n.type==="Service"&&getP(n.props,"spec.type")==="LoadBalancer"&&!lbInfo(n).internal),["Vẫn còn Service có load balancer mở ra Internet.","Xem pill “IP public” trên các khối Service.","ib-web, payment-api: đổi Kiểu thành ClusterIP (Ingress vẫn gọi được từ trong cluster). admin-portal: giữ LoadBalancer, đổi Phạm vi sang internal."]],
+    [()=>kRun(60,()=>okShare(clientNamed("branch-staff"))>0.95),["Nhân viên chi nhánh không mở được back-office nữa.","admin-portal đã thành ClusterIP: địa chỉ chỉ có trong cluster, mạng nội bộ cũng không tới được.","Đổi admin-portal về LoadBalancer với Phạm vi internal (NLB nội bộ): mạng nội bộ ngân hàng tới được, Internet thì không."]],
     [()=>kRun(60,()=>okShare(clientNamed("customers"))>0.95&&okShare(clientNamed("partners"))>0.95),["Khách hoặc đối tác bị lỗi khi đi qua Ingress.","Xem mũi tên đỏ từ Ingress và lý do lỗi.","Host của client phải là ib.anphat.vn và đường dẫn khớp một luật (/ cho web, /api cho đối tác)."]]],i),
-  solve(){edit("đi qua Ingress, bỏ LoadBalancer",()=>{for(const[nm,path]of [["customers","/"],["partners","/api"]]){const c=clientNamed(nm);c.props.spec.target="ing/public";c.props.spec.host="ib.anphat.vn";c.props.spec.path=path}for(const s of allNodes())if(s.type==="Service")s.props.spec.type="ClusterIP"});solveLog("clients → ing/public; mọi Service → ClusterIP")},
-  pass:"Một Ingress, một load balancer, một chỗ đặt TLS và tường lửa ứng dụng; mọi Service khác là ClusterIP, chỉ có địa chỉ bên trong cluster. Công cụ nội bộ không cần nằm trên Internet chỉ vì tiện."};
+  solve(){edit("đi qua Ingress, back-office qua NLB nội bộ",()=>{for(const[nm,path]of [["customers","/"],["partners","/api"]]){const c=clientNamed(nm);c.props.spec.target="ing/public";c.props.spec.host="ib.anphat.vn";c.props.spec.path=path}
+      for(const s of allNodes())if(s.type==="Service"){if(nmOf(s)==="admin-portal")meta(s).annotations={[A_LB_TYPE]:"external",[A_NLB_TARGET]:"ip",[A_LB_SCHEME]:"internal"};else s.props.spec.type="ClusterIP"}});solveLog("clients → ing/public; ib-web, payment-api → ClusterIP; admin-portal → NLB internal")},
+  pass:"Một Ingress, một load balancer, một chỗ đặt TLS và tường lửa ứng dụng cho khách; Service phía sau là ClusterIP. Công cụ nội bộ dùng load balancer internal: mạng nội bộ vào được, Internet thì không. Lưu ý: AWS Load Balancer Controller mặc định tạo load balancer internal, Classic LB mặc định thì internet-facing. Bài này dùng ingress-nginx vì phổ biến, nhưng dự án đã ngừng bảo trì từ tháng 3/2026: hệ thống mới nên dùng Gateway API (thử mẫu “Canary 90 / 10 với Gateway API” trong sandbox)."};
 
 const L_RES={id:"resources",phase:"Tải và tài nguyên",step:5,title:"Requests và limits",tag:"OOMKilled + Pending",who:["H","Hà · vận hành"],speed:1,
   scenario:"Sao kê gián đoạn.",goal:"statement-api không còn bị OOMKilled; statement-export được xếp lên node và chạy.",
@@ -633,8 +645,8 @@ spec:
       resource:
         name: cpu
         target: {type: Utilization, averageUtilization: 70}
-`+CLIENT("payday","ing/public","  ratePerSecond: 40\n  pattern: payday\n  peak: 8\n  host: ib.anphat.vn\n  path: /api")+POOL(2,"t3.medium",2),
-  layout:{"client/payday":[40,80],"nodepool/nodes":[40,420],"ing/public":[380,80],"svc/payment-api":[720,80],"deploy/payment-api":[1060,80],"hpa/payment-api":[1060,420]},
+`+CTL()+CLIENT("payday","ing/public","  ratePerSecond: 40\n  pattern: payday\n  peak: 8\n  host: ib.anphat.vn\n  path: /api")+POOL(2,"t3.medium",2),
+  layout:{"client/payday":[40,80],"nodepool/nodes":[40,420],"ingressctl/ingress-nginx":[380,420],"ing/public":[380,80],"svc/payment-api":[720,80],"deploy/payment-api":[1060,80],"hpa/payment-api":[1060,420]},
   explain:{"client/payday":"Ngày 25: bình thường 40 lệnh chuyển tiền mỗi giây, đỉnh gấp 8 lần (320/giây) kéo dài khoảng nửa giờ, lặp lại mỗi giờ mô phỏng.","deploy/payment-api":"API chuyển tiền. Mỗi request tốn khoảng 8ms CPU: một pod với limits 500m chịu chừng 60 request/giây.",
     "hpa/payment-api":"Tự co giãn theo CPU, mục tiêu 70% của requests.cpu. Bấm vào để xem vì sao nó chưa làm gì.","nodepool/nodes":"2 node t3.medium: còn 3600m CPU cho pod.","ing/public":"Cửa vào chung; /api tới payment-api.","svc/payment-api":"Chia lệnh cho các pod payment-api."},
   tasks:[{t:"HPA đo được CPU",c:"Container khai báo resources.requests.cpu.",test:()=>!!cpuQ(getP(ctrOf(byName("Deployment","payment-api"))||{},"resources.requests.cpu"))},
@@ -859,8 +871,8 @@ spec:
           image: ${REG}/campaign-api:1.2.0
           ports: [{containerPort: 8080}]
           resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: 250m, memory: 256Mi}}
-`+CLIENT("checkout","ing/checkout","  ratePerSecond: 10\n  host: pay.anphat.vn\n  path: /")+CLIENT("from-marketing","svc/card-vault","  ratePerSecond: 0.5\n  expect: Deny\n  from:\n    namespace: marketing\n    labels: {app: campaign-api}")+POOL(3),
-  layout:{"client/checkout":[40,80],"client/from-marketing":[40,620],"nodepool/nodes":[40,900],"ing/checkout":[440,80],"svc/payment-api":[440,340],"deploy/payment-api":[800,80],"svc/card-vault":[1240,80],"deploy/card-vault":[1240,340],"deploy/campaign-api":[440,700],"ns/card":[1200,20],"ns/payments":[400,20],"ns/marketing":[400,640]},
+`+CTL()+CLIENT("checkout","ing/checkout","  ratePerSecond: 10\n  host: pay.anphat.vn\n  path: /")+CLIENT("from-marketing","svc/card-vault","  ratePerSecond: 0.5\n  expect: Deny\n  from:\n    namespace: marketing\n    labels: {app: campaign-api}")+POOL(3),
+  layout:{"client/checkout":[40,80],"client/from-marketing":[40,620],"nodepool/nodes":[40,900],"ingressctl/ingress-nginx":[40,350],"ing/checkout":[440,80],"svc/payment-api":[440,340],"deploy/payment-api":[800,80],"svc/card-vault":[1240,80],"deploy/card-vault":[1240,340],"deploy/campaign-api":[440,700],"ns/card":[1200,20],"ns/payments":[400,20],"ns/marketing":[400,640]},
   explain:{"ns/card":"Vùng dữ liệu thẻ (cardholder data environment). Nhãn pci=true.","ns/payments":"Khối Thanh toán, nhãn team=payments: được phép gọi kho thẻ.","ns/marketing":"Khối Marketing, nhãn team=marketing: không có lý do gì để chạm dữ liệu thẻ.",
     "deploy/card-vault":"Kho token hóa số thẻ. Nghe cổng 8443.","svc/card-vault":"Địa chỉ của kho thẻ: card-vault.card.svc.cluster.local.","deploy/payment-api":"API thanh toán: gọi kho thẻ qua biến VAULT_URL.",
     "client/checkout":"Khách thanh toán trên pay.anphat.vn.","client/from-marketing":"Thử nghiệm xâm nhập: đứng từ một pod của campaign-api gọi thẳng kho thẻ. Lẽ ra phải bị chặn.","deploy/campaign-api":"API chiến dịch khuyến mãi của Marketing."},
@@ -962,8 +974,8 @@ spec:
             pathType: Prefix
             backend:
               service: {name: dispute-api, port: {number: 80}}
-`+CLIENT("customers","ing/public","  ratePerSecond: 2\n  host: ib.anphat.vn\n  path: /tra-soat")+POOL(3),
-  layout:{"client/customers":[40,80],"nodepool/nodes":[40,420],"ing/public":[380,80],"svc/dispute-api":[720,80],"deploy/dispute-api":[1060,80],"svc/dispute-db":[1060,400],"deploy/dispute-db":[1400,400],"secret/dispute-db":[1400,80]},
+`+CTL()+CLIENT("customers","ing/public","  ratePerSecond: 2\n  host: ib.anphat.vn\n  path: /tra-soat")+POOL(3),
+  layout:{"client/customers":[40,80],"nodepool/nodes":[40,420],"ingressctl/ingress-nginx":[380,420],"ing/public":[380,80],"svc/dispute-api":[720,80],"deploy/dispute-api":[1060,80],"svc/dispute-db":[1060,400],"deploy/dispute-db":[1400,400],"secret/dispute-db":[1400,80]},
   explain:{"deploy/dispute-db":"PostgreSQL lưu yêu cầu tra soát, chạy bằng Deployment, không gắn ổ đĩa nào: dữ liệu nằm trong container. Bấm Restart để thấy chuyện gì xảy ra.","deploy/dispute-api":"API nhận yêu cầu tra soát của khách, ghi vào database.",
     "svc/dispute-db":"Địa chỉ nội bộ của database.","secret/dispute-db":"Mật khẩu database.","client/customers":"Khách gửi yêu cầu tra soát (giao dịch lỗi, bị trừ tiền hai lần…).","ing/public":"Cửa vào: /tra-soat tới API tra soát.","svc/dispute-api":"Chia yêu cầu cho các pod API."},
   tasks:[{t:"Database ghi dữ liệu lên ổ đĩa bền",c:"Pod database gắn một PersistentVolumeClaim (hoặc là StatefulSet có volumeClaimTemplates).",test:()=>{const d=allNodes().find(n=>WORKLOADS.includes(n.type)&&(imageCheck((ctrOf(n)||{}).image).app||{}).db);return!!d&&(pvcClaims(d).length>0||(d.type==="StatefulSet"&&arr(getP(d.props,"spec.volumeClaimTemplates")).length>0))}},
@@ -1025,3 +1037,433 @@ spec:
   pass:"Tác vụ theo lịch phải trả lời được: lần này chạy lâu hơn chu kỳ thì sao? Forbid bỏ qua lần mới, Replace dừng lần cũ, Allow cho chạy chồng. Với đối soát, chạy chồng là ghi hai lần; và job nên idempotent, vì Kubernetes cũng có lúc tạo hai Job cho một lần lịch."};
 
 const LESSONS=[L_PODS,L_SVC,L_PROBES,L_ING,L_RES,L_HPA,L_SEC,L_NP,L_PVC,L_CRON];
+
+/* ---------------- more lessons: rate limiting, quota, node maintenance, RBAC ---------------- */
+const CANARY={id:"canary",title:"Canary 90 / 10 với Gateway API",tag:"Gateway + HTTPRoute",desc:"Gateway nhận ib.anphat.vn; HTTPRoute chia 90% traffic cho bản web đang chạy, 10% cho bản mới. Đổi trọng số để chuyển dần.",
+  yaml:`# CloudLab Kubernetes · sandbox · Canary 90 / 10 với Gateway API
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ib-web-v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels: {app: ib-web, version: v1}
+  template:
+    metadata:
+      labels: {app: ib-web, version: v1}
+    spec:
+      containers:
+        - name: ib-web
+          image: ${REG}/ib-web:2.4.0
+          ports: [{containerPort: 8080}]
+          resources: {requests: {cpu: 250m, memory: 256Mi}, limits: {cpu: 500m, memory: 512Mi}}
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ib-web-v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: ib-web, version: v2}
+  template:
+    metadata:
+      labels: {app: ib-web, version: v2}
+    spec:
+      containers:
+        - name: ib-web
+          image: ${REG}/ib-web:2.4.1
+          ports: [{containerPort: 8080}]
+          resources: {requests: {cpu: 250m, memory: 256Mi}, limits: {cpu: 500m, memory: 512Mi}}
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ib-web-v1
+spec:
+  selector: {app: ib-web, version: v1}
+  ports: [{port: 80, targetPort: 8080}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ib-web-v2
+spec:
+  selector: {app: ib-web, version: v2}
+  ports: [{port: 80, targetPort: 8080}]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: public
+spec:
+  gatewayClassName: nginx
+  listeners:
+    - {name: http, port: 80, protocol: HTTP, hostname: ib.anphat.vn}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ib-web
+spec:
+  parentRefs: [{name: public}]
+  hostnames: [ib.anphat.vn]
+  rules:
+    - matches: [{path: {type: PathPrefix, value: /}}]
+      backendRefs:
+        - {name: ib-web-v1, port: 80, weight: 90}
+        - {name: ib-web-v2, port: 80, weight: 10}
+`+CLIENT("customers","gtw/public","  ratePerSecond: 40\n  host: ib.anphat.vn\n  path: /")+POOL(3),
+  layout:{"client/customers":[40,80],"nodepool/nodes":[40,420],"gtw/public":[380,80],"httproute/ib-web":[720,80],"svc/ib-web-v1":[1060,80],"svc/ib-web-v2":[1060,400],"deploy/ib-web-v1":[1400,80],"deploy/ib-web-v2":[1400,400]}};
+STARTERS.canary=CANARY;
+
+const L_RATE={id:"ratelimit",phase:"Ra Internet",title:"Giới hạn tốc độ: chặn bot gửi OTP",tag:"Ingress + limit-rps",who:["K","Khoa · tài chính"],speed:1,
+  scenario:"Hóa đơn SMS tăng vọt.",goal:"Bot không còn đốt tiền SMS: mỗi IP chỉ được xin OTP vài lần mỗi giây; khách thật vẫn đăng nhập và nhận OTP bình thường.",
+  concepts:["rate limiting","giới hạn theo IP","annotation của ingress-nginx","429 / 503","SMS pumping","OWASP API4: Unrestricted Resource Consumption"],
+  yaml:`# CloudLab Kubernetes · lab-ratelimit · Bot xin OTP liên tục
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ib-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: ib-web}
+  template:
+    metadata:
+      labels: {app: ib-web}
+    spec:
+      containers:
+        - name: ib-web
+          image: ${REG}/ib-web:2.4.1
+          ports: [{containerPort: 8080}]
+          resources: {requests: {cpu: 250m, memory: 256Mi}, limits: {cpu: 500m, memory: 512Mi}}
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otp-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: otp-api}
+  template:
+    metadata:
+      labels: {app: otp-api}
+    spec:
+      containers:
+        - name: otp-api
+          image: ${REG}/otp-api:1.4.0
+          ports: [{containerPort: 8080}]
+          resources: {requests: {cpu: 250m, memory: 256Mi}, limits: {cpu: 500m, memory: 512Mi}}
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ib-web
+spec:
+  selector: {app: ib-web}
+  ports: [{port: 80, targetPort: 8080}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otp-api
+spec:
+  selector: {app: otp-api}
+  ports: [{port: 80, targetPort: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: public
+spec:
+  ingressClassName: nginx
+  tls: [{hosts: [ib.anphat.vn], secretName: ib-tls}]
+  rules:
+    - host: ib.anphat.vn
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: ib-web, port: {number: 80}}
+          - path: /api/otp
+            pathType: Prefix
+            backend:
+              service: {name: otp-api, port: {number: 80}}
+`+CTL()+CLIENT("customers","ing/public","  ratePerSecond: 30\n  sources: 900\n  host: ib.anphat.vn\n  path: /")+CLIENT("otp-users","ing/public","  ratePerSecond: 2\n  sources: 120\n  host: ib.anphat.vn\n  path: /api/otp")+CLIENT("sms-bot","ing/public","  ratePerSecond: 60\n  sources: 4\n  host: ib.anphat.vn\n  path: /api/otp")+POOL(3),
+  layout:{"client/customers":[40,60],"client/otp-users":[40,330],"client/sms-bot":[40,600],"nodepool/nodes":[40,880],"ingressctl/ingress-nginx":[400,600],"ing/public":[400,250],"svc/ib-web":[760,60],"svc/otp-api":[760,400],"deploy/ib-web":[1100,60],"deploy/otp-api":[1100,400]},
+  explain:{"client/customers":"Khách vào Internet Banking, khoảng 30 lượt mỗi giây từ hàng trăm địa chỉ IP khác nhau.","client/otp-users":"Khách xin mã OTP khi chuyển tiền: 2 lượt mỗi giây, mỗi IP chỉ vài lần một phút.",
+    "client/sms-bot":"Bot đứng sau 4 địa chỉ IP, xin OTP liên tục cho các số điện thoại trả phí cao (SMS pumping): 60 lượt mỗi giây.","deploy/otp-api":"Gửi mã OTP qua SMS brandname. Mỗi tin nhắn ngân hàng trả khoảng $0.02 (giá tham khảo).",
+    "ing/public":"Ingress cho ib.anphat.vn: / tới web, /api/otp tới dịch vụ OTP. Chưa giới hạn tốc độ.","ingressctl/ingress-nginx":"ingress-nginx: hiểu annotation nginx.ingress.kubernetes.io/limit-rps (giới hạn theo từng IP).",
+    "svc/otp-api":"Địa chỉ nội bộ của dịch vụ OTP.","svc/ib-web":"Địa chỉ nội bộ của web.","deploy/ib-web":"Web Internet Banking."},
+  tasks:[{t:"Đường dẫn OTP có giới hạn tốc độ theo IP",c:"Ingress phục vụ /api/otp có limit-rps tối đa 2.",test:()=>{const b=ingMatch(allNodes().filter(x=>x.type==="Ingress"&&ingClass(x)==="nginx"),"ib.anphat.vn","/api/otp");return!!b&&rateLimit(b.ing)!=null&&rateLimit(b.ing)<=2}},
+    {t:"Không quá 10 tin SMS OTP mỗi giây",c:"Bot bị chặn phần lớn; hóa đơn SMS về mức bình thường.",test:()=>kRun(60,()=>{const d=byName("Deployment","otp-api");return((RT.n[d.id]||{m:{}}).m.sms||0)/60<=10})},
+    {t:"Khách thật không bị ảnh hưởng",c:"Hơn 99% request của khách (web và OTP) thành công.",test:()=>kRun(60,()=>okShare(clientNamed("customers"))>=0.99&&okShare(clientNamed("otp-users"))>=0.99)}],
+  hints:()=>["Bấm ▶ Chạy rồi nhìn đồng hồ chi phí: dòng “SMS OTP” của otp-api. 60 tin mỗi giây là hơn $4.000 mỗi giờ.","Bot chỉ có 4 IP, mỗi IP gửi 15 lần/giây; khách thật mỗi IP vài lần một phút. Giới hạn theo IP chặn được bot mà khách không biết gì.","Mở Ingress public, đặt “Giới hạn tốc độ (mỗi IP)” = 1. (Muốn chỉ giới hạn riêng OTP thì tách /api/otp ra một Ingress riêng có annotation này.) Ở Ingress controller, đổi mã trả về sang 429 cho đúng nghĩa."],
+  diagnose:i=>ladder([[()=>{const b=ingMatch(allNodes().filter(x=>x.type==="Ingress"&&ingClass(x)==="nginx"),"ib.anphat.vn","/api/otp");return!!b&&rateLimit(b.ing)!=null},["Hóa đơn SMS vẫn tăng: không có gì giới hạn số lần xin OTP.","Ingress public chưa có annotation giới hạn tốc độ.","Thêm nginx.ingress.kubernetes.io/limit-rps (ô “Giới hạn tốc độ (mỗi IP)”) cho Ingress phục vụ /api/otp."]],
+    [()=>kRun(60,()=>{const d=byName("Deployment","otp-api");return((RT.n[d.id]||{m:{}}).m.sms||0)/60<=10}),["Đã có giới hạn nhưng bot vẫn gửi được quá nhiều SMS.","4 IP × giới hạn mỗi IP = số tin bot vẫn gửi được mỗi giây.","Hạ limit-rps xuống 1 hoặc 2: khách thật mỗi IP chỉ xin OTP vài lần một phút."]],
+    [()=>kRun(60,()=>okShare(clientNamed("customers"))>=0.99),["Bot bị chặn nhưng khách thật cũng bị chặn.","Giới hạn đang quá thấp so với một người dùng bình thường.","Giới hạn tính theo từng IP: 1–2 request/giây mỗi IP là đủ rộng cho khách thật."]]],i),
+  solve(){const i=byName("Ingress","public");edit("limit-rps 1",()=>{meta(nodeOf(i.id)).annotations=Object.assign({},meta(nodeOf(i.id)).annotations||{},{[A_RPS]:"1"})});const c=first("CloudLab::IngressController");if(c)edit("trả 429",()=>{nodeOf(c.id).props.spec.rateLimitStatus=429});solveLog("ing/public: limit-rps 1 mỗi IP; controller trả 429")},
+  pass:"Giới hạn tốc độ theo IP chặn được kẻ gửi dồn dập từ ít địa chỉ, còn khách thật (nhiều IP, ít request mỗi IP) không bị ảnh hưởng. Với API tốn tiền mỗi lần gọi (SMS, eKYC, tra cứu CIC), đây là lớp bảo vệ đầu tiên; bot dùng hàng nghìn IP thì cần thêm CAPTCHA, giới hạn theo số điện thoại hay tài khoản. Lưu ý: limit-rps của ingress-nginx tính trên mỗi bản controller, và ingress-nginx đã ngừng bảo trì từ 3/2026; với ALB dùng AWS WAF rate-based rule."};
+
+const L_QUOTA={id:"quota",phase:"Vận hành cluster",title:"Hạn mức cho từng khối: ResourceQuota",tag:"ResourceQuota",who:["M","Minh · mentor"],speed:1,
+  scenario:"Thanh toán thiếu chỗ chạy.",goal:"Khối Marketing không còn chiếm hết CPU của cluster: namespace marketing có hạn mức, mọi pod thanh toán đều chạy và khách thanh toán không lỗi.",
+  concepts:["ResourceQuota","LimitRange","namespace","noisy neighbor","requests.cpu","quota chỉ chặn pod mới"],
+  yaml:`# CloudLab Kubernetes · lab-quota · Một khối chiếm hết cluster
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: marketing
+  labels: {team: marketing}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: payments
+  labels: {team: payments}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: campaign-worker
+  namespace: marketing
+spec:
+  replicas: 14
+  selector:
+    matchLabels: {app: campaign-worker}
+  template:
+    metadata:
+      labels: {app: campaign-worker}
+    spec:
+      containers:
+        - name: worker
+          image: ${REG}/campaign-api:1.2.0
+          ports: [{containerPort: 8080}]
+          resources: {requests: {cpu: 250m, memory: 192Mi}, limits: {cpu: 500m, memory: 384Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-api
+  namespace: payments
+spec:
+  replicas: 6
+  selector:
+    matchLabels: {app: payment-api}
+  template:
+    metadata:
+      labels: {app: payment-api}
+    spec:
+      containers:
+        - name: payment-api
+          image: ${REG}/payment-api:3.1.2
+          ports: [{containerPort: 8080}]
+          resources: {requests: {cpu: 500m, memory: 256Mi}, limits: {cpu: 500m, memory: 512Mi}}
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-api
+  namespace: payments
+spec:
+  selector: {app: payment-api}
+  ports: [{port: 80, targetPort: 8080}]
+`+CLIENT("pos-terminals","svc/payment-api","  ratePerSecond: 300\n  from:\n    namespace: default\n    labels: {app: pos-gateway}")+POOL(3),
+  layout:{"client/pos-terminals":[40,80],"nodepool/nodes":[40,420],"svc/payment-api":[420,80],"deploy/payment-api":[780,80],"deploy/campaign-worker":[420,520],"ns/payments":[380,20],"ns/marketing":[380,460]},
+  explain:{"deploy/campaign-worker":"Worker gửi thông báo khuyến mãi của Khối Marketing: 14 pod, mỗi pod xin 250m CPU (tổng 3500m).","deploy/payment-api":"API thanh toán thẻ tại điểm bán: cần 6 pod (mỗi pod chịu khoảng 60 giao dịch/giây) cho 300 giao dịch/giây.",
+    "client/pos-terminals":"Máy POS tại cửa hàng gửi giao dịch thẻ, qua cổng thanh toán trong cluster.","nodepool/nodes":"3 node t3.medium: tổng 5400m CPU cho pod. Marketing xin 3500m, thanh toán xin 3000m: không đủ chỗ cho cả hai.",
+    "ns/marketing":"Namespace của Khối Marketing.","ns/payments":"Namespace của Khối Thanh toán.","svc/payment-api":"Địa chỉ nội bộ của API thanh toán."},
+  tasks:[{t:"Namespace marketing có hạn mức CPU",c:"Có ResourceQuota trong marketing với requests.cpu tối đa 2 core.",test:()=>allNodes().some(q=>q.type==="ResourceQuota"&&nsOf(q)==="marketing"&&cpuQ(getP(q.props,"spec.hard")["requests.cpu"]??getP(q.props,"spec.hard").cpu)<=2000)},
+    {t:"Mọi pod thanh toán được xếp lên node",c:"payment-api 6/6 Ready.",test:()=>kRun(120,()=>readyAll(byName("Deployment","payment-api")))},
+    {t:"Thanh toán tại điểm bán không lỗi",c:"Hơn 99% giao dịch thành công.",test:()=>kRun(120,()=>okShare(clientNamed("pos-terminals"))>=0.99)}],
+  hints:()=>["Bấm payment-api: 4 pod Pending, “Insufficient cpu”. Bấm node pool: CPU đã xin gần 100%. Ai đang giữ chỗ?","campaign-worker xin 14 × 250m = 3500m. Kéo một ResourceQuota vào khung marketing, đặt requests.cpu: 2 (tối đa 8 pod như vậy).","Quota chỉ chặn pod MỚI: 14 pod marketing đang chạy vẫn giữ chỗ. Giảm replicas của campaign-worker xuống 8 để trả chỗ cho thanh toán."],
+  diagnose:i=>ladder([[()=>allNodes().some(q=>q.type==="ResourceQuota"&&nsOf(q)==="marketing"),["Thanh toán thiếu pod: nhiều pod Pending vì cluster hết CPU.","Khối Marketing đang giữ 3500m CPU, không có gì giới hạn.","Thêm ResourceQuota vào namespace marketing (kéo vào khung marketing), hard requests.cpu: 2."]],
+    [()=>allNodes().some(q=>q.type==="ResourceQuota"&&nsOf(q)==="marketing"&&cpuQ(getP(q.props,"spec.hard")["requests.cpu"]??getP(q.props,"spec.hard").cpu)<=2000),["Quota có rồi nhưng vẫn quá rộng.","Xem hard requests.cpu của quota.","Đặt requests.cpu tối đa 2 (2 core) cho marketing."]],
+    [()=>kRun(120,()=>readyAll(byName("Deployment","payment-api"))),["Quota đã có, nhưng thanh toán vẫn Pending.","14 pod marketing tạo trước khi có quota vẫn chạy: quota không đuổi pod đang chạy.","Giảm replicas của campaign-worker xuống 8. Từ nay marketing có tăng thêm cũng bị quota chặn (FailedCreate)."]]],i),
+  solve(){edit("ResourceQuota cho marketing",()=>{M.res["quota/marketing-cpu"]={Type:"ResourceQuota",Properties:{metadata:{name:"marketing-cpu",namespace:"marketing"},spec:{hard:{"requests.cpu":"2","requests.memory":"4Gi",pods:"10"}}}};M.pos["quota/marketing-cpu"]=[780,520]});
+    edit("campaign-worker 8 pod",()=>{nodeOf("deploy/campaign-worker").props.spec.replicas=8});solveLog("quota/marketing-cpu (2 CPU); campaign-worker 8 pod")},
+  pass:"Trong một cluster dùng chung, mỗi khối nghiệp vụ cần hạn mức riêng, như hạn mức ngân sách. ResourceQuota chặn pod mới khi vượt; LimitRange đặt mặc định cho pod không khai báo. Dịch vụ quan trọng có thể dùng thêm PriorityClass để được ưu tiên xếp chỗ."};
+
+const L_PDB={id:"pdb",phase:"Vận hành cluster",title:"Nâng cấp node không làm gián đoạn",tag:"PodDisruptionBudget",who:["M","Minh · mentor"],speed:1,
+  scenario:"Bảo trì định kỳ làm gián đoạn quầy.",goal:"Nâng cấp cả node group mà giao dịch viên không bị gián đoạn: core API luôn còn ít nhất một pod sẵn sàng.",
+  concepts:["kubectl drain","cordon","eviction","PodDisruptionBudget","minAvailable / maxUnavailable","EKS managed node group update"],
+  yaml:`# CloudLab Kubernetes · lab-pdb · Nâng cấp node làm sập core API
+apiVersion: v1
+kind: Secret
+metadata:
+  name: core-db
+type: Opaque
+stringData:
+  password: doi-mat-khau-nay
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: core-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: core-api}
+  template:
+    metadata:
+      labels: {app: core-api}
+    spec:
+      containers:
+        - name: core-api
+          image: ${REG}/core-api:5.3.0
+          ports: [{containerPort: 8080}]
+          env:
+            - {name: DB_HOST, value: core-db.internal}
+            - name: DB_PASSWORD
+              valueFrom: {secretKeyRef: {name: core-db, key: password}}
+          resources: {requests: {cpu: 500m, memory: 512Mi}, limits: {cpu: "1", memory: 768Mi}}
+          startupProbe: {httpGet: {path: /healthz, port: 8080}, periodSeconds: 5, failureThreshold: 12}
+          readinessProbe: {httpGet: {path: /ready, port: 8080}, periodSeconds: 5}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: core-api
+spec:
+  selector: {app: core-api}
+  ports: [{port: 80, targetPort: 8080}]
+`+CLIENT("tellers","svc/core-api","  ratePerSecond: 15\n  from:\n    namespace: default\n    labels: {app: teller-portal}")+POOL(3),
+  layout:{"client/tellers":[40,80],"nodepool/nodes":[40,400],"svc/core-api":[380,80],"deploy/core-api":[720,80],"secret/core-db":[1060,80]},
+  explain:{"deploy/core-api":"Core API: 2 pod, mỗi pod cần khoảng 45–50 giây mới sẵn sàng sau khi khởi động.","nodepool/nodes":"3 node. Bấm vào rồi bấm “Nâng cấp node group”: từng node bị cordon, drain (đuổi pod), rồi thay bằng node mới.",
+    "client/tellers":"Ứng dụng giao dịch viên gọi core API 15 lần mỗi giây.","svc/core-api":"Địa chỉ nội bộ của core API.","secret/core-db":"Mật khẩu database của core API."},
+  tasks:[{t:"Có PodDisruptionBudget cho core-api",c:"Drain phải chờ khi đuổi pod làm core-api còn dưới 1 pod sẵn sàng.",test:()=>{const d=byName("Deployment","core-api");return!!d&&pdbsFor(d).length>0}},
+    {t:"Nâng cấp node group chạy xong, không kẹt",c:"Mọi node được thay; không bị PodEvictionFailure.",test:()=>upgradeRun().done},
+    {t:"Giao dịch viên không bị gián đoạn trong lúc nâng cấp",c:"Hơn 99% request thành công suốt đợt nâng cấp.",test:()=>upgradeRun().ok>=0.99}],
+  hints:()=>["Bấm node pool → “Nâng cấp node group”, rồi xem core-api và mũi tên từ tellers: có lúc cả hai pod cùng bị đuổi.","Drain không biết app của bạn cần bao lâu để khởi động. Pod mới còn đang khởi động (45 giây) thì drain đã sang node tiếp theo và đuổi nốt pod còn lại.","Kéo PodDisruptionBudget vào canvas, nối nó tới core-api, đặt minAvailable: 1. Đừng đặt 2 khi chỉ có 2 pod: không pod nào được đuổi, nâng cấp sẽ kẹt rồi thất bại."],
+  diagnose:i=>ladder([[()=>pdbsFor(byName("Deployment","core-api")).length>0,["Trong lúc nâng cấp node, giao dịch viên bị lỗi một lúc: core API không còn pod nào sẵn sàng.","Drain đuổi pod thứ hai khi pod thay thế cho pod thứ nhất còn đang khởi động.","Thêm PodDisruptionBudget cho core-api (selector app=core-api), minAvailable: 1."]],
+    [()=>upgradeRun().done,["Nâng cấp bị kẹt rồi thất bại (PodEvictionFailure).","PodDisruptionBudget không cho đuổi pod nào.","minAvailable bằng số pod thì không pod nào được đuổi. Với 2 pod, đặt minAvailable: 1 (hoặc tăng replicas lên 3)."]]],i),
+  solve(){edit("PodDisruptionBudget cho core-api",()=>{M.res["pdb/core-api"]={Type:"PodDisruptionBudget",Properties:{metadata:{name:"core-api"},spec:{minAvailable:1,selector:{matchLabels:{app:"core-api"}}}}};M.pos["pdb/core-api"]=[720,400]});solveLog("pdb/core-api: minAvailable 1")},
+  pass:"Kubernetes không tự biết app nào quan trọng. PodDisruptionBudget là lời cam kết “luôn còn N pod”, và mọi thao tác bảo trì tự nguyện (drain, nâng cấp node) phải tôn trọng nó. Nó không chống được sự cố bất ngờ (node chết): việc đó cần nhiều pod trên nhiều node, nhiều AZ."};
+/* one node-group upgrade on a copy: start it, run until it ends, count the tellers' errors meanwhile */
+const upgradeRun=()=>probe(()=>{if(!stackUp())deploy();RT.q=[];let t=0;while(t<60){step(5,true);t+=5}for(const k in RT.n)RT.n[k]={cost:0,m:{},tk:{},series:[],last:null};RT.flow={};RT.why={};RT.maintFailed=false;
+  startUpgrade();t=0;while((RT.maint||t<30)&&t<2400){step(5);t+=5}const s=clientNamed("tellers");return{done:!RT.maint&&!RT.maintFailed,ok:okShare(s)}});
+
+const L_RBAC={id:"rbac",phase:"Bảo mật",title:"Quyền tối thiểu: RBAC",tag:"Role + RoleBinding",who:["V","Vy · kiểm toán"],speed:1,
+  scenario:"Pipeline có chìa khóa vạn năng.",goal:"Pipeline CI chỉ được cập nhật ứng dụng ở namespace web; kiểm toán chỉ được xem, không sửa và không đọc Secret.",
+  concepts:["RBAC","ServiceAccount","Role / ClusterRole","RoleBinding / ClusterRoleBinding","cluster-admin","view vs edit","least privilege","kubectl auth can-i"],
+  yaml:`# CloudLab Kubernetes · lab-rbac · Ai cũng có quá nhiều quyền
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: web
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: card
+  labels: {pci: "true"}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ci-deployer
+  namespace: ci
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ci-admin
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: cluster-admin}
+subjects:
+  - {kind: ServiceAccount, name: ci-deployer, namespace: ci}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: auditors
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: edit}
+subjects:
+  - {apiGroup: rbac.authorization.k8s.io, kind: Group, name: auditors}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vault-keys
+  namespace: card
+type: Opaque
+stringData:
+  master-key: khong-duoc-lo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ib-web
+  namespace: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: ib-web}
+  template:
+    metadata:
+      labels: {app: ib-web}
+    spec:
+      containers:
+        - name: ib-web
+          image: ${REG}/ib-web:2.4.1
+          ports: [{containerPort: 8080}]
+          resources: {requests: {cpu: 250m, memory: 256Mi}, limits: {cpu: 500m, memory: 512Mi}}
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+---
+apiVersion: cloudlab.dev/v1
+kind: Actor
+metadata:
+  name: gitlab-ci
+spec:
+  as: {kind: ServiceAccount, name: ci-deployer, namespace: ci}
+  perMinute: 6
+  actions:
+    - {verb: update, resource: deployments, namespace: web}
+    - {verb: get, resource: secrets, namespace: card, expect: Deny}
+    - {verb: delete, resource: namespaces, namespace: card, expect: Deny}
+---
+apiVersion: cloudlab.dev/v1
+kind: Actor
+metadata:
+  name: vy-auditor
+spec:
+  as: {kind: User, name: vy, groups: [auditors]}
+  perMinute: 4
+  actions:
+    - {verb: list, resource: pods, namespace: web}
+    - {verb: get, resource: secrets, namespace: card, expect: Deny}
+    - {verb: update, resource: deployments, namespace: web, expect: Deny}
+`+POOL(3),
+  layout:{"actor/gitlab-ci":[40,80],"actor/vy-auditor":[40,460],"nodepool/nodes":[40,820],"clusterrolebinding/ci-admin":[420,80],"clusterrolebinding/auditors":[420,460],"sa/ci-deployer":[800,80],"deploy/ib-web":[800,460],"secret/vault-keys":[1180,80],"ns/ci":[760,20],"ns/web":[760,400],"ns/card":[1140,20]},
+  explain:{"actor/gitlab-ci":"Pipeline CI/CD: mỗi lần merge code thì cập nhật Deployment ib-web ở namespace web, bằng token của ServiceAccount ci-deployer.","actor/vy-auditor":"Chị Vy (kiểm toán, nhóm auditors) dùng kubectl để xem hệ thống đang chạy gì.",
+    "clusterrolebinding/ci-admin":"Cấp cluster-admin cho ci-deployer: toàn quyền mọi namespace. Ai lấy được token của pipeline là có chìa khóa vạn năng.","clusterrolebinding/auditors":"Cấp ClusterRole edit cho nhóm auditors: được sửa tài nguyên và đọc được Secret, ở mọi namespace.",
+    "sa/ci-deployer":"Danh tính của pipeline. Bấm vào để xem bảng quyền thực tế theo từng namespace.","secret/vault-keys":"Khóa của kho dữ liệu thẻ (namespace card). Không ai ngoài đội thẻ được đọc.","deploy/ib-web":"Web Internet Banking, thứ duy nhất pipeline cần cập nhật."},
+  tasks:[{t:"Pipeline vẫn deploy được ib-web",c:"ci-deployer được update deployments ở namespace web.",test:()=>canI({kind:"ServiceAccount",name:"ci-deployer",namespace:"ci"},"update","deployments","web").ok},
+    {t:"Pipeline không đọc được Secret thẻ, không xóa được namespace",c:"Không còn chìa khóa vạn năng cluster-admin.",test:()=>{const w={kind:"ServiceAccount",name:"ci-deployer",namespace:"ci"};return!canI(w,"get","secrets","card").ok&&!canI(w,"delete","namespaces","card").ok&&!canI(w,"update","deployments","card").ok}},
+    {t:"Kiểm toán chỉ xem",c:"Vy xem được pod, không sửa được Deployment, không đọc được Secret.",test:()=>{const w={kind:"User",name:"vy",groups:["auditors"]};return canI(w,"list","pods","web").ok&&!canI(w,"update","deployments","web").ok&&!canI(w,"get","secrets","card").ok}}],
+  hints:()=>["Bấm gitlab-ci và vy-auditor: các dòng đỏ là thao tác lẽ ra phải bị chặn mà vẫn được phép. Bấm ci-deployer để xem bảng quyền thực tế.","Pipeline chỉ cần: update / patch / get deployments ở namespace web. Kéo một Role vào khung web với đúng quyền đó, một RoleBinding (cũng ở web) nối tới Role và tới ServiceAccount ci-deployer. Rồi xóa ci-admin.","Kiểm toán: đổi role của ClusterRoleBinding auditors từ edit sang view. view chỉ xem, và không đọc được Secret."],
+  diagnose:i=>ladder([[()=>canI({kind:"ServiceAccount",name:"ci-deployer",namespace:"ci"},"update","deployments","web").ok,["Pipeline không deploy được nữa: update deployments ở web bị Forbidden.","ci-deployer chưa có quyền nào ở namespace web.","Tạo Role ở namespace web (apps · deployments · get, list, update, patch) và RoleBinding ở web trỏ tới Role đó, subject là ServiceAccount ci-deployer (namespace ci)."]],
+    [()=>!canI({kind:"ServiceAccount",name:"ci-deployer",namespace:"ci"},"get","secrets","card").ok,["Pipeline vẫn đọc được Secret của kho thẻ.","ClusterRoleBinding ci-admin vẫn cấp cluster-admin cho ci-deployer.","Xóa ci-admin. Quyền deploy đã có qua RoleBinding ở web."]],
+    [()=>!canI({kind:"ServiceAccount",name:"ci-deployer",namespace:"ci"},"update","deployments","card").ok,["Pipeline vẫn sửa được Deployment ở namespace khác.","Quyền đang được cấp ở cấp cluster (ClusterRoleBinding) thay vì trong namespace web.","Dùng RoleBinding trong namespace web, không dùng ClusterRoleBinding."]],
+    [()=>!canI({kind:"User",name:"vy",groups:["auditors"]},"get","secrets","card").ok,["Kiểm toán vẫn đọc được Secret và sửa được hệ thống.","ClusterRoleBinding auditors cấp ClusterRole edit.","Đổi role sang view: chỉ xem (get, list, watch), không có Secret."]]],i),
+  solve(){edit("CI chỉ deploy ở web",()=>{removeNode("clusterrolebinding/ci-admin");M.res["role/deployer"]={Type:"Role",Properties:{metadata:{name:"deployer",namespace:"web"},rules:[{apiGroups:["apps"],resources:["deployments"],verbs:["get","list","update","patch"]}]}};
+      M.res["rolebinding/ci-deployer"]={Type:"RoleBinding",Properties:{metadata:{name:"ci-deployer",namespace:"web"},roleRef:{apiGroup:"rbac.authorization.k8s.io",kind:"Role",name:"deployer"},subjects:[{kind:"ServiceAccount",name:"ci-deployer",namespace:"ci"}]}};M.pos["role/deployer"]=[1180,460];M.pos["rolebinding/ci-deployer"]=[800,760]});
+    edit("kiểm toán: view",()=>{nodeOf("clusterrolebinding/auditors").props.roleRef.name="view"});solveLog("bỏ ci-admin; Role + RoleBinding deployer ở web; auditors → view")},
+  pass:"Quyền tối thiểu: mỗi danh tính chỉ có đúng quyền cần cho việc của nó, ở đúng namespace. RoleBinding hẹp hơn ClusterRoleBinding; view khác edit ở chỗ không đọc được Secret. Kiểm tra bằng kubectl auth can-i, và rà định kỳ ai đang có cluster-admin."};
+
+LESSONS.splice(LESSONS.indexOf(L_ING)+1,0,L_RATE);
+LESSONS.splice(LESSONS.indexOf(L_HPA)+1,0,L_QUOTA,L_PDB);
+LESSONS.splice(LESSONS.indexOf(L_SEC)+1,0,L_RBAC);
+LESSONS.forEach((l,i)=>{l.step=i+1});

@@ -103,9 +103,13 @@ Không có build step. Trang tải kit layout từ `../kit/`, nên khi chạy lo
 Trang con [`/cloudlab/k8s/`](https://dat-2k2.github.io/cloudlab/k8s/) dùng chung shell (bố cục, canvas, khung bài học, mô phỏng, toàn màn hình, tour) với một domain pack riêng cho Kubernetes:
 
 - `k8s/src/catalog.js`: Namespace, Deployment, StatefulSet, CronJob, Service, Ingress, ConfigMap, Secret, PVC, HPA, NetworkPolicy; client và node pool (mô phỏng); các image app mà registry mô phỏng biết (cổng, health path, thời gian khởi động, memory, CPU mỗi request)
+- `k8s/src/edge.js`: Ingress controller (ingress-nginx, AWS Load Balancer Controller), load balancer NLB / Classic, internet-facing / internal, khách từ Internet / mạng nội bộ / pod, giới hạn tốc độ theo IP, Gateway API (Gateway, HTTPRoute có trọng số)
+- `k8s/src/rbac.js`: ServiceAccount, Role, ClusterRole, RoleBinding, ClusterRoleBinding, ClusterRole có sẵn (cluster-admin, admin, edit, view), người / pipeline gọi API và kiểm tra quyền như kubectl auth can-i
+- `k8s/src/ops.js`: PodDisruptionBudget, nâng cấp node group (cordon, drain theo PDB, thay node), ResourceQuota, LimitRange, DaemonSet, Job, StorageClass
+- `k8s/src/views-more.js`: phần giao diện cho các loại trên
 - `k8s/src/model.js`: cạnh suy ra theo tên (Ingress → Service, envFrom, claimName, scaleTargetRef), theo label selector và theo tên DNS trong biến môi trường; manifest YAML nhiều tài liệu
 - `k8s/src/sim.js`: scheduler theo requests, kubelet (kéo image, cấu hình, probe, OOMKilled, CrashLoopBackOff), rolling update, HPA, cluster autoscaler, Service / Ingress / NetworkPolicy, CronJob, PVC, chi phí EKS
-- `k8s/src/lessons.js`, `bank.js`: 10 bài trong bối cảnh Ngân hàng An Phát, có nguồn
+- `k8s/src/lessons.js`, `bank.js`: 14 bài trong bối cảnh Ngân hàng An Phát, có nguồn; mẫu sandbox Internet Banking, database có PVC, canary với Gateway API
 - `k8s/src/views.js`, `lint.js`: phần giao diện riêng, panel Vấn đề, xuất manifest cho cluster thật
 
 ## Cấu trúc

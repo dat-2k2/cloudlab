@@ -110,4 +110,51 @@ const K8S_BANK={
     who:["V","Vy · Kiểm toán nội bộ"]
   }
 };
+const K8S_BANK2={
+  ratelimit:{why:"Mỗi lần API gửi OTP được gọi, ngân hàng trả tiền cho một tin SMS, dù người gọi là khách thật hay bot. Giống một quầy giao dịch không giới hạn số phiếu mỗi người được bốc: vài kẻ bốc hàng nghìn phiếu, khách thật phải chờ còn ngân hàng chịu chi phí. Giới hạn số yêu cầu mỗi giây theo từng IP là cách chia lượt cho công bằng.",
+    cases:[
+      {t:"Theo Twilio, SMS pumping là khi kẻ gian lợi dụng ô nhập số điện thoại (ví dụ luồng gửi OTP) để kích hoạt tin nhắn tới các dải số do một nhà mạng kiểm soát rồi chia phần doanh thu; dấu hiệu thường gặp là OTP được gửi đi nhưng không bao giờ được xác thực.",url:"https://www.twilio.com/docs/glossary/what-is-sms-pumping-fraud"},
+      {t:"OWASP API Security Top 10 2023 (API4: Unrestricted Resource Consumption) mô tả một luồng quên mật khẩu qua SMS bị script gọi lặp lại, gửi hàng chục nghìn tin và làm công ty mất hàng nghìn đô la trong vài phút; OWASP khuyến nghị giới hạn tần suất gọi API và đặt hạn mức chi tiêu với nhà cung cấp dịch vụ.",url:"https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/"}
+    ],
+    rule:{t:"Thông tư 09/2020/TT-NHNN, Điều 23 khoản 3 điểm đ yêu cầu hệ thống thông tin từ cấp độ 3 trở lên cung cấp dịch vụ trên Internet phải có phương án cân bằng tải và phương án ứng phó tấn công từ chối dịch vụ.",url:"https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang"},
+    q:"Nhiều khách dùng 4G có thể đi ra Internet chung một địa chỉ IP: ngân hàng nên đặt ngưỡng bao nhiêu để chặn bot mà không chặn nhầm khách thật, và ai được quyền quyết định ngưỡng đó?",
+    scenario:"Hóa đơn SMS brandname tháng này tăng gấp nhiều lần so với tháng trước, trong khi số khách đăng ký mới gần như không đổi. Cùng lúc, tổng đài nhận rất nhiều phản ánh rằng mã OTP về chậm và ứng dụng quay vòng mãi không vào được.",
+    who:["K","Khoa · Khối Tài chính"]},
+
+  rbac:{why:"Trong ngân hàng, thủ quỹ giữ chìa két nhưng không tự duyệt chi, kiểm soát viên được xem sổ nhưng không được sửa. Kubernetes cũng vậy: pipeline CI chỉ cần quyền triển khai trong một namespace, kiểm toán viên chỉ cần quyền xem. Trao cluster-admin cho CI giống đưa chìa tổng của mọi kho cho một nhân viên giao hàng.",
+    cases:[
+      {t:"Theo tài liệu Kubernetes, ClusterRole edit cho phép truy cập Secrets và chạy Pod dưới bất kỳ ServiceAccount nào trong namespace, còn view không cho xem Secrets vì đọc Secrets có thể dẫn tới leo thang đặc quyền.",url:"https://kubernetes.io/docs/reference/access-authn-authz/rbac/#user-facing-roles"},
+      {t:"Từ 31/01 đến 01/04/2021, script Bash Uploader của Codecov bị sửa trái phép để gửi biến môi trường của CI ra máy chủ bên ngoài, làm lộ credential, token và key mà pipeline của khách hàng đang giữ.",url:"https://about.codecov.io/security-update/"}
+    ],
+    rule:{t:"Thông tư 09/2020/TT-NHNN, Điều 30 khoản 3 yêu cầu quản lý và phân quyền truy cập thông tin và ứng dụng theo nguyên tắc cấp quyền vừa đủ, phân quyền đến từng thư mục, chức năng và các quyền đọc, ghi, xóa, thực thi.",url:"https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang"},
+    q:"Ở đơn vị của anh chị, có tài khoản hệ thống hoặc tài khoản dùng chung nào đang giữ quyền rộng hơn công việc thực tế cần không, và lần cuối quyền đó được rà soát là khi nào?",
+    scenario:"Khi rà soát quyền định kỳ, tôi thấy tài khoản dùng cho pipeline triển khai có thể đọc dữ liệu thẻ và xóa cả môi trường của các phòng khác. Trớ trêu là chính nhóm kiểm toán chúng tôi cũng được cấp quyền sửa cấu hình và đọc mật khẩu hệ thống, trong khi việc của chúng tôi chỉ là xem.",
+    who:["V","Vy · Kiểm toán nội bộ"]},
+
+  pdb:{why:"Bảo trì theo kế hoạch vẫn gây gián đoạn nếu không ai giữ số người trực tối thiểu. Giống chi nhánh nâng cấp quầy: cho cả hai giao dịch viên nghỉ cùng lúc thì khách vẫn phải chờ, dù chỉ là bảo trì. PodDisruptionBudget là quy định luôn còn ít nhất một quầy mở, và quy trình drain node phải tôn trọng quy định đó.",
+    cases:[
+      {t:"Theo AWS, khi cập nhật managed node group, EKS drain Pod khỏi từng node; nếu Pod không rời node trong 15 phút (một nguyên nhân được nêu là PDB quá chặt) và không dùng cờ force, bước nâng cấp thất bại với lỗi PodEvictionFailure.",url:"https://docs.aws.amazon.com/eks/latest/userguide/managed-node-update-behavior.html"},
+      {t:"Ngày 14/10/2023, trong một đợt nâng cấp hệ thống theo kế hoạch tại trung tâm dữ liệu Equinix ở Singapore, nhà thầu gửi nhầm tín hiệu đóng van bồn nước làm mát, nhiệt độ tăng và khách hàng của DBS và Citibank Singapore mất dịch vụ ngân hàng.",url:"https://datacenterdynamics.com/en/news/equinix-blames-singapore-outage-on-third-party-contractor"}
+    ],
+    rule:{t:"MAS (Singapore) yêu cầu ngân hàng khôi phục hệ thống và dịch vụ trọng yếu trong vòng 4 giờ sau sự cố, và thời gian ngừng ngoài kế hoạch của mỗi hệ thống trọng yếu không vượt quá 4 giờ trong bất kỳ 12 tháng nào.",url:"https://www.mas.gov.sg/news/media-releases/2023/mas-response-to-media-queries-on-dbs-bank-and-citibank"},
+    q:"Trong khung giờ bảo trì của ngân hàng mình, dịch vụ nào bắt buộc phải luôn còn chạy, và ai xác nhận điều đó trước khi bắt đầu bảo trì?",
+    scenario:"Tối thứ Bảy có lịch bảo trì hạ tầng, nhóm kỹ thuật báo chỉ nâng cấp máy chủ, không ảnh hưởng nghiệp vụ. Nhưng các quầy còn mở cửa ngoài giờ ở chi nhánh lại báo hệ thống lõi treo hẳn hơn mười phút, khách xếp hàng mà không hạch toán được giao dịch nào.",
+    who:["H","Hà · Khối Vận hành"]},
+
+  quota:{why:"Cluster dùng chung giống một quỹ chi tiêu chung giữa các phòng: không có hạn mức thì một phòng có thể dùng gần hết, phòng khác không còn gì để chi. ResourceQuota đặt hạn mức CPU, bộ nhớ cho từng namespace, LimitRange đặt mức mặc định cho từng container. Nhờ đó chiến dịch marketing không lấn sang phần của thanh toán.",
+    cases:[
+      {t:"Tài liệu Kubernetes về multi-tenancy giải thích quota ngăn một tenant dùng quá phần tài nguyên được cấp, giảm vấn đề noisy neighbor khi một tenant làm giảm hiệu năng của tenant khác, nhưng quota không bảo vệ được mọi loại chia sẻ, ví dụ lưu lượng mạng.",url:"https://kubernetes.io/docs/concepts/security/multi-tenancy/"},
+      {t:"Bộ nguyên tắc về khả năng chống chịu hoạt động của Ủy ban Basel (31/03/2021) gọi hoạt động trọng yếu là những hoạt động, quy trình, dịch vụ mà nếu gián đoạn sẽ ảnh hưởng nghiêm trọng tới hoạt động liên tục của ngân hàng, và yêu cầu ngân hàng lập bản đồ các phụ thuộc cần thiết để cung cấp chúng (Nguyên tắc 4).",url:"https://www.bis.org/publications/202103-guidelines-principles-operational-resilience.pdf"}
+    ],
+    rule:{t:"Thông tư 09/2020/TT-NHNN, Điều 21 khoản 2 yêu cầu tổ chức giám sát, tối ưu hiệu suất của hệ thống thông tin, đánh giá khả năng đáp ứng và lập kế hoạch mở rộng, nâng cấp.",url:"https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang"},
+    q:"Khi tài nguyên dùng chung bị thiếu vào giờ cao điểm, dịch vụ nào của ngân hàng phải được ưu tiên, và ai có quyền quyết định cắt bớt phần của các phòng khác?",
+    scenario:"Từ 11 giờ đến 13 giờ hôm nay, nhiều lệnh chuyển tiền của khách bị báo hệ thống bận, đúng lúc lưu lượng thanh toán cao nhất trong ngày. Dịch vụ thanh toán cần mở thêm phiên bản để chịu tải nhưng cứ phải xếp hàng chờ, trong khi cluster vẫn đang chạy rất nhiều việc khác của đợt gửi ưu đãi bên marketing.",
+    who:["L","Lan · Dev Internet Banking"]},
+
+  lbNote:{t:"Trang quản trị nội bộ chỉ nên mở qua mạng nội bộ hoặc load balancer nội bộ (annotation service.beta.kubernetes.io/aws-load-balancer-scheme: internal, giá trị mặc định của AWS Load Balancer Controller), phù hợp với Điều 29 Thông tư 09/2020/TT-NHNN: kiểm soát chặt kết nối từ mạng không tin cậy vào mạng nội bộ, và truy cập từ Internet vào mạng nội bộ phải dùng mạng riêng ảo kèm xác thực đa yếu tố.",url:"https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/service/annotations/",url2:"https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang"}
+};
+Object.assign(K8S_BANK,K8S_BANK2);
+/* internal admin consoles: the ingress lesson gets the load balancer note as one more case */
+if(K8S_BANK.ingress)K8S_BANK.ingress.cases=(K8S_BANK.ingress.cases||[]).concat([{t:"AWS Load Balancer Controller: annotation service.beta.kubernetes.io/aws-load-balancer-scheme nhận internal hoặc internet-facing, mặc định là internal. Trang quản trị nội bộ nên đi qua load balancer internal hoặc mạng nội bộ.",url:K8S_BANK2.lbNote.url}]);
+delete K8S_BANK.lbNote;
 for(const L of LESSONS){const B=K8S_BANK[L.id];if(!B)continue;L.who=B.who||L.who;L.scenario=B.scenario||L.scenario;L.bank={why:B.why,cases:B.cases||[],rule:B.rule,q:B.q}}

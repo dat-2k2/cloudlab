@@ -731,3 +731,7 @@ body:has(.shell[data-fs]) .drawer{--drawer-top:12px;--drawer-bottom:12px;right:1
 fieldset.res .frow,fieldset.probe .frow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 fieldset.probe .frow:first-of-type{grid-template-columns:auto 1fr auto}
 fieldset.probe .frow:last-of-type{grid-template-columns:1fr 1fr 1fr}
+:root{--c-ops:#7c2d12}
+:root[data-theme="dark"]{--c-ops:#fb923c}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--c-ops:#fb923c}}
+[data-cat=ops]{--cat:var(--c-ops)}

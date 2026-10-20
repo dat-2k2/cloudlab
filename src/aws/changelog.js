@@ -2,9 +2,11 @@
 /* "Có gì mới": the app's features and updates grouped by big feature (from the repo history on GitHub,
    dat-2k2/cloudlab), newest first inside each group. CHANGELOG_VERSION changes whenever entries are added: the
    top-bar button shows a dot until the viewer opens the dialog (seen flag in localStorage cloudlab:news). */
-const CHANGELOG_VERSION="2026-10-20c";
+const CHANGELOG_VERSION="2026-10-20d";
 const CHANGELOG=[
   {id:"k8s",icon:"☸",title:"CloudLab Kubernetes",sum:"Cùng giao diện, cho Kubernetes: kéo thả Deployment, Service, Ingress… hoặc viết manifest, rồi xem pod lên và request đi qua.",items:[
+    ["20/10","Thêm 17 loại tài nguyên: Ingress controller (ingress-nginx, AWS Load Balancer Controller), load balancer NLB / Classic, internet-facing / internal, giới hạn tốc độ theo IP, Gateway API (Gateway, HTTPRoute, canary theo trọng số), RBAC (ServiceAccount, Role, ClusterRole, RoleBinding, ClusterRoleBinding), PodDisruptionBudget, ResourceQuota, LimitRange, DaemonSet, Job, StorageClass."],
+    ["20/10","4 bài mới: chặn bot gửi OTP (giới hạn tốc độ), hạn mức cho từng khối (ResourceQuota), nâng cấp node không gián đoạn (PodDisruptionBudget), quyền tối thiểu cho pipeline và kiểm toán (RBAC). Nâng cấp node group mô phỏng drain từng node như EKS."],
     ["20/10","Trang mới cloudlab/k8s: 10 bài trong bối cảnh Ngân hàng An Phát (pod không chạy, Service không có endpoint, probe, Ingress, requests / limits, HPA ngày lương về, Secret, NetworkPolicy cho vùng dữ liệu thẻ, PVC, CronJob đối soát)."],
     ["20/10","Mô phỏng cluster: xếp pod theo requests, kéo image, probe, CrashLoopBackOff, OOMKilled, rolling update, HPA, cluster autoscaler, NetworkPolicy, DNS giữa namespace, chi phí EKS theo giờ."]]},
   {id:"editor",icon:"⊞",title:"Editor hạ tầng kéo thả",sum:"Dựng hạ tầng AWS như vẽ sơ đồ: mỗi khối là một thành phần thật, mỗi mũi tên là một cấu hình thật.",items:[

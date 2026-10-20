@@ -5,12 +5,20 @@
    "deploy/ib-web", "svc/ib-web" (unique even when a Deployment and a Service share a name). Simulation-only actors
    (clients, the node pool) are documents with apiVersion cloudlab.dev/v1 and live in M.ext. */
 const CLUSTER="anphat-prod",REG="registry.anphat.vn";
-const GROUPS=[["ext","Ngoài cluster"],["work","Workload"],["net","Mạng"],["cfg","Cấu hình"],["store","Lưu trữ"],["sec","Bảo mật"],["scale","Tự co giãn"],["infra","Cluster"]];
+const GROUPS=[["ext","Ngoài cluster"],["work","Workload"],["net","Mạng và cửa vào"],["cfg","Cấu hình"],["store","Lưu trữ"],["sec","Bảo mật và quyền"],["scale","Tự co giãn"],["ops","Vận hành và hạn mức"],["infra","Cluster"]];
 const T={};
 function def(type,spec){T[type]=Object.assign({type,fields:[],rel:{}},spec)}
 /* kind ↔ id prefix ↔ apiVersion */
-const KS={Namespace:"ns",Deployment:"deploy",StatefulSet:"sts",Service:"svc",Ingress:"ing",ConfigMap:"cm",Secret:"secret",HorizontalPodAutoscaler:"hpa",NetworkPolicy:"netpol",PersistentVolumeClaim:"pvc",CronJob:"cj","CloudLab::Client":"client","CloudLab::NodePool":"nodepool"};
-const API={Namespace:"v1",Deployment:"apps/v1",StatefulSet:"apps/v1",Service:"v1",Ingress:"networking.k8s.io/v1",ConfigMap:"v1",Secret:"v1",HorizontalPodAutoscaler:"autoscaling/v2",NetworkPolicy:"networking.k8s.io/v1",PersistentVolumeClaim:"v1",CronJob:"batch/v1"};
+const KS={Namespace:"ns",Deployment:"deploy",StatefulSet:"sts",DaemonSet:"ds",Job:"job",CronJob:"cj",Service:"svc",Ingress:"ing",Gateway:"gtw",HTTPRoute:"httproute",ConfigMap:"cm",Secret:"secret",PersistentVolumeClaim:"pvc",StorageClass:"sc",
+  HorizontalPodAutoscaler:"hpa",NetworkPolicy:"netpol",ServiceAccount:"sa",Role:"role",ClusterRole:"clusterrole",RoleBinding:"rolebinding",ClusterRoleBinding:"clusterrolebinding",PodDisruptionBudget:"pdb",ResourceQuota:"quota",LimitRange:"limits",
+  "CloudLab::Client":"client","CloudLab::NodePool":"nodepool","CloudLab::IngressController":"ingressctl","CloudLab::Actor":"actor"};
+const API={Namespace:"v1",Deployment:"apps/v1",StatefulSet:"apps/v1",DaemonSet:"apps/v1",Job:"batch/v1",CronJob:"batch/v1",Service:"v1",Ingress:"networking.k8s.io/v1",Gateway:"gateway.networking.k8s.io/v1",HTTPRoute:"gateway.networking.k8s.io/v1",
+  ConfigMap:"v1",Secret:"v1",PersistentVolumeClaim:"v1",StorageClass:"storage.k8s.io/v1",HorizontalPodAutoscaler:"autoscaling/v2",NetworkPolicy:"networking.k8s.io/v1",ServiceAccount:"v1",Role:"rbac.authorization.k8s.io/v1",ClusterRole:"rbac.authorization.k8s.io/v1",
+  RoleBinding:"rbac.authorization.k8s.io/v1",ClusterRoleBinding:"rbac.authorization.k8s.io/v1",PodDisruptionBudget:"policy/v1",ResourceQuota:"v1",LimitRange:"v1"};
+const CLUSTER_SCOPED=new Set(["Namespace","StorageClass","ClusterRole","ClusterRoleBinding"]);
+/* extension points the topic modules (edge.js, rbac.js, ops.js) fill: edges, connect rules, renames, edge removal,
+   request routing by target kind, controllers run each tick, sources, and Problems-panel checks */
+const EDGE_X=[],CONNECT_K=[],WHY_K={},RENAME_K=[],REMOVE_EDGE_K={},ROUTE_K={},TICK_K=[],SOURCE_K=[],SYNC_K=[],LINT_K=[];
 const KIND_OF=Object.fromEntries(Object.entries(KS).map(([k,v])=>[v,k]));
 const WORKLOADS=["Deployment","StatefulSet"];
 /* the container images the simulated registry has. An image is an app: port it listens on, health path, seconds to
@@ -26,6 +34,9 @@ const IMAGES={
   [REG+"/statement-api"]:{tags:["1.9.0"],label:"API sao kê",port:8080,health:["/healthz"],start:6,mem:350,cpu:6},
   [REG+"/loan-api"]:{tags:["2.2.0"],label:"API khoản vay / tra soát",port:8080,health:["/healthz"],start:10,mem:256,cpu:8,needs:["DB_HOST","DB_PASSWORD"]},
   [REG+"/recon-job"]:{tags:["2.0.0"],label:"Đối soát cuối ngày",job:true,jobSec:1500,mem:300,cpu:0,needs:["DB_HOST"]},
+  [REG+"/otp-api"]:{tags:["1.4.0"],label:"Gửi mã OTP qua SMS",port:8080,health:["/healthz"],start:5,mem:200,cpu:2,sms:0.02},
+  [REG+"/log-agent"]:{tags:["3.2.0"],label:"Thu log từ mỗi node (agent)",port:2020,health:["/api/v1/health"],start:3,mem:120,cpu:1},
+  [REG+"/ci-runner"]:{tags:["16.5.0"],label:"CI runner",job:true,jobSec:300,mem:256,cpu:0},
   "postgres":{tags:["15","16"],label:"PostgreSQL",port:5432,tcp:true,start:8,mem:300,cpu:3,needs:["POSTGRES_PASSWORD"],data:"/var/lib/postgresql/data",db:true},
   "nginx":{tags:["1.27","latest"],label:"nginx",port:80,health:["/"],start:2,mem:40,cpu:1}};
 const imgParse=s=>{s=String(s||"").trim();const at=s.lastIndexOf(":"),sl=s.lastIndexOf("/");const has=at>sl;return{repo:has?s.slice(0,at):s,tag:has?s.slice(at+1):"latest"}};
@@ -36,13 +47,19 @@ function imageCheck(image){const{repo,tag}=imgParse(image);if(!repo)return{err:"
 /* worker node sizes (vCPU, GiB) and on-demand price per hour, Singapore (ap-southeast-1), reference only */
 const NODE_TYPES={"t3.medium":{cpu:2,mem:4,usd:0.0528},"m5.large":{cpu:2,mem:8,usd:0.12},"m5.xlarge":{cpu:4,mem:16,usd:0.24},"c5.xlarge":{cpu:4,mem:8,usd:0.196}};
 const K8S_PRICE={controlPlaneH:0.10,lbH:0.0252,ipv4H:0.005,gbMonth:{gp3:0.096,standard:0.096},egressGB:0.12,note:"Giá tham khảo AWS EKS ap-southeast-1 (Singapore), on-demand, không tính free tier."};
-const STORAGE_CLASSES=["gp3","standard"];
+/* storage classes: the cluster ships gp3 (default) and standard (gp2); StorageClass objects add more */
+const BUILTIN_SC={gp3:{type:"gp3",reclaim:"Delete",builtin:true},standard:{type:"gp2",reclaim:"Delete",builtin:true}};
+const scMap=()=>{const o={};for(const[k,v]of Object.entries(BUILTIN_SC))o[k]=Object.assign({default:k==="gp3"},v);
+  for(const n of (typeof M!=="undefined"&&M?allNodes():[]).filter(x=>x.type==="StorageClass")){o[nmOf(n)]={type:getP(n.props,"parameters.type")||"gp3",reclaim:n.props.reclaimPolicy||"Delete",default:String((meta(n).annotations||{})["storageclass.kubernetes.io/is-default-class"])==="true",node:n.id}}
+  if(Object.values(o).some(x=>x.node&&x.default))for(const v of Object.values(o))if(!v.node)v.default=false;return o};
+const STORAGE_CLASSES={includes:k=>k in scMap(),join:s=>Object.keys(scMap()).join(s),get list(){return Object.keys(scMap())}};
+const scOf=name=>{const m=scMap();if(name)return m[name]?Object.assign({name},m[name]):null;const d=Object.entries(m).find(([,v])=>v.default);return d?Object.assign({name:d[0]},d[1]):null};
 const INGRESS_NS="ingress-nginx";
 
 /* ---------- helpers ---------- */
 const meta=n=>n.props.metadata||(n.props.metadata={});
 const nmOf=n=>meta(n).name||n.id.split("/").pop();
-const nsOf=n=>n.type==="Namespace"||n.ext?null:(meta(n).namespace||"default");
+const nsOf=n=>CLUSTER_SCOPED.has(n.type)||n.ext?null:(meta(n).namespace||"default");
 const labelsOf=n=>meta(n).labels||{};
 const podSpec=n=>n.type==="CronJob"?getP(n.props,"spec.jobTemplate.spec.template.spec"):getP(n.props,"spec.template.spec");
 const podLabels=n=>(n.type==="CronJob"?getP(n.props,"spec.jobTemplate.spec.template.metadata.labels"):getP(n.props,"spec.template.metadata.labels"))||{};

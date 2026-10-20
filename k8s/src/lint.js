@@ -2,9 +2,9 @@
 /* Kubernetes pack · the Problems panel (like a reviewer reading the manifest: kube-linter / Polaris style checks) and
    the export tabs. */
 function problems(){const out=[],add=(sev,id,msg)=>out.push({sev,id,msg});
-  for(const n of allNodes()){if(n.ext)continue;const id=n.id,p=n.props,ns=nsOf(n);
+  for(const n of allNodes()){if(n.ext)continue;const id=n.id,p=n.props,ns=nsOf(n);for(const f of LINT_K)f(n,add);
     if(ns&&!nsExists(ns))add("error",id,`${id}: namespace ${ns} chưa có. Tạo Namespace ${ns} trước (kubectl apply sẽ báo namespaces "${ns}" not found)`);
-    if(WORKLOADS.includes(n.type)||n.type==="CronJob"){const c=ctrOf(n)||{},img=imgParse(c.image),ck=imageCheck(c.image),res=c.resources||{};
+    if(WORKLOADS.includes(n.type)||["CronJob","Job","DaemonSet"].includes(n.type)){const c=ctrOf(n)||{},img=imgParse(c.image),ck=imageCheck(c.image),res=c.resources||{};
       if(WORKLOADS.includes(n.type)){const sel=getP(p,"spec.selector.matchLabels")||{};if(!matches(sel,podLabels(n)))add("error",id,`${id}: selector ${labelText(sel)} không khớp nhãn pod ${labelText(podLabels(n))}: API server từ chối`)}
       if(ck.err)add("error",id,`${id}: ${ck.err} · ${ck.msg}`);else if(img.tag==="latest"||!String(c.image||"").includes(":"))add("warn",id,`${id}: image dùng tag latest: không biết chắc đang chạy bản nào, khó quay lại bản cũ. Ghi rõ phiên bản`);
       for(const m of envOf(n).missing)add("error",id,`${id}: ${m}`);
@@ -28,8 +28,9 @@ function problems(){const out=[],add=(sev,id,msg)=>out.push({sev,id,msg});
     if(n.type==="ConfigMap")for(const k of Object.keys(p.data||{}))if(SECRETY.test(k))add("error",id,`${id}: khóa ${k} trông như mật khẩu: ConfigMap ai đọc được namespace cũng đọc được. Chuyển sang Secret`);
     if(n.type==="HorizontalPodAutoscaler"){const r=getP(p,"spec.scaleTargetRef")||{},w=r.name&&findObj(r.kind||"Deployment",r.name,ns);if(!w)add("error",id,`${id}: scaleTargetRef ${r.kind||"Deployment"} "${r.name||""}" không có`);
       else if(!cpuQ(getP(ctrOf(w)||{},"resources.requests.cpu")))add("error",id,`${id}: ${w.id} chưa khai báo requests.cpu: HPA không tính được % CPU, sẽ không co giãn`)}
-    if(n.type==="PersistentVolumeClaim"&&!STORAGE_CLASSES.includes(getP(p,"spec.storageClassName")||"gp3"))add("error",id,`${id}: storage class ${getP(p,"spec.storageClassName")} không tồn tại (có: ${STORAGE_CLASSES.join(", ")}): PVC Pending`);
+    if(n.type==="PersistentVolumeClaim"&&!scOf(getP(p,"spec.storageClassName")))add("error",id,`${id}: storage class ${getP(p,"spec.storageClassName")} không tồn tại (có: ${STORAGE_CLASSES.join(", ")}): PVC Pending`);
     if(n.type==="Namespace"&&String(labelsOf(n).pci)==="true"&&!allNodes().some(x=>x.type==="NetworkPolicy"&&nsOf(x)===nmOf(n)))add("warn",id,`${id}: namespace chứa dữ liệu thẻ (pci=true) nhưng chưa có NetworkPolicy: pod ở mọi namespace đều gọi vào được`)}
-  const order={error:0,warn:1,info:2};return out.sort((a,b)=>order[a.sev]-order[b.sev])}
+    for(const c of allNodes())if(c.type==="CloudLab::IngressController"&&getP(c.props,"spec.controller")!=="aws-load-balancer-controller")add("info",c.id,`${c.id}: ingress-nginx đã ngừng bảo trì từ tháng 3/2026 (không còn bản vá bảo mật). Cluster đang chạy vẫn hoạt động; hệ thống mới nên dùng Gateway API (xem mẫu “Canary 90 / 10 với Gateway API”)`);
+    return out.sort((a,b)=>({error:0,warn:1,info:2})[a.sev]-({error:0,warn:1,info:2})[b.sev])}
 const EXPORTS={yaml:{label:"Manifest (CloudLab)",file:"manifests.cloudlab.yaml",edit:true,aria:"Kubernetes manifest (YAML)",note:`Sửa YAML là sửa canvas, và ngược lại. Phần mô phỏng (client, node pool) là các tài liệu <span class="mono">apiVersion: cloudlab.dev/v1</span> ở cuối.`},
   kubectl:{label:"Cho cluster thật",file:"manifests.yaml",gen:()=>toYaml(M,{clean:true}),note:"Đã bỏ phần mô phỏng. Chạy kubectl apply --dry-run=server -f manifests.yaml để API server kiểm tra trước khi apply thật."}};

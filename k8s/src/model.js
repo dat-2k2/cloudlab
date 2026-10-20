@@ -16,14 +16,15 @@ function edges(){const out=[],seen=new Set(),add=e=>{const k=e.from+">"+e.to+">"
         if(!hit.length&&Object.keys(sel).length)allNodes().filter(w=>WORKLOADS.includes(w.type)&&nsOf(w)===ns&&Object.keys(sel).some(k=>k in podLabels(w))).forEach(w=>add({from:n.id,to:w.id,kind:"selects",label:"✕ selector không khớp nhãn pod",owner:n.id,path:"spec.selector",deny:true,miss:true}));break}
       case"HorizontalPodAutoscaler":{const r=getP(p,"spec.scaleTargetRef")||{},w=r.name&&findObj(r.kind||"Deployment",r.name,ns);if(w)add({from:n.id,to:w.id,kind:"scales",label:`${getP(p,"spec.minReplicas")||1}–${getP(p,"spec.maxReplicas")||1} pod`,owner:n.id,path:"spec.scaleTargetRef"});break}
       case"NetworkPolicy":{const sel=getP(p,"spec.podSelector.matchLabels")||{};allNodes().filter(w=>WORKLOADS.includes(w.type)&&nsOf(w)===ns&&matches(sel,podLabels(w))).forEach(w=>add({from:n.id,to:w.id,kind:"applies",label:"áp cho",owner:n.id,path:"spec.podSelector"}));break}}
-    if(WORKLOADS.includes(n.type)||n.type==="CronJob"){const c=ctrOf(n)||{},base=CTR(n);
+    for(const f of EDGE_X)f(n,add);
+    if(WORKLOADS.includes(n.type)||["CronJob","Job","DaemonSet"].includes(n.type)){const c=ctrOf(n)||{},base=CTR(n);
       arr(c.envFrom).forEach((ef,i)=>{const r=ef.configMapRef||ef.secretRef,o=r&&findObj(ef.configMapRef?"ConfigMap":"Secret",r.name,ns);if(o)add({from:n.id,to:o.id,kind:"uses",label:"envFrom",owner:n.id,path:`${base}.envFrom.${i}`})});
       arr(c.env).forEach((e,i)=>{const vf=e&&e.valueFrom||{},r=vf.secretKeyRef||vf.configMapKeyRef,o=r&&findObj(vf.secretKeyRef?"Secret":"ConfigMap",r.name,ns);if(o)add({from:n.id,to:o.id,kind:"uses",label:e.name,owner:n.id,path:`${base}.env.${i}`})});
       arr(getP(podSpec(n)||{},"volumes")).forEach((v,i)=>{const cl=v&&getP(v,"persistentVolumeClaim.claimName"),o=cl&&findObj("PersistentVolumeClaim",cl,ns);if(o)add({from:n.id,to:o.id,kind:"mounts",label:"gắn ổ đĩa",owner:n.id,path:`spec.template.spec.volumes.${i}`})});
       for(const d of depsOf(n))add({from:n.id,to:d.svc,kind:"calls",label:d.ok?d.env:"✕ DNS "+d.host,owner:n.id,path:"env:"+d.env,deny:!d.ok,dns:!d.ok})}}
   return out}
 /* ---------------- add / remove / rename ---------------- */
-const BASE_NAME={Deployment:"app",StatefulSet:"db",Service:"app",Ingress:"public",ConfigMap:"config",Secret:"secret",PersistentVolumeClaim:"data",HorizontalPodAutoscaler:"app",NetworkPolicy:"policy",CronJob:"job",Namespace:"team","CloudLab::Client":"customers","CloudLab::NodePool":"nodes"};
+const BASE_NAME={DaemonSet:"agent",Job:"task",StorageClass:"fast",Gateway:"public",HTTPRoute:"route",ServiceAccount:"app",Role:"deployer",ClusterRole:"reader",RoleBinding:"deployer",ClusterRoleBinding:"readers",PodDisruptionBudget:"app",ResourceQuota:"team-quota",LimitRange:"defaults","CloudLab::IngressController":"ingress-nginx","CloudLab::Actor":"someone",Deployment:"app",StatefulSet:"db",Service:"app",Ingress:"public",ConfigMap:"config",Secret:"secret",PersistentVolumeClaim:"data",HorizontalPodAutoscaler:"app",NetworkPolicy:"policy",CronJob:"job",Namespace:"team","CloudLab::Client":"customers","CloudLab::NodePool":"nodes"};
 function freeName(kind,base){let i=1;while(rawOf(idFor(kind,base+"-"+i)))i++;return base+"-"+i}
 function addNode(type,x,y,id){const d=T[type];const name=id?id.split("/").pop():freeName(type,BASE_NAME[type]||"obj");id=id||idFor(type,name);
   const raw={Type:type,Properties:clone(d.defaults(name))};raw.Properties.metadata=Object.assign({name},raw.Properties.metadata||{});raw.Properties.metadata.name=name;
@@ -40,7 +41,7 @@ function renameNode(a,b){const n=nodeOf(a);if(!n)return{ok:false,err:"Không tì
   for(const x of Object.values(M.ext))if(getP(x,"Properties.spec.target")===a)x.Properties.spec.target=nid;
   const envHost=(o,fn)=>{for(const c of arr((podSpec(o)||{}).containers))for(const e of arr(c.env))if(e&&typeof e.value==="string")e.value=fn(e.value,e.name)};
   const cms=o=>o.type==="ConfigMap"?o.props.data||{}:null;
-  for(const o of allNodes()){if(o.ext)continue;const p=o.props;
+  for(const o of allNodes()){for(const f of RENAME_K)f(n,old,name,ns,o);if(o.ext)continue;const p=o.props;
     if(n.type==="Service"){if(o.type==="Ingress"&&sameNs(o))arr(getP(p,"spec.rules")).forEach(r=>arr(getP(r||{},"http.paths")).forEach(x=>{if(getP(x||{},"backend.service.name")===old)x.backend.service.name=name}));
       const re=new RegExp(`(^|//)${old.replace(/[.-]/g,"\\$&")}(?=$|[.:/])`),fix=(v,k)=>(DNS_VAR.test(k||"")||v.includes("://"))&&(sameNs(o)||v.includes(old+"."+ns))?v.replace(re,"$1"+name):v;
       if(o.type!=="ConfigMap")envHost(o,fix);else{const d=cms(o);for(const k of Object.keys(d))d[k]=fix(String(d[k]),k)}}
@@ -52,7 +53,7 @@ function renameNode(a,b){const n=nodeOf(a);if(!n)return{ok:false,err:"Không tì
     if(n.type==="Namespace"&&meta(o).namespace===old){meta(o).namespace=name}}
   if(n.type==="Namespace")for(const x of Object.values(M.ext))if(getP(x,"Properties.spec.from.namespace")===old)x.Properties.spec.from.namespace=name;
   return{ok:true,id:nid}}
-function removeEdge(e){const o=nodeOf(e.owner);if(!o)return;const p=o.props;
+function removeEdge(e){const o=nodeOf(e.owner);if(!o)return;const p=o.props;if(REMOVE_EDGE_K[e.kind]&&REMOVE_EDGE_K[e.kind](e,o))return;
   if(e.kind==="calls"&&o.ext){p.spec.target=null;return}
   if(e.kind==="routes"){const ks=e.path.split("."),ri=+ks[2],pi=+ks[5],r=arr(getP(p,"spec.rules"))[ri];if(!r)return;r.http.paths.splice(pi,1);if(!r.http.paths.length)p.spec.rules.splice(ri,1);return}
   if(e.kind==="selects"){if(!e.miss)p.spec.selector={};return}
@@ -63,7 +64,7 @@ function removeEdge(e){const o=nodeOf(e.owner);if(!o)return;const p=o.props;
 /* ---------------- connecting two blocks (drag, or "Nối tới…") ---------------- */
 const sameNsOk=(A,B)=>nsOf(A)===nsOf(B);
 function connectRule(a,b){const A=nodeOf(a),B=nodeOf(b);if(!A||!B||a===b)return null;const ta=A.type,tb=B.type;const say=(label,apply,grant)=>({label,apply,grant});
-  const wl=WORKLOADS.includes(ta)||ta==="CronJob";
+  const wl=WORKLOADS.includes(ta)||["CronJob","Job","DaemonSet"].includes(ta);
   if(ta==="CloudLab::Client"&&(tb==="Ingress"||tb==="Service"))return say(tb==="Ingress"?"gửi request tới Ingress":`gọi thẳng Service (${getP(B.props,"spec.type")||"ClusterIP"})`,()=>{A.props.spec=A.props.spec||{};A.props.spec.target=b;if(tb==="Ingress"&&!A.props.spec.host){const r=arr(getP(B.props,"spec.rules"))[0];if(r&&r.host)A.props.spec.host=r.host;A.props.spec.path=A.props.spec.path||"/"}});
   if(ta==="Ingress"&&tb==="Service"&&sameNsOk(A,B))return say("thêm luật đường dẫn → Service này",()=>{const sp=arr(getP(B.props,"spec.ports"))[0]||{port:80};A.props.spec=A.props.spec||{};A.props.spec.rules=arr(A.props.spec.rules);
     let r=A.props.spec.rules[0];if(!r){r={host:"ib.anphat.vn",http:{paths:[]}};A.props.spec.rules.push(r)}r.http=r.http||{paths:[]};r.http.paths=arr(r.http.paths);const used=r.http.paths.some(x=>x.path==="/");
@@ -75,14 +76,17 @@ function connectRule(a,b){const A=nodeOf(a),B=nodeOf(b);if(!A||!B||a===b)return 
     return say(`gọi Service qua DNS (biến ${k}=${host})`,()=>{const c=ctrOf(A);c.env=arr(c.env).filter(e=>e.name!==k).concat([{name:k,value:host}])})}
   if(ta==="HorizontalPodAutoscaler"&&WORKLOADS.includes(tb)&&sameNsOk(A,B))return say("tự co giãn workload này",()=>{A.props.spec.scaleTargetRef={apiVersion:"apps/v1",kind:tb,name:nmOf(B)}});
   if(ta==="NetworkPolicy"&&WORKLOADS.includes(tb)&&sameNsOk(A,B))return say("áp policy cho pod của workload này",()=>{A.props.spec.podSelector={matchLabels:clone(podLabels(B))}});
+  if(ta==="PodDisruptionBudget"&&WORKLOADS.includes(tb)&&sameNsOk(A,B))return say("bảo vệ pod của workload này khi bảo trì node",()=>{A.props.spec.selector={matchLabels:clone(podLabels(B))}});
+  for(const f of CONNECT_K){const r=f(A,B,say);if(r)return r}
   return null}
 function whyNot(a,b){const A=nodeOf(a),B=nodeOf(b);if(!A||!B)return"";
-  const can={"CloudLab::Client":"Ingress hoặc Service",Ingress:"Service cùng namespace",Service:"Deployment / StatefulSet cùng namespace (để chọn pod)",Deployment:"ConfigMap, Secret, PVC (cùng namespace) hoặc Service",StatefulSet:"ConfigMap, Secret, PVC (cùng namespace) hoặc Service",
-    CronJob:"ConfigMap, Secret hoặc Service",HorizontalPodAutoscaler:"Deployment / StatefulSet cùng namespace",NetworkPolicy:"Deployment / StatefulSet cùng namespace"}[A.type];
-  if(can&&!A.ext&&!B.ext&&nsOf(A)!==nsOf(B)&&!(B.type==="Service"))return`${A.def.label} ở namespace ${nsOf(A)}, ${B.def.label} ở ${nsOf(B)}: ${A.def.label} chỉ nối tới ${can}`;
+  const can=Object.assign({"CloudLab::Client":"Ingress, Ingress controller, Gateway hoặc Service",PodDisruptionBudget:"Deployment / StatefulSet cùng namespace",Job:"ConfigMap, Secret, Service hoặc ServiceAccount",DaemonSet:"ConfigMap, Secret hoặc ServiceAccount",Ingress:"Service cùng namespace",Service:"Deployment / StatefulSet cùng namespace (để chọn pod)",Deployment:"ConfigMap, Secret, PVC (cùng namespace) hoặc Service",StatefulSet:"ConfigMap, Secret, PVC (cùng namespace) hoặc Service",
+    CronJob:"ConfigMap, Secret hoặc Service",HorizontalPodAutoscaler:"Deployment / StatefulSet cùng namespace",NetworkPolicy:"Deployment / StatefulSet cùng namespace"},WHY_K)[A.type];
+  if(can&&can[0]==="(")return`${A.def.label} không nối đi đâu ${can}`;
+  if(can&&!A.ext&&!B.ext&&nsOf(A)&&nsOf(B)&&nsOf(A)!==nsOf(B)&&!(B.type==="Service"))return`${A.def.label} ở namespace ${nsOf(A)}, ${B.def.label} ở ${nsOf(B)}: ${A.def.label} chỉ nối tới ${can}`;
   return can?`${A.def.label} chỉ nối tới ${can}`:`${A.def.label} không nối đi đâu được`}
 /* ---------------- YAML: multi-document manifest ---------------- */
-const KIND_ORDER=["Namespace","ConfigMap","Secret","PersistentVolumeClaim","Deployment","StatefulSet","CronJob","Service","Ingress","HorizontalPodAutoscaler","NetworkPolicy"];
+const KIND_ORDER=["Namespace","StorageClass","ServiceAccount","ClusterRole","Role","ClusterRoleBinding","RoleBinding","ResourceQuota","LimitRange","ConfigMap","Secret","PersistentVolumeClaim","Deployment","StatefulSet","DaemonSet","Job","CronJob","Service","Ingress","Gateway","HTTPRoute","HorizontalPodAutoscaler","PodDisruptionBudget","NetworkPolicy"];
 function cleanV(v){if(Array.isArray(v))return v.map(cleanV);if(v&&typeof v==="object"){const o={};for(const k of Object.keys(v)){if(v[k]===null||v[k]===undefined)continue;o[k]=cleanV(v[k])}return o}return v}
 const docOf=(id,r,ext)=>{const d=T[r.Type]||{},p=r.Properties||{},o={apiVersion:ext?(d.api||"cloudlab.dev/v1"):(p.apiVersion||API[r.Type]||"v1"),kind:ext?(d.kind||r.Type.replace("CloudLab::","")):r.Type,metadata:p.metadata||{name:id.split("/").pop()}};
   for(const k of Object.keys(p))if(k!=="metadata"&&k!=="apiVersion")o[k]=p[k];return cleanV(o)};
@@ -101,14 +105,14 @@ function fromYaml(text,keep){let docs=[];keep=keep||{};
     if(!d.kind)return{ok:false,err:`Tài liệu thứ ${i+1}: thiếu kind.`};const name=getP(d,"metadata.name");
     if(!name||typeof name!=="string")return{ok:false,err:`${d.kind} (tài liệu ${i+1}): thiếu metadata.name.`};if(!DNS1123.test(name))return{ok:false,err:`${d.kind} "${name}": tên chỉ gồm chữ thường, số, dấu - và dấu chấm.`};
     const isCl=String(d.apiVersion||"").startsWith("cloudlab.dev/");let type=d.kind;
-    if(isCl){type="CloudLab::"+d.kind;if(!T[type])return{ok:false,err:`cloudlab.dev: không có kind ${d.kind} (có Client, NodePool).`}}
+    if(isCl){type="CloudLab::"+d.kind;if(!T[type])return{ok:false,err:`cloudlab.dev: không có kind ${d.kind} (có Client, NodePool, IngressController, Actor).`}}
     else if(API[d.kind]&&d.apiVersion&&d.apiVersion!==API[d.kind])return{ok:false,err:`${d.kind} "${name}": no matches for kind "${d.kind}" in version "${d.apiVersion}" (dùng ${API[d.kind]}).`};
-    const ns=type==="Namespace"||isCl?null:(getP(d,"metadata.namespace")||"default");let id=idFor(type,name);
+    const ns=CLUSTER_SCOPED.has(type)||isCl?null:(getP(d,"metadata.namespace")||"default");let id=idFor(type,name);
     if(m.res[id]||m.ext[id]){const prev=m.res[id]||m.ext[id];if((getP(prev,"Properties.metadata.namespace")||"default")===ns)return{ok:false,err:`${d.kind} "${name}" khai báo hai lần trong namespace ${ns}.`};id=id+"@"+ns}
     const props={};for(const k of Object.keys(d))if(k!=="kind"&&k!=="apiVersion")props[k]=d[k];if(!isCl&&d.apiVersion&&API[d.kind]!==d.apiVersion)props.apiVersion=d.apiVersion;
     (isCl?m.ext:m.res)[id]={Type:type,Properties:props}}
   /* positions: keep known ones, put new blocks in columns by role */
-  const old=keep.pos||{},col={"CloudLab::Client":0,Ingress:1,Service:1,NetworkPolicy:1,Deployment:2,StatefulSet:2,CronJob:2,HorizontalPodAutoscaler:2,ConfigMap:3,Secret:3,PersistentVolumeClaim:3,Namespace:4,"CloudLab::NodePool":0},cnt={};
+  const old=keep.pos||{},col={"CloudLab::Client":0,"CloudLab::Actor":0,"CloudLab::IngressController":1,Gateway:1,HTTPRoute:1,Ingress:1,Service:1,NetworkPolicy:1,Deployment:2,StatefulSet:2,DaemonSet:2,Job:2,CronJob:2,HorizontalPodAutoscaler:2,PodDisruptionBudget:2,ConfigMap:3,Secret:3,PersistentVolumeClaim:3,ServiceAccount:3,Role:4,ClusterRole:4,RoleBinding:4,ClusterRoleBinding:4,ResourceQuota:4,LimitRange:4,StorageClass:4,Namespace:5,"CloudLab::NodePool":0},cnt={};
   for(const id of [...Object.keys(m.ext),...Object.keys(m.res),...Object.keys(m.manual)]){if(old[id]){m.pos[id]=old[id];continue}const t=(m.res[id]||m.ext[id]||m.manual[id]).Type,c=col[t]??4;cnt[c]=(cnt[c]||0)+1;m.pos[id]=[40+c*340,60+(cnt[c]-1)*200]}
   return{ok:true,model:m}}
 function loadTemplate(yaml,layout,name,manual){const r=fromYaml(yaml,{name,pos:layout||{},manual:manual||{}});if(!r.ok)throw new Error(name+": "+r.err+(r.line?" @"+r.line:""));return r.model}
