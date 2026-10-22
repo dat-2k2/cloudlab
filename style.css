@@ -676,6 +676,8 @@ body:has(.shell[data-fs]) .drawer{--drawer-top:12px;--drawer-bottom:12px;right:1
 .gpicker.glib{background:var(--surface);border-color:var(--frame-line)}
 .shell.app .lesson{background:var(--paper);box-shadow:var(--paper-shadow);border-left-color:var(--frame-line);position:relative;z-index:1}
 .pane-code .yaml,.pane-code{background:transparent}
+/* the code pane sits on the page surface: its text follows the page ink (light text on a light page was unreadable) */
+.pane-code .yaml{color:var(--ink);caret-color:var(--ink);border-color:var(--line-strong)}.pane-code .yaml::placeholder{color:var(--subtle)}
 /* full screen keeps the same layers */
 .shell[data-fs]>.main{background:var(--canvas)}
 .shell.app[data-fs] .lesson{background:color-mix(in srgb,var(--paper) 96%,transparent);box-shadow:0 8px 28px rgba(15,23,42,.16)}

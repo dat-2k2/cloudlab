@@ -189,7 +189,7 @@ function keepVisible(){const id=UI.sel&&UI.sel.node;if(!id||id===SEEN||KIT.isNar
   const el=document.querySelector(`.gnode[data-gid="${id}"]`),dw=document.getElementById("drawer"),gx=document.querySelector(".gx");if(!el||!dw||dw.hidden||!gx||!el.getBoundingClientRect)return;
   const r=el.getBoundingClientRect(),d=dw.getBoundingClientRect(),g=gx.getBoundingClientRect();if(!d.width)return;const over=r.right-Math.min(d.left,g.right)+24;
   if(over>0){gFreeze();GCUR.pan=[GCUR.pan[0]-over,GCUR.pan[1]];gs().pan=[...GCUR.pan];gApply()}}
-function onModelChanged(label,cli){if(stackUp()&&!QUIET&&DOMAIN.redeploy)DOMAIN.redeploy(label,cli);
+function onModelChanged(label,cli){if(stackUp()&&!QUIET&&DOMAIN.redeploy)DOMAIN.redeploy(label,cli);if(!QUIET)restartCounts();
   YAML_ERR=null;saveSandbox();render()}
 function onSimTick(){gRefresh();renderSim(true);refreshRt();if(UI.panel==="log"&&LOG.length&&LOG[0].id!==onSimTick.last){onSimTick.last=LOG[0].id;renderLog()}}
 function saveSandbox(){if(UI.mode!=="sandbox")return;store.set("sandbox",{yaml:toYaml(),pos:M.pos,manual:M.manual,name:M.name})}

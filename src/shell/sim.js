@@ -21,6 +21,9 @@ function step(dt,noSources){TICK_DT=dt;const t0=RT.t,t1=t0+dt;for(const k in RT.
   RT.q.sort((a,b)=>a.at-b.at);periodic(t0,dt);RT.t=t1;
   if(RT.t>=RT.month*MONTH){RT.month++;RT.total=0;for(const id in RT.n)RT.n[id].cost=0;if(DOMAIN.onNewMonth)DOMAIN.onNewMonth();log("CloudLab","billing","new-month",`Sang tháng ${RT.month}: chi tiêu tháng về $0`,"")}
   for(const k in RT.n){const r=RT.n[k];r.series.push({t:t1,dt,...r.tk});if(r.series.length>40)r.series.shift()}}
+/* after the template changes, counters and arrow states start again so what the canvas shows describes the new
+   configuration (an old "not blocked" from before a fix is gone); cost and state (objects, pods, mail) stay */
+function restartCounts(){for(const k in RT.n){const r=RT.n[k];r.m={};r.tk={};r.series=[];r.lastErr=null}RT.flow={};RT.why={}}
 /* run everything queued now (manual actions while paused), without starting sources */
 function drain(){let g=0;const t=RT.t;while(RT.q.length&&g<400){RT.q.sort((a,b)=>a.at-b.at);const ev=RT.q.shift();if(ev.at>t+120)ev.at=t;handle(ev,t+120);g++}}
 function inject(n,c){fire(n,c||1,RT.t);drain()}
