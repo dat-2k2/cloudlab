@@ -830,7 +830,7 @@ ${EC2("PublicEc2","PublicA","PublicSg")}${EC2("PrivateEc2","PrivateB","PrivateSg
     if(arr(getP(nodeOf("PublicSg")||{props:{}},"props.SecurityGroupIngress")).some(r=>+r.FromPort===22&&r.CidrIp==="0.0.0.0/0"))return["Bot quét vẫn SSH vào được PublicEc2.","Xem rule cổng 22 của PublicSg.","Đổi nguồn của rule SSH thành 203.0.113.10/32 (IP của bạn)."][Math.min(n,2)];
     return["PrivateSg vẫn mở SSH cho Internet.","Ai nên SSH được vào máy private?","Rule 22 của PrivateSg: nguồn = SG PublicSg."][Math.min(n,2)]},
   hints:()=>["Subnet chỉ public khi VPC có internet gateway gắn vào. Security group: mở đúng cổng cho đúng nguồn.","Kéo Igw thả vào khung VPC (hoặc kéo mũi tên Igw → khung VPC). PublicSg: rule 22 nguồn 203.0.113.10/32. PrivateSg: rule 22 nguồn SG PublicSg."],
-  solve(){edit("fix vpc",()=>{M.res.IgwAttach={Type:"AWS::EC2::VPCGatewayAttachment",Properties:{VpcId:{Ref:"Vpc"},InternetGatewayId:{Ref:"Igw"}}};
+  solve(){edit("fix vpc",()=>{if(!igwOf("Vpc"))connectRule("Igw","Vpc").apply(true);
     nodeOf("PublicSg").props.SecurityGroupIngress=[{IpProtocol:"tcp",FromPort:80,ToPort:80,CidrIp:"0.0.0.0/0"},{IpProtocol:"tcp",FromPort:22,ToPort:22,CidrIp:"203.0.113.10/32"}];
     nodeOf("PrivateSg").props.SecurityGroupIngress=[{IpProtocol:"tcp",FromPort:22,ToPort:22,SourceSecurityGroupId:{"Fn::GetAtt":["PublicSg","GroupId"]}}]})},
   pass:"Public subnet = có IGW. Security group là tường lửa theo nguồn: Internet cho web, /32 cho SSH, và SG-tới-SG cho máy bên trong. Lab thật còn có NAT gateway để private đi ra."};

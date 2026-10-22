@@ -139,7 +139,7 @@ Object.assign(T["AWS::EC2::Subnet"],{box:{pad:22,head:30,size:[300,170]},boxExtr
 Object.assign(T["AWS::Organizations::OrganizationalUnit"],{box:{pad:22,head:34,size:[320,190]},boxExtra:b=>({reg:typeof ouRegistered==="function"&&ouRegistered(b.id)}),boxClass:b=>b.reg?" reg":"",
   boxLabel:b=>`OU · ${b.props.Name||b.id} · ${b.reg?"đã register":"chưa register"}`,boxEmpty:"Kéo account vào đây"});
 DOMAIN.parentOf=n=>{const c=n.def.container;if(c==="subnet")return refId(n.props.VpcId);if(c)return null;
-  if(n.type==="AWS::EC2::InternetGateway"){const v=igwVpc(n.id);return v&&nodeOf(v)?v:null}
+  if(n.type==="AWS::EC2::InternetGateway"){if(IGW_LOOSE)return null;const v=igwVpc(n.id);return v&&nodeOf(v)?v:null}
   if(n.type==="AWS::Organizations::Account")return refId(arr(n.props.ParentIds)[0]);
   const ss=subnetsOf(n);if(ss.length===1&&nodeOf(ss[0]))return ss[0];const v=vpcOf(n);return v&&nodeOf(v)?v:null};
 
@@ -217,10 +217,15 @@ function placeIn(id,sid){const n=nodeOf(id);if(!n||!PLACEABLE.includes(n.type))r
 const igwAttachments=id=>Object.keys(M.res).filter(k=>M.res[k].Type==="AWS::EC2::VPCGatewayAttachment"&&refId(M.res[k].Properties.InternetGatewayId)===id);
 function igwVpc(id){const k=igwAttachments(id)[0];return k?refId(M.res[k].Properties.VpcId):null}
 /* keep the gateway clear of the other blocks: inside the VPC box, below what is already there */
-function seatIgw(id,vpc){const L=typeof GLAST!=="undefined"&&GLAST;if(!L)return;const box=L.by[vpc],me=L.by[id];if(!box)return;const p=M.pos[id]||[0,0],h=(me&&me.h)||110;
+let IGW_LOOSE=false;
+function seatIgw(id,vpc,L0){const L=L0||(typeof GLAST!=="undefined"&&GLAST);if(!L)return;const box=L.by[vpc],me=L.by[id];if(!box)return;const p=M.pos[id]||[0,0],h=(me&&me.h)||110;
   const inside=p[0]>=box.x&&p[0]+GW<=box.x+box.w&&p[1]>=box.y&&p[1]<=box.y+box.h;
   const hits=L.nodes.some(o=>o.id!==id&&p[0]<o.x+o.w+12&&p[0]+GW>o.x-12&&p[1]<o.y+o.h+12&&p[1]+h>o.y-12)||L.boxes.some(b=>b.id!==vpc&&b.box!=="vpc"&&p[0]<b.x+b.w&&p[0]+GW>b.x&&p[1]<b.y+b.h&&p[1]+h>b.y);
   if(inside&&!hits)return;const pad=(T["AWS::EC2::VPC"].box||{}).pad||24;M.pos[id]=[Math.round(box.x+pad),Math.round(box.y+box.h-pad+18)]}
+/* templates (lessons, starters, YAML) give an attached gateway any position: before it is drawn inside its VPC box,
+   lay the model out once without gateway membership and seat each attached gateway below what the box holds */
+function seatIgws(m){const ids=Object.keys(m.res).filter(k=>m.res[k].Type==="AWS::EC2::InternetGateway");if(!ids.length||typeof layoutModel!=="function"||typeof RT==="undefined"||!RT)return;
+  const sM=M;M=m;IGW_LOOSE=true;try{const L=layoutModel();for(const id of ids){const v=igwVpc(id);if(v&&L.by[v])seatIgw(id,v,L)}}catch(_){}finally{IGW_LOOSE=false;M=sM}}
 function attachIgw(id,vpc){const n=nodeOf(id);if(!n||n.type!=="AWS::EC2::InternetGateway"||!vpc)return false;if(igwVpc(id)===vpc){seatIgw(id,vpc);return false}const r=connectRule(id,vpc);if(!r)return false;
   edit(`${id} → ${vpc}`,()=>{for(const k of igwAttachments(id))delete M.res[k];r.apply(true);seatIgw(id,vpc)});log("CloudLab","editor","connect",`${id} → ${vpc}: ${r.label}`,"ok");return true}
 function detachIgw(id){const ks=igwAttachments(id);if(!ks.length)return false;const v=igwVpc(id);edit(`tháo ${id} khỏi ${v}`,()=>{for(const k of ks)delete M.res[k]});log("CloudLab","editor","detach",`${id} không còn gắn vào ${v}: public subnet mất đường ra Internet`,"warn");gNote(`${id} đã tháo khỏi ${v}. Kéo lại vào khung VPC để gắn.`,"info");return true}

@@ -148,6 +148,7 @@ function fromYaml(text,keep){let doc;
   const old=(keep||{}).pos||{};const ids=[...Object.keys(m.ext),...Object.keys(m.res),...Object.keys(m.manual)];let nx=0;
   const maxX=Math.max(40,...Object.values(old).map(p=>p[0]+300));
   for(const id of ids){if(old[id])m.pos[id]=old[id];else{m.pos[id]=[maxX,60+nx*170];nx++}}
+  if(typeof seatIgws==="function")seatIgws(m);
   return{ok:true,model:m}}
 /* lesson templates are authored as YAML + a layout table */
 function loadTemplate(yaml,layout,name,manual){const r=fromYaml(yaml,{name,pos:layout||{},manual:manual||{}});if(!r.ok)throw new Error(name+": "+r.err+(r.line?" @"+r.line:""));return r.model}
