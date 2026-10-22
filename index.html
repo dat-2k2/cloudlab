@@ -22,7 +22,9 @@
     <p class="top-crumb" id="crumb"></p>
     <div class="top-actions">
       <span class="chip live ok hide-s">ap-southeast-2 · Sydney</span>
+      <a class="hide-s" href="gcp/" title="CloudLab cho Google Cloud: Terraform, Kafka, Redis, RabbitMQ, WebSocket, $300 credit">Google Cloud</a>
       <a class="hide-s" href="k8s/" title="CloudLab cho Kubernetes: 14 bài trong bối cảnh ngân hàng">Kubernetes</a>
+      <a class="hide-s" href="pricing.html" title="So sánh giá Kafka, Redis, RabbitMQ, WebSocket giữa AWS, Google Cloud và tự cài">So sánh giá</a>
       <a class="hide-s" href="https://github.com/dat-2k2/cloudlab" target="_blank" rel="noopener">GitHub ↗</a>
       <button class="topnews hide-s" id="newsBtn" title="Tính năng và cập nhật mới">Có gì mới</button>
       <button class="icon-btn" id="mcpBtn" aria-label="Kết nối trợ lý AI của trình duyệt (WebMCP)" title="Trợ lý AI trong trình duyệt (WebMCP)">✦</button>
@@ -43,17 +45,17 @@
   <div class="lesson-resize" id="lessonResize" role="separator" aria-orientation="vertical" aria-controls="lesson" aria-label="Kéo để đổi độ rộng khung bài học (phím ← →)" tabindex="0"></div>
   <aside class="lesson" id="lesson" aria-label="Bài học" aria-live="polite"></aside>
   <footer class="shell-foot">
-    <span class="foot-l">© 2026 Nguyen Quoc Dat · <a href="credits.html">Nguồn và bản quyền</a> · <a href="#/changelog" data-news>Có gì mới</a><span class="hide-s"> · <a href="learn.html">Bản văn bản</a> · <a href="learn.html#gemini">Dùng với Gemini</a> · <a href="k8s/">Kubernetes</a> · <a href="https://dat-2k2.github.io/">← dat-2k2.github.io</a></span></span>
+    <span class="foot-l">© 2026 Nguyen Quoc Dat · <a href="credits.html">Nguồn và bản quyền</a> · <a href="#/changelog" data-news>Có gì mới</a><span class="hide-s"> · <a href="learn.html">Bản văn bản</a> · <a href="learn.html#gemini">Dùng với Gemini</a> · <a href="gcp/">Google Cloud</a> · <a href="k8s/">Kubernetes</a> · <a href="pricing.html">So sánh giá</a> · <a href="https://dat-2k2.github.io/">← dat-2k2.github.io</a></span></span>
     <span class="foot-r">Không liên kết với AWS · mô phỏng, giá tham khảo</span>
   </footer>
 </div>
 <aside class="drawer" id="drawer" hidden></aside>
 <div id="modal"></div>
 <script src="../kit/layout.js"></script>
-<script src="vendor/js-yaml.min.js"></script>
+<script src="vendor/js-yaml.min.js"></script><script src="src/prices.js"></script>
 <!-- shell: editor, layout, simulation clock (domain-agnostic) · aws: the AWS domain pack. See src/shell/README.md -->
 <script src="src/shell/core.js"></script><script src="src/shell/model.js"></script><script src="src/shell/sim.js"></script>
-<script src="src/aws/catalog.js"></script><script src="src/aws/cfn.js"></script><script src="src/aws/infra.js"></script><script src="src/aws/org.js"></script><script src="src/aws/eli5.js"></script><script src="src/aws/iam.js"></script><script src="src/aws/sim.js"></script><script src="src/aws/lessons.js"></script><script src="src/aws/lessons-org.js"></script><script src="src/aws/bank.js"></script><script src="src/aws/iac.js"></script><script src="src/aws/lint.js"></script><script src="src/aws/views.js"></script>
+<script src="src/aws/catalog.js"></script><script src="src/aws/cfn.js"></script><script src="src/aws/infra.js"></script><script src="src/aws/org.js"></script><script src="src/aws/eli5.js"></script><script src="src/aws/iam.js"></script><script src="src/aws/sim.js"></script><script src="src/aws/streaming.js"></script><script src="src/aws/lessons.js"></script><script src="src/aws/lessons-org.js"></script><script src="src/aws/lessons-stream.js"></script><script src="src/aws/bank.js"></script><script src="src/aws/iac.js"></script><script src="src/aws/lint.js"></script><script src="src/aws/views.js"></script>
 <script src="src/shell/editor.js"></script><script src="src/shell/ui.js"></script><script src="src/shell/webmcp.js"></script><script src="src/aws/changelog.js"></script><script src="src/shell/tour.js"></script>
 </body>
 </html>

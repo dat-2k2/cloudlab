@@ -35,7 +35,7 @@
     {name:"open_sandbox",description:"Mở sandbox tự do (giữ sơ đồ sandbox đã lưu trước đó).",inputSchema:{type:"object",properties:{}},execute:async()=>{startSandbox();render();return out({ok:true,blocks:allNodes().length})}},
     {name:"load_template",description:DS("load_template","Mở một template YAML vào sandbox (thay sơ đồ sandbox hiện tại). Dùng để dựng tình huống của người dùng. Trả về lỗi YAML kèm số dòng, hoặc danh sách khối và vấn đề."),
       inputSchema:{type:"object",properties:{yaml:{type:"string",description:DS("load_template.yaml","Template YAML; xem get_format_guide")}},required:["yaml"]},
-      execute:async({yaml})=>{const r=fromYaml(String(yaml||""),{name:"sandbox"});if(!r.ok)return fail(`${r.line?`YAML lỗi ở dòng ${r.line}`:"Không mở được"}: ${r.err}`);
+      execute:async({yaml})=>{const r=fromYaml(String(yaml||""),{name:"sandbox"});if(!r.ok)return fail(`${r.line?`${TX("codeName")} lỗi ở dòng ${r.line}`:"Không mở được"}: ${r.err}`);
         startSandbox(r.model);gs().zoom=null;render();log("CloudLab","webmcp","load_template",`Agent mở template · ${Object.keys(r.model.res).length} ${DS("unitRes","tài nguyên")}`,"ok");
         return out({ok:true,blocks:allNodes().map(n=>n.id),problems:problems().map(p=>p.sev+": "+p.msg)})}},
     {name:"add_component",description:"Thêm một khối mới lên sơ đồ.",inputSchema:{type:"object",properties:{type:{type:"string",description:DS("add_component.type","Loại thành phần (xem get_format_guide)")}},required:["type"]},

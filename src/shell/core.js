@@ -31,7 +31,7 @@ function download(name,text){try{const b=new Blob([text],{type:"text/plain"}),u=
    actions: data-act handlers beyond the shell's own              (arg, el, event) → true keeps the page as is
    optional hooks (all may be absent): view, rt, nodeActs, edgeState, parentOf, dropHint, onDrop, dragHint, onDragEnd,
    beforeDelete, afterDelete, onChange, redeploy, runtime, onNewMonth, manualStatus, lessonRef, api */
-const DOMAIN={id:APP_ID||"aws",texts:{},fields:{},actions:{}};
+const DOMAIN={id:APP_ID||"aws",texts:{codeName:"YAML"},fields:{},actions:{}};
 const TX=(k,...a)=>{const v=DOMAIN.texts[k];return typeof v==="function"?v(...a):v??""};
 
 /* ---------------- state ---------------- */

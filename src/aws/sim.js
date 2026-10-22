@@ -9,7 +9,7 @@ const PRICE={lambdaReq:0.20/1e6,lambdaGBs:0.0000166667,apiReq:1.29/1e6,s3Put:0.0
   ec2:{"t3.micro":0.0132,"t3.small":0.0264,"t3.medium":0.0528,"m5.large":0.12,"c5.large":0.111},albH:0.0252,albLCU:0.008,
   rds:{"db.t3.micro":0.028,"db.t3.small":0.056,"db.t3.medium":0.112,"db.m5.large":0.247},rdsGB:0.138,cache:{"cache.t3.micro":0.025,"cache.t3.small":0.05},ipv4H:0.005,
   cfReq:0.0125/1e4,cfGB:0.114,r53Zone:0.50,dtoGB:0.114,note:"Giá tham khảo ap-southeast-2 (một số theo us-east-1), không tính free tier."};
-DOMAIN.runtime=()=>({obj:{},items:{},logs:{},subs:{},inbox:{},alarms:{},budgets:{},loop:{}});
+DOMAIN.runtime=()=>({obj:{},items:{},logs:{},subs:{},inbox:{},alarms:{},budgets:{},loop:{},ws:{}});
 DOMAIN.onNewMonth=()=>{for(const b of Object.values(RT.budgets))b.fired=[]};
 const stackUp=()=>["CREATE_COMPLETE","UPDATE_COMPLETE","DELETE_FAILED"].includes(RT.stack.status);
 function exists(id){const s=scopeOf(id);if(!s)return false;if(s==="ext"||s==="manual")return true;if(RT.stack.status==="DELETE_FAILED")return!!RT.stack.left&&RT.stack.left.includes(id);return stackUp()}
@@ -140,6 +140,7 @@ function appRun(id,w,T1){const n=nodeOf(id),cap=(EC2_TYPES[n.props.InstanceType]
     if(un.type==="AWS::RDS::DBInstance"){const q=okW*(cache?1-hit:1);if(!exists(u)){errW=w;why="Database chưa được deploy";flow(id,u,"uses",okW,why);continue}const s=sgAllows(u,dbPort(un),{node:id});
       if(!s.ok){errW=w;why="Không kết nối được database: "+s.why;flow(id,u,"uses",okW,s.why);continue}flow(id,u,"uses",q);bump(u,"q",q);const qps=(nrt(u).tk.q||0)/TICK_DT,qc=(RDS_TYPES[un.props.DBInstanceClass]||{qps:300}).qps;nrt(u).cpu=Math.min(100,Math.round(qps/qc*100));
       if(qps>qc){const e=okW*(qps-qc)/qps;errW+=e;why=`Database quá tải: ${num(qps)} truy vấn/giây, ${un.props.DBInstanceClass} chỉ chịu ${qc} (thêm ElastiCache hoặc chọn class lớn hơn)`}}
+    else if(un.def.use){const r=un.def.use(id,u,okW,n);if(r&&r.err){errW+=r.errW!=null?r.errW:w;why=r.err}}
     else if(USE_ENV[un.type]){const prof=nodeOf(refId(n.props.IamInstanceProfile)),role=prof&&refId(arr(prof.props.Roles)[0]);
       const act={"AWS::S3::Bucket":"s3:PutObject","AWS::DynamoDB::Table":"dynamodb:PutItem","AWS::SNS::Topic":"sns:Publish","AWS::SQS::Queue":"sqs:SendMessage"}[un.type],res=un.type==="AWS::S3::Bucket"?arnOf(u)+"/uploads/item.json":arnOf(u);
       const e=role?evalRole(role,act,res):{allow:false,by:"instance chưa có IAM role, hãy nối EC2 tới một role"};if(!e.allow){errW=w;why=`AccessDenied: ${act} (${e.by})`;flow(id,u,"uses",okW,why);continue}
@@ -153,10 +154,12 @@ function handle(ev,T1){RT.ops++;
     case"s3":{const r=s3Op(ev);const src=ev.data&&ev.data.client;if(src){bump(src,r.ok?"ok":"err",ev.w);if(!r.ok)nrt(src).lastErr=r.err;if(r.ok&&r.e&&r.e.leak)bump(src,"leak",ev.w)}return}
     case"pub":publish(ev);return;
     case"ddb":if(!exists(ev.to)){flow(ev.from,ev.to,"uses",ev.w,"ResourceNotFound");return}RT.items[ev.to]=(RT.items[ev.to]||0)+ev.w;bump(ev.to,"wr",ev.w);charge(ev.to,ev.w*PRICE.ddbWrite,"ghi");flow(ev.from,ev.to,"uses",ev.w);return;
+    case"ws":if(typeof wsRun==="function")wsRun(ev,TICK_DT||1);return;
     case"sqs":if(!exists(ev.to))return;bump(ev.to,"sent",ev.w);charge(ev.to,ev.w*PRICE.sqsReq,"request");if(ev.from)flow(ev.from,ev.to,ev.kind,ev.w);RT.items[ev.to]=(RT.items[ev.to]||0)+ev.w;return}}
 /* ---------------- sources, schedules, alarms, budgets ---------------- */
 const rateOf=s=>{const m=/rate\((\d+)\s*(minute|minutes|hour|hours|day|days)\)/.exec(s||"");if(!m)return 0;return 1/(+m[1]*({minute:60,minutes:60,hour:3600,hours:3600,day:86400,days:86400})[m[2]])};
-function sources(t0,dt){for(const n of allNodes()){let rate=0;
+function sources(t0,dt){RT.wsConn={};for(const n of allNodes()){let rate=0;
+    if(n.type==="CloudLab::Client"&&n.props.Protocol==="websocket"){const tg=refId(n.props.Target),c=+n.props.Connections||0;if(tg&&c>0){bump(n.id,"sent",0);push({at:t0+dt/2,to:tg,from:n.id,kind:"calls",w:c,type:"ws"})}continue}
     if(n.type==="CloudLab::Client")rate=+n.props.RatePerSecond||0;else if(n.type==="CloudLab::Uploader")rate=(+n.props.PerHour||0)/3600;else if(n.type==="AWS::Events::Rule"&&exists(n.id)&&n.props.State!=="DISABLED")rate=rateOf(n.props.ScheduleExpression);
     if(!rate)continue;const a=(RT.acc[n.id]||0)+rate*dt,c=Math.floor(a);RT.acc[n.id]=a-c;if(!c)continue;fire(n,c,t0+dt/2)}
   /* queues drained by event source mappings */
@@ -173,7 +176,7 @@ function periodic(t0,dt){const t1=t0+dt,h=dt/3600,zones=new Set();
     if(n.type==="AWS::EC2::Instance"){charge(n.id,(PRICE.ec2[p.InstanceType]||0.0132)*h,"giờ chạy");const s=subnetsOf(n)[0];if(!s||isPublicSubnet(s))charge(n.id,PRICE.ipv4H*h,"IPv4 public")}
     if(n.type==="AWS::ElasticLoadBalancingV2::LoadBalancer"){charge(n.id,PRICE.albH*h,"giờ chạy");if(p.Scheme!=="internal")charge(n.id,PRICE.ipv4H*Math.max(2,subnetsOf(n).length)*h,"IPv4 public");const rate=(nrt(n.id).tk.req||0)/dt;charge(n.id,Math.max(rate/25,0)*PRICE.albLCU*h,"LCU")}
     if(n.type==="AWS::RDS::DBInstance"){charge(n.id,(PRICE.rds[p.DBInstanceClass]||0.028)*(p.MultiAZ===true?2:1)*h,"giờ chạy");charge(n.id,(+p.AllocatedStorage||20)*PRICE.rdsGB*dt/MONTH*(p.MultiAZ===true?2:1),"lưu trữ")}
-    if(n.type==="AWS::ElastiCache::CacheCluster")charge(n.id,(PRICE.cache[p.CacheNodeType]||0.026)*(+p.NumCacheNodes||1)*h,"giờ chạy");
+    if(n.type==="AWS::ElastiCache::CacheCluster")charge(n.id,(PRICES.aws.cacheNode[p.CacheNodeType]||PRICE.cache[p.CacheNodeType]||0.026)*(+p.NumCacheNodes||1)*h,"giờ chạy");
     if(n.type==="AWS::Route53::RecordSet"&&!zones.has(p.HostedZoneName)){zones.add(p.HostedZoneName);charge(n.id,PRICE.r53Zone*dt/MONTH,"hosted zone")}
     if(n.type==="AWS::S3::Bucket"){const gb=Object.values(RT.obj[n.id]||{}).reduce((s,o)=>s+o.kb*o.n,0)/1048576;charge(n.id,gb*PRICE.s3GBmo*dt/MONTH,"lưu trữ");nrt(n.id).gb=gb}
     if(n.type==="AWS::CloudWatch::Alarm"){charge(n.id,PRICE.alarmMo*dt/MONTH,"alarm");const a=RT.alarms[n.id]||(RT.alarms[n.id]={state:"OK",next:t0+(+n.props.Period||60),base:null});

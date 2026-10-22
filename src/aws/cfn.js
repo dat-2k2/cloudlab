@@ -44,7 +44,7 @@ function edges(){const out=[],seen=new Set(),add=e=>{const k=e.from+">"+e.to+">"
 const BASE_ID={"AWS::Lambda::Function":"Function","AWS::S3::Bucket":"Bucket","AWS::IAM::Role":"Role","AWS::SNS::Topic":"Topic","AWS::SQS::Queue":"Queue","AWS::DynamoDB::Table":"Table","AWS::ApiGatewayV2::Api":"Api",
   "AWS::Events::Rule":"Schedule","AWS::Logs::LogGroup":"LogGroup","AWS::CloudWatch::Alarm":"Alarm","AWS::Budgets::Budget":"Budget","AWS::S3::BucketPolicy":"BucketPolicy","AWS::Lambda::EventSourceMapping":"Mapping",
   "CloudLab::Client":"Client","CloudLab::Uploader":"Uploader","CloudLab::Inbox":"Inbox","CloudLab::Monitor":"Monitor"};
-function addNode(type,x,y,id){const d=T[type];id=id||freeId(BASE_ID[type]||"Resource");const raw={Type:type,Properties:clone(d.defaults(id))};
+function addNode(type,x,y,id){const d=T[type];id=id||freeId(BASE_ID[type]||BASE_ID[baseType(type)]||"Resource");const raw={Type:baseType(type),Properties:clone(d.defaults(id))};
   if(d.meta)raw.Metadata={CloudLab:clone(d.meta)};
   (d.ext?M.ext:M.res)[id]=raw;M.pos[id]=[Math.round(x),Math.round(y)];return id}
 /* drop every reference to `id` (used when deleting a node) */
@@ -84,6 +84,7 @@ function connectRule(a,b){const A=nodeOf(a),B=nodeOf(b);if(!A||!B||a===b)return 
   const say=(label,apply,grant)=>({label,apply,grant});
   if(typeof CONNECT_X==="function"){const x=CONNECT_X(a,b,A,B,say);if(x)return x}
   if(typeof CONNECT_ORG==="function"){const x=CONNECT_ORG(a,b,A,B,say);if(x)return x}
+  if(typeof CONNECT_S==="function"){const x=CONNECT_S(a,b,A,B,say);if(x)return x}
   if(tb==="CloudLab::Monitor")return say("gửi số liệu tới monitor",()=>{B.props.Watch=arr(B.props.Watch);if(!B.props.Watch.some(x=>refId(x)===a))B.props.Watch.push(R(a))});
   switch(ta){
     case"CloudLab::Client":if(tb==="AWS::ApiGatewayV2::Api")return say("gửi request tới API",()=>{A.props.Target=R(b);delete A.props.Action;delete A.props.Key});

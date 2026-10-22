@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="cloudlab-app" content="gcp">
+<title>CloudLab · Google Cloud</title>
+<meta name="description" content="Học Google Cloud trong trình duyệt bằng Terraform: Cloud Run, Memorystore (Redis), Managed Kafka, RabbitMQ trên VM, WebSocket. Mỗi khối hiện giá niêm yết; mô phỏng cho thấy $300 credit dùng thử bị đốt nhanh thế nào.">
+<link rel="preload" href="../fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<script>try{var t=localStorage.getItem("cloudlab:theme");if(t)document.documentElement.dataset.theme=JSON.parse(t)}catch(_){}</script>
+<link rel="canonical" href="https://dat-2k2.github.io/cloudlab/gcp/">
+<link rel="alternate" type="text/markdown" href="llms-full.txt" title="Toàn bộ nội dung CloudLab GCP dạng văn bản">
+<link rel="alternate" type="text/html" href="learn.html" title="Nội dung bài học Google Cloud (HTML tĩnh)">
+<link rel="stylesheet" href="../../kit/layout.css">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<noscript><p>CloudLab GCP cần JavaScript để chạy editor và mô phỏng. Nội dung bài học dạng văn bản: <a href="learn.html">learn.html</a> · <a href="llms-full.txt">llms-full.txt</a>.</p></noscript>
+<div class="shell app" data-shell>
+  <header class="shell-top">
+    <button class="icon-btn" data-shell-toggle aria-controls="side" aria-label="Thu gọn / mở thanh bên">☰</button>
+    <a class="top-brand" href="https://dat-2k2.github.io/" title="Về trang chủ"><span class="mark" aria-hidden="true">D</span><span class="hide-s">Nguyen Quoc Dat</span><span class="app">/ CloudLab · Google Cloud</span></a>
+    <p class="top-crumb" id="crumb"></p>
+    <div class="top-actions">
+      <span class="chip live ok hide-s">project anphat-lab · mô phỏng</span>
+      <a class="hide-s" href="../" title="CloudLab cho AWS">AWS</a>
+      <a class="hide-s" href="../k8s/" title="CloudLab Kubernetes">Kubernetes</a>
+      <a class="hide-s" href="../pricing.html" title="So sánh giá Kafka, Redis, RabbitMQ, WebSocket">So sánh giá</a>
+      <a class="hide-s" href="https://github.com/dat-2k2/cloudlab" target="_blank" rel="noopener">GitHub ↗</a>
+      <button class="icon-btn" id="mcpBtn" aria-label="Kết nối trợ lý AI của trình duyệt (WebMCP)" title="Trợ lý AI trong trình duyệt (WebMCP)">✦</button>
+      <button class="icon-btn" id="tourBtn" aria-label="Xem hướng dẫn sử dụng" title="Hướng dẫn">?</button>
+      <button class="icon-btn" id="theme" aria-label="Đổi giao diện sáng / tối" title="Sáng / tối">☾</button>
+    </div>
+  </header>
+  <nav class="shell-side" id="side" aria-label="Bài học"></nav>
+  <main class="main">
+    <div class="stackbar" id="bar"></div>
+    <section class="work" id="work">
+      <div class="pane-canvas" id="canvas" aria-label="Canvas"></div>
+      <div class="pane-code" id="code" hidden></div>
+    </section>
+    <section class="simbar" id="simbar" aria-label="Mô phỏng"></section>
+    <section class="logp" id="log" aria-label="Event log" hidden></section>
+  </main>
+  <div class="lesson-resize" id="lessonResize" role="separator" aria-orientation="vertical" aria-controls="lesson" aria-label="Kéo để đổi độ rộng khung bài học (phím ← →)" tabindex="0"></div>
+  <aside class="lesson" id="lesson" aria-label="Bài học" aria-live="polite"></aside>
+  <footer class="shell-foot">
+    <span class="foot-l">© 2026 Nguyen Quoc Dat · <a href="../credits.html">Nguồn và bản quyền</a><span class="hide-s"> · <a href="learn.html">Bản văn bản</a> · <a href="learn.html#gemini">Dùng với Gemini</a> · <a href="../pricing.html">So sánh giá</a> · <a href="../">← CloudLab AWS</a> · <a href="https://dat-2k2.github.io/">dat-2k2.github.io</a></span></span>
+    <span class="foot-r">Google Cloud là nhãn hiệu của Google LLC; CloudLab không liên kết · mô phỏng, giá niêm yết 22/10/2026</span>
+  </footer>
+</div>
+<aside class="drawer" id="drawer" hidden></aside>
+<div id="modal"></div>
+<script src="../../kit/layout.js"></script>
+<script src="../vendor/js-yaml.min.js"></script><script src="../src/prices.js"></script>
+<!-- shared shell (../src/shell) + the Google Cloud pack (src/). Contract: ../src/shell/README.md -->
+<script src="../src/shell/core.js"></script><script src="../src/shell/model.js"></script><script src="../src/shell/sim.js"></script>
+<script src="src/hcl.js"></script><script src="src/catalog.js"></script><script src="src/model.js"></script><script src="src/sim.js"></script>
+<script src="src/lessons.js"></script><script src="src/views.js"></script><script src="src/lint.js"></script>
+<script src="../src/shell/editor.js"></script><script src="../src/shell/ui.js"></script><script src="../src/shell/webmcp.js"></script><script src="../src/shell/tour.js"></script>
+</body>
+</html>

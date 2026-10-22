@@ -9,7 +9,7 @@ const SPEEDS=[["Thời gian thật",1],["1 phút mỗi giây",60],["1 giờ mỗ
 function freshRuntime(){return Object.assign({t:0,month:1,running:false,q:[],n:{},acc:{},flow:{},why:{},total:0,stack:{status:"NOT_DEPLOYED"},seq:0,ops:0},DOMAIN.runtime?DOMAIN.runtime():{})}
 const nrt=id=>RT.n[id]||(RT.n[id]={cost:0,m:{},tk:{},series:[],last:null});
 function bump(id,k,w){const r=nrt(id);r.m[k]=(r.m[k]||0)+w;r.tk[k]=(r.tk[k]||0)+w}
-function charge(id,usd,what){if(!usd)return;const r=nrt(id);r.cost+=usd;r.tk.cost=(r.tk.cost||0)+usd;RT.total+=usd;r.costBy=r.costBy||{};r.costBy[what]=(r.costBy[what]||0)+usd}
+function charge(id,usd,what){if(!usd)return;const r=nrt(id);r.cost+=usd;r.tk.cost=(r.tk.cost||0)+usd;RT.total+=usd;RT.spent=(RT.spent||0)+usd;r.costBy=r.costBy||{};r.costBy[what]=(r.costBy[what]||0)+usd}
 function flow(a,b,kind,w,err){const k=a+">"+b+">"+kind,f=RT.flow[k]||(RT.flow[k]={ok:0,err:0,tot:0,tk:0,tke:0});if(err){f.err+=w;f.tke+=w;RT.why[k]=err}else{f.ok+=w;f.tk+=w}f.tot+=w}
 function push(ev){RT.q.push(ev)}
 let TICK_DT=1;
@@ -24,6 +24,12 @@ function step(dt,noSources){TICK_DT=dt;const t0=RT.t,t1=t0+dt;for(const k in RT.
 /* run everything queued now (manual actions while paused), without starting sources */
 function drain(){let g=0;const t=RT.t;while(RT.q.length&&g<400){RT.q.sort((a,b)=>a.at-b.at);const ev=RT.q.shift();if(ev.at>t+120)ev.at=t;handle(ev,t+120);g++}}
 function inject(n,c){fire(n,c||1,RT.t);drain()}
+/* list price of a block: def.price(n) → {h: fixed USD per hour, parts:[[label, USD/h]], usage:[text], note} or null.
+   Fixed = what you pay for it existing (instance hours, minimum capacity); usage = per request / GB, charged as it happens. */
+const HOURS_MO=730;
+function priceOf(n){const f=n&&(n.def.price||(T[n.type]||{}).price);if(!f)return null;try{return f(n)||null}catch(_){return null}}
+/* fixed hourly price of everything deployed (or, before the first deploy, of everything declared) */
+function fixedRate(){const up=stackUp();let h=0;for(const n of allNodes()){if(n.ext||n.scope==="manual"&&!up)continue;if(up&&!exists(n.id))continue;const p=priceOf(n);if(p)h+=p.h||0}return h}
 /* the monthly run-rate the meter shows next to the total */
 function rateNow(){let s=0,dt=0;for(const id in RT.n){const L=RT.n[id].series;if(!L.length)continue;const last=L.slice(-8);s+=last.reduce((a,x)=>a+(x.cost||0),0);dt=Math.max(dt,last.reduce((a,x)=>a+x.dt,0))}return dt?s/dt*3600:0}
 /* probe: run a callback against a throw-away copy of the template + runtime (task checks) */

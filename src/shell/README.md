@@ -11,6 +11,7 @@ A **domain pack** teaches one platform. Two exist:
 |---|---|---|
 | AWS (CloudFormation) | `/cloudlab/` | `src/aws/*` |
 | Kubernetes (manifests) | `/cloudlab/k8s/` | `k8s/src/*` |
+| Google Cloud (Terraform) | `/cloudlab/gcp/` | `gcp/src/*` (own HCL reader / writer in `gcp/src/hcl.js`) |
 
 All files are classic scripts sharing globals. A page loads, in order:
 
@@ -85,3 +86,14 @@ descriptions keyed `tool` or `tool.param`, e.g. `load_template.yaml`), `guide()`
 `tools/export-text.js` (AWS: `llms.txt`, `llms-full.txt`, `learn.html`, `credits.html`) and `tools/export-k8s.js`
 (`k8s/llms.txt`, `k8s/llms-full.txt`, `k8s/learn.html`) load the pack in Node and write the lessons, the component
 explanations and the Gemini guide as plain files. `build.py` runs both.
+
+## Variants, prices, credit
+
+- **Variants.** A catalog entry can show as another: `def.variant(props)` returns a key of `T` (for example the HTTP API
+  shown as `AWS::ApiGatewayV2::Api#ws` when `ProtocolType` is `WEBSOCKET`; a VM shown as RabbitMQ when `labels.app` is
+  `rabbitmq`). A palette-only entry carries `alias: <real type>`; packs create it as the real type (`baseType(t)`).
+- **List prices.** `def.price(n)` → `{h, parts:[[label, USD/h]], usage:[text], note}`: the block row shows $/hour and
+  $/month, the inspector a "Giá niêm yết" section, and the meter the fixed rate of everything deployed (or declared,
+  before the first deploy). Prices live in `src/prices.js` (shared with `tools/export-pricing.js` → `pricing.html`).
+- `RT.spent` is cumulative spend across months (`RT.total` resets monthly). `DOMAIN.meterExtra()` adds a line under the
+  meter (the GCP free-trial credit). `TX("codeName")` names the code pane (`YAML` by default, `Terraform` on GCP).

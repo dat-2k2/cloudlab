@@ -11,7 +11,7 @@ function problems(){const out=[],P=(sev,id,msg)=>out.push({sev,id,msg});if(!M)re
       case"AWS::Lambda::Function":if(!refId(p.Role))P("error",n.id,`${n.id}: Lambda cần execution role. Nối function tới một IAM role`);else{const need=+(getP(n.raw,"Metadata.CloudLab.WorkMs")||300)*128/(+p.MemorySize||128);if(need>(+p.Timeout||3)*1000)P("warn",n.id,`${n.id}: code cần ~${Math.round(need)} ms nhưng Timeout chỉ ${p.Timeout||3} s → sẽ timeout. Tăng Timeout hoặc Memory`)}
         {const outB=Object.values(getP(p,"Environment.Variables")||{}).map(refId).find(x=>x&&(nodeOf(x)||{}).type==="AWS::S3::Bucket");if(outB){const nb=nodeOf(outB);const hit=arr(getP(nb.props,"NotificationConfiguration.LambdaConfigurations")).find(c=>refId(c.Function)===n.id);
           if(hit){const rules=arr(getP(hit,"Filter.S3Key.Rules")),pre=(rules.find(r=>/prefix/i.test(r.Name))||{}).Value||"",op=getP(p,"Environment.Variables.OUTPUT_PREFIX")||"";if(!pre||String(op).startsWith(pre))P("error",n.id,`${n.id} ghi vào ${outB} đúng chỗ đang kích hoạt nó → vòng lặp vô tận. Ghi ra prefix khác và lọc trigger`)}}}break;
-      case"AWS::ApiGatewayV2::Api":if(!targetOf(p.Target))P("warn",n.id,`${n.id}: chưa có integration nên mọi request trả 404. Nối API tới một Lambda`);break;
+      case"AWS::ApiGatewayV2::Api":if(p.ProtocolType!=="WEBSOCKET"&&!targetOf(p.Target))P("warn",n.id,`${n.id}: chưa có integration nên mọi request trả 404. Nối API tới một Lambda`);break;
       case"AWS::ElasticLoadBalancingV2::LoadBalancer":{const ss=subnetsOf(n),azs=new Set(ss.map(s=>(nodeOf(s)||{props:{}}).props.AvailabilityZone));
         if(ss.length<2||azs.size<2)P("error",n.id,`${n.id}: Application Load Balancer cần ít nhất 2 subnet ở 2 Availability Zone khác nhau`);
         if(!sgsOf(n.id).length)P("warn",n.id,`${n.id}: chưa gắn security group`);
@@ -36,4 +36,5 @@ function problems(){const out=[],P=(sev,id,msg)=>out.push({sev,id,msg});if(!M)re
   for(const[id,r]of Object.entries(M.ext||{})){const d=r&&T[r.Type];if(!d){P("warn",id,`${id}: loại ${r&&r.Type} không có. Dùng một trong: ${Object.keys(T).filter(k=>k.startsWith("CloudLab::")).join(", ")}`);continue}
     const ok=new Set(d.fields.map(f=>f.k)),bad=Object.keys(r.Properties||{}).filter(k=>!ok.has(k));if(bad.length)P("warn",id,`${id}: thuộc tính ${bad.join(", ")} không được hỗ trợ nên bị bỏ qua. ${d.label} dùng: ${[...ok].join(", ")}`)}
   if(typeof orgProblems==="function")orgProblems(P);
+  if(typeof streamProblems==="function")streamProblems(P);
   const order={error:0,warn:1,info:2};return out.sort((a,b)=>order[a.sev]-order[b.sev])}

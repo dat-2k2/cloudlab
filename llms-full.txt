@@ -30,10 +30,10 @@ Yêu cầu:
 - Vùng mô phỏng: ap-southeast-2. Không mô phỏng route table, NAT gateway và traffic đi ra; public subnet = MapPublicIpOnLaunch: true và VPC có internet gateway gắn vào.
 - Phần chỉ dành cho mô phỏng nằm trong Metadata.CloudLab và được bỏ khi xuất ra AWS.
 
-Loại tài nguyên AWS được hỗ trợ: AWS::ApiGatewayV2::Api, AWS::Lambda::Function, AWS::IAM::Role, AWS::S3::Bucket, AWS::S3::BucketPolicy, AWS::DynamoDB::Table, AWS::SNS::Topic, AWS::SQS::Queue, AWS::Lambda::EventSourceMapping, AWS::Events::Rule, AWS::Logs::LogGroup, AWS::CloudWatch::Alarm, AWS::Budgets::Budget, AWS::EC2::VPC, AWS::EC2::Subnet, AWS::EC2::InternetGateway, AWS::EC2::VPCGatewayAttachment, AWS::EC2::SecurityGroup, AWS::EC2::Instance, AWS::IAM::InstanceProfile, AWS::ElasticLoadBalancingV2::LoadBalancer, AWS::ElasticLoadBalancingV2::TargetGroup, AWS::ElasticLoadBalancingV2::Listener, AWS::CloudFront::Distribution, AWS::Route53::RecordSet, AWS::RDS::DBInstance, AWS::RDS::DBSubnetGroup, AWS::ElastiCache::CacheCluster, AWS::Organizations::Organization, AWS::Organizations::OrganizationalUnit, AWS::Organizations::Account, AWS::Organizations::Policy, AWS::ControlTower::LandingZone, AWS::ControlTower::EnabledBaseline, AWS::ControlTower::EnabledControl.
+Loại tài nguyên AWS được hỗ trợ: AWS::ApiGatewayV2::Api, AWS::Lambda::Function, AWS::IAM::Role, AWS::S3::Bucket, AWS::S3::BucketPolicy, AWS::DynamoDB::Table, AWS::SNS::Topic, AWS::SQS::Queue, AWS::Lambda::EventSourceMapping, AWS::Events::Rule, AWS::Logs::LogGroup, AWS::CloudWatch::Alarm, AWS::Budgets::Budget, AWS::EC2::VPC, AWS::EC2::Subnet, AWS::EC2::InternetGateway, AWS::EC2::VPCGatewayAttachment, AWS::EC2::SecurityGroup, AWS::EC2::Instance, AWS::IAM::InstanceProfile, AWS::ElasticLoadBalancingV2::LoadBalancer, AWS::ElasticLoadBalancingV2::TargetGroup, AWS::ElasticLoadBalancingV2::Listener, AWS::CloudFront::Distribution, AWS::Route53::RecordSet, AWS::RDS::DBInstance, AWS::RDS::DBSubnetGroup, AWS::ElastiCache::CacheCluster, AWS::Organizations::Organization, AWS::Organizations::OrganizationalUnit, AWS::Organizations::Account, AWS::Organizations::Policy, AWS::ControlTower::LandingZone, AWS::ControlTower::EnabledBaseline, AWS::ControlTower::EnabledControl, AWS::MSK::Cluster, AWS::MSK::ServerlessCluster, AWS::ElastiCache::ServerlessCache, AWS::AmazonMQ::Broker, AWS::ApiGatewayV2::Api#ws, AWS::ApiGatewayV2::Integration, AWS::ApiGatewayV2::Route, AWS::ApiGatewayV2::Stage.
 
 Nguồn tải và người nhận bên ngoài AWS (đặt trong Metadata.CloudLab.External ở cấp template, mỗi mục có Type và Properties):
-- CloudLab::Client (Client / người dùng): Target, RatePerSecond, Action, Key, Port, SourceIp, As, Expect
+- CloudLab::Client (Client / người dùng): Target, Protocol, RatePerSecond, Connections, MessagesPerMinute, Action, Key, Port, SourceIp, As, Expect
 - CloudLab::Uploader (Uploader): Target, PerHour, Prefix, Suffix, SizeKB
 - CloudLab::Inbox (Hộp thư email): Address
 - CloudLab::Monitor (Monitor / dashboard): Watch
@@ -45,6 +45,8 @@ Metadata.CloudLab theo từng loại tài nguyên:
 - AWS::ElastiCache::CacheCluster: HitRatio
 - AWS::Organizations::Account: Origin, ExecutionRole, LegacyConfigRecorder, LegacyTrail
 - AWS::ControlTower::LandingZone: Drift
+- AWS::MSK::ServerlessCluster: Partitions
+- AWS::ElastiCache::ServerlessCache: DataGB, HitRatio
 
 Ví dụ hoàn chỉnh (API Gateway → Lambda → DynamoDB có khách gửi request):
 
@@ -614,6 +616,58 @@ AWS docs: Guidance for creating and modifying AWS Control Tower resources
 HCLTech: AWS migration from landing zone to Control Tower and CloudOps 
 Scale Factory: When Control Tower drifts
 
+## Bài 14: Bảng tỷ giá realtime qua WebSocket API
+
+Nhóm: Realtime & messaging · Chủ đề: API Gateway WebSocket
+
+**Mục tiêu:** Khách nhận được giá mới đẩy xuống; Lambda chỉ có đúng quyền đẩy tin vào API này; chi phí WebSocket không quá $200/tháng.
+
+**Tình huống:** App mobile mới có bảng tỷ giá cập nhật tức thì cho 2.000 khách. Mở bảng thì có kết nối nhưng không thấy giá nào nhảy. Bên tài chính hỏi thêm: ước tính tiền API Gateway mỗi tháng là bao nhiêu?
+
+**Nhiệm vụ:**
+1. Khách nhận được giá mới (Lambda đẩy tin xuống kết nối không bị AccessDenied.)
+2. Lambda chỉ đẩy tin vào đúng API này (Có execute-api:ManageConnections trên API fx-rates; không có execute-api:* trên mọi API.)
+3. WebSocket ≤ $200/tháng (Chạy 30 phút mô phỏng, quy ra tháng; vẫn đủ 2.000 khách.)
+
+**Các khối trong template:**
+- Customers: 2.000 khách mở bảng tỷ giá, mỗi người nhận 12 lần cập nhật mỗi phút.
+- RateSocket: WebSocket API: giữ kết nối với từng khách. Tính tiền theo phút-kết nối và theo từng message.
+- RateFn: Lambda đẩy tỷ giá mới xuống mọi kết nối qua @connections API.
+- RateRole: Role của Lambda: mới có quyền ghi log.
+
+**Khái niệm:** WebSocket API, route $default, @connections API, execute-api:ManageConnections, giá theo phút-kết nối và message
+
+**Gợi ý:** Bấm ▶ Chạy, bấm mũi tên RateSocket → RateFn: lỗi AccessDenied khi Lambda đẩy tin. Nối RateSocket → RateFn để CloudLab đề nghị cấp execute-api:ManageConnections, hoặc thêm statement đó vào RateRole với Resource là API này (!Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RateSocket}/*). Xem Giá niêm yết của RateSocket: tiền chủ yếu nằm ở số message. Tỷ giá ngân hàng chỉ đổi mỗi phút: đẩy 1 lần/phút thay vì 12.
+
+**Sau khi đạt:** API Gateway WebSocket tính tiền theo phút-kết nối và từng message, nên chi phí tăng theo số khách × tần suất đẩy. Đẩy ít mà đúng lúc (khi giá thật sự đổi) quan trọng hơn chọn dịch vụ. Trên Google Cloud, Cloud Run tính theo instance giữ kết nối thay vì theo message: xem trang So sánh giá.
+
+## Bài 15: Hàng đợi lệnh: Amazon MQ và MSK
+
+Nhóm: Realtime & messaging · Chủ đề: Amazon MQ + MSK
+
+**Mục tiêu:** Lệnh đặt đi qua cả hàng đợi và luồng kiểm toán; broker chỉ mở cho app; tiền messaging cố định của môi trường thử nghiệm ≤ $250/tháng.
+
+**Tình huống:** App đặt lệnh đẩy lệnh vào RabbitMQ (Amazon MQ) và ghi nhật ký vào Kafka cho bộ phận kiểm toán. Lệnh nào cũng lỗi, và bảng ước tính chi phí cho môi trường thử nghiệm đã gần $1.500/tháng.
+
+**Nhiệm vụ:**
+1. Chỉ app vào được broker (BrokerSg mở 5671 (AMQPS) và 9098 (Kafka IAM) từ AppSg, không mở cho 0.0.0.0/0.)
+2. Lệnh đặt thành công (Hơn 95% request qua cả hàng đợi và Kafka.)
+3. Messaging cố định ≤ $250/tháng (Tổng giá niêm yết của broker RabbitMQ và Kafka; vẫn có cả hai.)
+
+**Các khối trong template:**
+- Traders: Nhà đầu tư đặt lệnh, 50 lệnh mỗi giây.
+- OrderApp: App đặt lệnh: đẩy lệnh vào RabbitMQ, ghi một bản vào Kafka cho kiểm toán.
+- Orders: Amazon MQ for RabbitMQ: đang là cluster 3 × mq.m5.large ở 3 AZ.
+- Audit: MSK Serverless: Kafka không chọn broker, có phí cluster-giờ.
+- BrokerSg: Security group của cả hai broker: chưa có inbound rule nào.
+- AppRole: Role của app: được ghi vào Kafka (IAM).
+
+**Khái niệm:** Amazon MQ for RabbitMQ (AMQPS 5671), MSK provisioned vs Serverless, security group theo nguồn, giá cố định theo giờ
+
+**Gợi ý:** Bấm ▶ Chạy rồi bấm mũi tên OrderApp → Orders: security group chặn. Nối OrderApp → Orders và OrderApp → Audit để CloudLab đề nghị mở đúng cổng từ AppSg. Xem Giá niêm yết: cluster 3 × mq.m5.large và MSK Serverless (phí cluster-giờ) là cỡ production. Môi trường thử: một node mq.m7g.medium, Kafka 2 broker kafka.t3.small.
+
+**Sau khi đạt:** Messaging được quản lý trả theo giờ chạy, có hay không có message. Cỡ production (cluster 3 AZ, Serverless) là để chịu lỗi và tải lớn; môi trường thử dùng cỡ nhỏ nhất rồi tắt khi không dùng. Còn mạng: broker nằm ở private subnet, security group chỉ nhận đúng cổng từ security group của app.
+
 ## Thành phần AWS (giải thích bằng ví dụ ngân hàng)
 
 ### Client / người dùng (CloudLab::Client)
@@ -849,3 +903,33 @@ Register một OU: Control Tower bật baseline AWSControlTowerBaseline trên OU
 Một quy định cụ thể áp lên khối: loại phát hiện (báo cáo vi phạm) hoặc loại ngăn chặn (chặn hẳn).
 
 Một control (guardrail) bật trên OU. Detective chỉ báo vi phạm; preventive chặn hẳn bằng SCP. Bật preventive sau khi đã enroll xong và đo tác động của từng cái.
+
+### Amazon MSK (Kafka) (AWS::MSK::Cluster)
+
+Sổ cái giao dịch ghi liên tục mà nhiều phòng ban cùng đọc lại được (chống gian lận, đối soát, báo cáo). Thuê cả đội ghi sổ theo giờ, có việc hay không cũng trả lương.
+
+Apache Kafka do AWS vận hành: bạn chọn loại và số broker (bội số của số subnet / AZ), AWS lo cài đặt, bản sao, vá lỗi. Tính theo broker-giờ + GB ổ đĩa mỗi broker, chạy suốt kể cả khi không có message. Client trong VPC kết nối cổng 9098 (xác thực IAM).
+
+### MSK Serverless (AWS::MSK::ServerlessCluster)
+
+Sổ cái thuê theo lượng ghi: không chọn số người ghi sổ, nhưng vẫn trả phí mở sổ mỗi giờ.
+
+Kafka không phải chọn broker: tự co giãn, trả theo giờ cluster + giờ mỗi partition + GB vào / ra. Chỉ xác thực IAM. Rẻ hơn MSK có broker khi lưu lượng nhỏ, nhưng vẫn có phí cluster-giờ chạy suốt.
+
+### ElastiCache Serverless (AWS::ElastiCache::ServerlessCache)
+
+Bảng tra nhanh thuê theo số trang đang dùng và số lần tra, không phải thuê nguyên một cái bàn.
+
+Cache Valkey hoặc Redis OSS không phải chọn node: trả theo GB dữ liệu đang lưu mỗi giờ (có mức tối thiểu) và theo ECPU (đơn vị tính cho mỗi lệnh). Valkey rẻ hơn Redis OSS và có mức tối thiểu thấp hơn.
+
+### Amazon MQ (RabbitMQ) (AWS::AmazonMQ::Broker)
+
+Phòng văn thư nhận và chuyển công văn giữa các phòng ban, có người trực do AWS cử: không lo mất công văn khi một phòng bận.
+
+RabbitMQ do AWS vận hành: AWS lo cài đặt, vá lỗi, sao lưu cấu hình. Một node mq.m7g.medium để học (mq.t3.micro không tạo mới được nữa); cluster 3 node ở 3 AZ cho production. Tính theo broker-giờ + GB lưu message. Cổng 5671 (AMQPS).
+
+### API Gateway (WebSocket) (AWS::ApiGatewayV2::Api#ws)
+
+Tổng đài giữ máy để đọc tỷ giá liên tục cho khách: tính tiền theo số phút khách giữ máy và số lần đọc.
+
+Giữ kết nối hai chiều với trình duyệt / app: server đẩy dữ liệu xuống mà khách không phải hỏi lại. Tính theo phút-kết nối và số message (mỗi 32 KB là một message). Kết nối tối đa 2 giờ, im lặng 10 phút là bị đóng. Lambda đẩy tin xuống qua @connections API (cần quyền execute-api:ManageConnections).

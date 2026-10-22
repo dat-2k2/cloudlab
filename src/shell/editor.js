@@ -14,7 +14,9 @@ function nodeView(n){const r=RT.n[n.id]||{m:{},tk:{},series:[]},m=r.m,p=n.props,
   if(n.def.view){const s2=n.def.view(n,rows,cx);if(s2)st=s2}
   if(n.scope==="manual")st=DOMAIN.manualStatus?DOMAIN.manualStatus(n):["warn",TX("manualShort")];
   else if(!up&&!n.ext)st=["off",RT.stack.status==="DELETE_COMPLETE"?TX("ghostDeleted"):TX("ghostNew")];
-  const cost=r.cost||0,out=rows.slice(0,cost>0?3:4);if(cost>0)out.push(["Chi phí",money(cost),"cost"]);return{st,rows:out,cost,ghost:!up&&!n.ext}}
+  const cost=r.cost||0,pr=n.ext?null:priceOf(n),ph=pr&&pr.h>0?pr.h:0,show=cost>0||ph>0,out=rows.slice(0,show?3:4);
+  if(cost>0)out.push(["Chi phí",money(cost)+(ph?` · ${money(ph)}/giờ`:""),"cost"]);else if(ph)out.push(["Giá",`${money(ph)}/giờ · ${money(ph*HOURS_MO)}/tháng`,"cost"]);
+  return{st,rows:out,cost,ghost:!up&&!n.ext}}
 function gH(n,v){return GHEAD+(v.rows.length?19+v.rows.length*20:0)}
 /* edge look from what the simulation saw this tick and before */
 function edgeView(e){const f=RT.flow[e.id],from=nodeOf(e.from),style=(REL[e.kind]||{style:"role"}).style;let st="idle",label=e.label||"",why=RT.why[e.id]||"";

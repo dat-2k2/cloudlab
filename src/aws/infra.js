@@ -5,7 +5,7 @@
 const AZS=["ap-southeast-2a","ap-southeast-2b","ap-southeast-2c"];
 const EC2_TYPES={"t3.micro":{cap:40,vcpu:2,mem:1},"t3.small":{cap:80,vcpu:2,mem:2},"t3.medium":{cap:160,vcpu:2,mem:4},"m5.large":{cap:320,vcpu:2,mem:8},"c5.large":{cap:380,vcpu:2,mem:4}};
 const RDS_TYPES={"db.t3.micro":{qps:300},"db.t3.small":{qps:600},"db.t3.medium":{qps:1200},"db.m5.large":{qps:3000}};
-const CACHE_TYPES={"cache.t3.micro":{},"cache.t3.small":{}};
+const CACHE_TYPES={"cache.t4g.micro":{},"cache.t4g.small":{},"cache.t3.micro":{},"cache.t3.small":{}};
 const AL2023="{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}";
 Object.assign(REL,{contains:{style:"role"},attaches:{style:"role"},secured:{style:"role"},allows:{style:"grant"},forwards:{style:"flow"},listens:{style:"flow"},origin:{style:"flow"},alias:{style:"flow"}});
 const nameTag=id=>[{Key:"Name",Value:kebab(id)}];
@@ -40,7 +40,7 @@ def("AWS::EC2::Instance",{label:"EC2 instance",short:"EC2",cat:"comp",
   defaults:id=>({InstanceType:"t3.micro",ImageId:AL2023,SubnetId:null,SecurityGroupIds:[],Tags:nameTag(id)}),meta:{AppPort:80,Uses:[]},name:p=>tagName(p),
   fields:[{k:"InstanceType",label:"Instance type",type:"select",options:Object.keys(EC2_TYPES),help:"t3.micro ≈ 40 request/giây trong CloudLab."},{k:"SubnetId",label:"Subnet",type:"ref",to:["AWS::EC2::Subnet"]},
     {k:"SecurityGroupIds",label:"Security group",type:"refs",to:["AWS::EC2::SecurityGroup"],att:"GroupId"},{k:"@AppPort",label:"App lắng nghe cổng",type:"number",min:1,max:65535},
-    {k:"@Uses",label:"App gọi tới",type:"refs",to:["AWS::RDS::DBInstance","AWS::ElastiCache::CacheCluster","AWS::S3::Bucket","AWS::DynamoDB::Table","AWS::SNS::Topic","AWS::SQS::Queue"],meta:true,help:"Mỗi request vào app sẽ gọi các tài nguyên này (RDS/ElastiCache qua mạng + security group; S3/DynamoDB/SNS/SQS qua IAM role của instance)."}],
+    {k:"@Uses",label:"App gọi tới",type:"refs",to:["AWS::RDS::DBInstance","AWS::ElastiCache::CacheCluster","AWS::ElastiCache::ServerlessCache","AWS::MSK::Cluster","AWS::MSK::ServerlessCluster","AWS::AmazonMQ::Broker","AWS::S3::Bucket","AWS::DynamoDB::Table","AWS::SNS::Topic","AWS::SQS::Queue"],meta:true,help:"Mỗi request vào app sẽ gọi các tài nguyên này (RDS/ElastiCache qua mạng + security group; S3/DynamoDB/SNS/SQS qua IAM role của instance)."}],
   rel:{SubnetId:{kind:"contains",label:""},"SecurityGroupIds.*":{kind:"secured",label:"SG"},IamInstanceProfile:{kind:"assumes",label:"instance role"}}});
 def("AWS::IAM::InstanceProfile",{label:"Instance profile",short:"IP",cat:"sec",edge:true,doc:"Gói một IAM role để gắn vào EC2.",defaults:()=>({Roles:[]}),proxy:p=>refId(arr(p.Roles)[0])});
 def("AWS::ElasticLoadBalancingV2::LoadBalancer",{label:"Application Load Balancer",short:"ALB",cat:"infra",
@@ -89,7 +89,8 @@ function subnetsOf(n){if(!n)return[];switch(n.type){
   case"AWS::EC2::Instance":return[refId(n.props.SubnetId)].filter(Boolean);
   case"AWS::ElasticLoadBalancingV2::LoadBalancer":return arr(n.props.Subnets).map(refId).filter(Boolean);
   case"AWS::RDS::DBInstance":{const g=nodeOf(refId(n.props.DBSubnetGroupName));return g?arr(g.props.SubnetIds).map(refId).filter(Boolean):[]}
-  case"AWS::Lambda::Function":return arr(getP(n.props,"VpcConfig.SubnetIds")).map(refId).filter(Boolean)}return[]}
+  case"AWS::Lambda::Function":return arr(getP(n.props,"VpcConfig.SubnetIds")).map(refId).filter(Boolean)}
+  if(typeof STREAM_SUBNETS!=="undefined"&&STREAM_SUBNETS[n.type])return arr(getP(n.props,STREAM_SUBNETS[n.type])).map(refId).filter(Boolean);return[]}
 function vpcOf(n){if(!n)return null;if(n.type==="AWS::EC2::VPC")return n.id;if(["AWS::EC2::Subnet","AWS::EC2::SecurityGroup","AWS::ElasticLoadBalancingV2::TargetGroup"].includes(n.type))return refId(n.props.VpcId);
   const s=subnetsOf(n)[0];if(s)return vpcOf(nodeOf(s));const g=sgsOf(n.id)[0];return g?refId((nodeOf(g)||{props:{}}).props.VpcId):null}
 const igwOf=vpc=>Object.keys({...M.res,...M.manual}).map(nodeOf).find(x=>x&&x.type==="AWS::EC2::VPCGatewayAttachment"&&refId(x.props.VpcId)===vpc);

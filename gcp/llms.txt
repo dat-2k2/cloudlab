@@ -1,0 +1,49 @@
+# CloudLab GCP
+
+> CloudLab GCP là trang học Google Cloud chạy trong trình duyệt bằng Terraform, đặt trong bối cảnh một ngân hàng (project anphat-lab, region asia-southeast1). Người học kéo thả hoặc viết Terraform cho Cloud Run, Memorystore (Redis, Valkey), Managed Service for Apache Kafka, RabbitMQ trên VM, WebSocket trên Cloud Run, Pub/Sub; mỗi khối hiện giá niêm yết theo giờ và tháng; mô phỏng cho thấy mạng nội bộ, firewall, quyền IAM, tải và credit dùng thử $300 bị đốt nhanh thế nào. Xuất ra main.tf sạch để terraform apply. Mô phỏng chạy hoàn toàn trong trình duyệt, không gọi Google Cloud thật.
+
+Ứng dụng: https://dat-2k2.github.io/cloudlab/gcp/
+Toàn bộ nội dung dạng văn bản: https://dat-2k2.github.io/cloudlab/gcp/llms-full.txt · bản HTML tĩnh: https://dat-2k2.github.io/cloudlab/gcp/learn.html
+So sánh giá Kafka, Redis, RabbitMQ, WebSocket giữa AWS, Google Cloud và tự cài: https://dat-2k2.github.io/cloudlab/pricing.html
+
+## Chi phí
+
+- [Bài 1: Cảnh báo trước khi đốt hết $300](https://dat-2k2.github.io/cloudlab/gcp/learn.html#credit): Budget thấy tiền credit đang bị đốt và gửi cảnh báo vào hộp thư của bạn khi tiêu tới 50% hạn mức.
+- [Bài 7: Đủ 90 ngày với $300](https://dat-2k2.github.io/cloudlab/gcp/learn.html#burn): Giữ đủ bốn dịch vụ đang chạy được cho khách, mà một ngày tốn không quá $5 (credit đủ ít nhất 60 ngày).
+
+## Nền tảng
+
+- [Bài 2: API trả 403 cho khách](https://dat-2k2.github.io/cloudlab/gcp/learn.html#public): Khách trên Internet gọi được API tỷ giá; service vẫn chỉ có đúng quyền cần thiết.
+
+## Redis
+
+- [Bài 3: Cloud Run không với tới Memorystore](https://dat-2k2.github.io/cloudlab/gcp/learn.html#redis): API đọc được Redis qua mạng nội bộ, khách gọi thành công, và Redis có cỡ hợp lý cho môi trường học.
+
+## RabbitMQ
+
+- [Bài 4: RabbitMQ trên VM: tường lửa và cỡ máy](https://dat-2k2.github.io/cloudlab/gcp/learn.html#rabbitmq): Chỉ app trong subnet nói chuyện được với RabbitMQ, VM không lộ ra Internet, và chịu được tải giờ cao điểm.
+
+## Kafka
+
+- [Bài 5: Managed Kafka: endpoint và quyền](https://dat-2k2.github.io/cloudlab/gcp/learn.html#kafka): API ghi được giao dịch vào topic Kafka bằng đúng quyền cần thiết, và bạn biết giá tối thiểu của cluster.
+
+## WebSocket
+
+- [Bài 6: Bảng giá realtime: WebSocket trên Cloud Run](https://dat-2k2.github.io/cloudlab/gcp/learn.html#websocket): Cả 3.000 khách giữ được kết nối, không bị cắt mỗi 5 phút, và service WebSocket tốn không quá $350/tháng (tính cả truyền dữ liệu ra Internet).
+
+## Dùng với Gemini
+
+- [Nhờ Gemini viết Terraform cho tình huống của bạn, rồi mở trong CloudLab GCP](https://dat-2k2.github.io/cloudlab/gcp/learn.html#gemini): định dạng, resource được hỗ trợ, giá, câu lệnh mẫu. Dán Terraform tại https://dat-2k2.github.io/cloudlab/gcp/#/import
+
+## WebMCP (cho trợ lý AI của trình duyệt)
+
+Trình duyệt có WebMCP (document.modelContext) sẽ thấy các công cụ: get_state, get_template, get_format_guide, list_lessons, get_lesson, explain_component, open_lesson, open_sandbox, load_template, add_component, connect, set_property, remove_component, run_simulation, check_lesson, export_iac (tf, terraform).
+
+## Giá và thành phần
+
+- [Giá niêm yết các cấu hình mẫu](https://dat-2k2.github.io/cloudlab/gcp/learn.html#prices)
+- [Giải thích từng tài nguyên Google Cloud bằng ví dụ ngân hàng](https://dat-2k2.github.io/cloudlab/gcp/learn.html#components)
+
+## Nguồn và bản quyền
+
+- [Bản quyền, nhãn hiệu, nguồn tham khảo](https://dat-2k2.github.io/cloudlab/credits.html). Google Cloud là nhãn hiệu của Google LLC; trang này không liên kết với Google.

@@ -31,6 +31,11 @@ Toàn bộ nội dung dạng văn bản: https://dat-2k2.github.io/cloudlab/llms
 - [Bài 12: Set up landing zone, enroll theo đợt](https://dat-2k2.github.io/cloudlab/learn.html#lz-enroll): Landing zone chạy; OU Workloads enroll 100% trước; rồi coverage 100% cả org.
 - [Bài 13: Dọn phần cũ và giữ landing zone không drift](https://dat-2k2.github.io/cloudlab/learn.html#lz-contract): Hết drift; không còn log ghi hai nơi; bật một preventive control trên Workloads.
 
+## Realtime & messaging
+
+- [Bài 14: Bảng tỷ giá realtime qua WebSocket API](https://dat-2k2.github.io/cloudlab/learn.html#wsapi): Khách nhận được giá mới đẩy xuống; Lambda chỉ có đúng quyền đẩy tin vào API này; chi phí WebSocket không quá $200/tháng.
+- [Bài 15: Hàng đợi lệnh: Amazon MQ và MSK](https://dat-2k2.github.io/cloudlab/learn.html#mqmsk): Lệnh đặt đi qua cả hàng đợi và luồng kiểm toán; broker chỉ mở cho app; tiền messaging cố định của môi trường thử nghiệm ≤ $250/tháng.
+
 ## Dùng với Gemini
 
 - [Nhờ Gemini viết template cho tình huống của bạn, rồi mở trong CloudLab](https://dat-2k2.github.io/cloudlab/learn.html#gemini): định dạng, loại tài nguyên hỗ trợ, câu lệnh mẫu. Dán template tại https://dat-2k2.github.io/cloudlab/#/import
@@ -38,6 +43,11 @@ Toàn bộ nội dung dạng văn bản: https://dat-2k2.github.io/cloudlab/llms
 ## WebMCP (cho trợ lý AI của trình duyệt)
 
 Trình duyệt có WebMCP (document.modelContext) sẽ thấy các công cụ: get_state, get_template, get_format_guide, list_lessons, get_lesson, explain_component, open_lesson, open_sandbox, load_template, add_component, connect, set_property, remove_component, run_simulation, check_lesson, export_iac. Trợ lý có thể dựng tình huống của người dùng bằng load_template rồi run_simulation.
+
+## Google Cloud và giá
+
+- [CloudLab GCP](https://dat-2k2.github.io/cloudlab/gcp/): Terraform cho Google Cloud: Cloud Run, Memorystore, Managed Kafka, RabbitMQ trên VM, WebSocket, Pub/Sub; 7 bài xoay quanh $300 credit dùng thử. Mục lục: https://dat-2k2.github.io/cloudlab/gcp/llms.txt
+- [So sánh giá Kafka, Redis, RabbitMQ, WebSocket](https://dat-2k2.github.io/cloudlab/pricing.html): AWS, Google Cloud và tự cài, giá niêm yết đọc ngày 22/10/2026.
 
 ## Kubernetes
 

@@ -112,6 +112,19 @@ Trang con [`/cloudlab/k8s/`](https://dat-2k2.github.io/cloudlab/k8s/) dùng chun
 - `k8s/src/lessons.js`, `bank.js`: 14 bài trong bối cảnh Ngân hàng An Phát, có nguồn; mẫu sandbox Internet Banking, database có PVC, canary với Gateway API
 - `k8s/src/views.js`, `lint.js`: phần giao diện riêng, panel Vấn đề, xuất manifest cho cluster thật
 
+## CloudLab Google Cloud (`gcp/`)
+
+Trang con [`/cloudlab/gcp/`](https://dat-2k2.github.io/cloudlab/gcp/): cùng shell, domain pack cho Google Cloud, viết bằng **Terraform** (provider google):
+
+- `gcp/src/hcl.js`: đọc và ghi Terraform HCL (block, nhãn, chuỗi có `${…}`, heredoc, list, map, mọi biểu thức khác giữ nguyên văn), tìm tham chiếu giữa resource
+- `gcp/src/catalog.js`: VPC, subnet, firewall, VM (và VM chạy RabbitMQ / Redis / Kafka tự cài), Cloud Run (và server WebSocket), quyền gọi Cloud Run, service account, IAM binding, Memorystore for Redis / Valkey, Managed Kafka cluster + topic, Pub/Sub, Cloud Storage, budget, notification channel; `cloudlab_client`, `cloudlab_inbox` cho mô phỏng
+- `gcp/src/model.js`: cạnh suy ra từ tham chiếu Terraform, firewall → VM theo network tag, budget → hộp thư; nối khối (biến môi trường, Direct VPC egress, gán role)
+- `gcp/src/sim.js`: Cloud Run theo concurrency (request-based / instance-based), WebSocket giữ instance, mạng nội bộ và firewall, IAM của service account, tải của VM / Kafka, giá theo giờ, free trial $300 / 90 ngày (hết thì tài nguyên dừng), budget trừ hoặc không trừ credit
+- `gcp/src/lessons.js`: 7 bài (budget và credit, Cloud Run 403, Memorystore + VPC egress, RabbitMQ trên VM, Managed Kafka + IAM, WebSocket, đủ 60 ngày với $300)
+- `gcp/src/views.js`, `lint.js`: giao diện, dòng credit dưới đồng hồ chi phí, panel Vấn đề, xuất `main.tf` sạch
+
+Giá niêm yết dùng chung ở `src/prices.js` (đọc ngày 22/10/2026 từ AWS Price List API và trang giá Google Cloud). `tools/export-pricing.js` tạo [`pricing.html`](https://dat-2k2.github.io/cloudlab/pricing.html): so sánh Kafka, Redis, RabbitMQ, WebSocket trên AWS, Google Cloud và tự cài, kèm tính $300 credit đủ bao nhiêu ngày.
+
 ## Cấu trúc
 
 CloudLab tách làm hai lớp: **shell** (editor, bố cục, khung bài học, đồng hồ mô phỏng, toàn màn hình, tour) không biết gì về AWS, và **domain pack** cho từng nền tảng. Hợp đồng giữa hai lớp (hàm toàn cục và `DOMAIN`) ghi ở [`src/shell/README.md`](src/shell/README.md).
@@ -133,7 +146,8 @@ AWS pack (`src/aws/`):
 - `org.js`: Organizations, OU, account, SCP, Control Tower (landing zone, register OU, controls), precheck enroll
 - `iam.js`: đánh giá IAM (identity policy, managed policy, bucket policy, BPA)
 - `sim.js`: deploy / xóa stack, xử lý sự kiện và request, budget, alarm, giá
-- `lessons.js`, `lessons-org.js`, `bank.js`: template mẫu, bài học FCAJ, bài landing zone, bối cảnh ngân hàng
+- `streaming.js`: Amazon MSK (có broker, Serverless), ElastiCache Serverless, Amazon MQ for RabbitMQ, API Gateway WebSocket; giá niêm yết của mọi khối
+- `lessons.js`, `lessons-org.js`, `lessons-stream.js`, `bank.js`: template mẫu, bài học FCAJ, bài landing zone, bài realtime và messaging, bối cảnh ngân hàng
 - `eli5.js`: giải thích từng thành phần bằng ví dụ ngân hàng
 - `iac.js`: xuất CloudFormation, Terraform, CDK
 - `lint.js`: panel Vấn đề

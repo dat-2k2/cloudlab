@@ -2,8 +2,13 @@
 /* "Có gì mới": the app's features and updates grouped by big feature (from the repo history on GitHub,
    dat-2k2/cloudlab), newest first inside each group. CHANGELOG_VERSION changes whenever entries are added: the
    top-bar button shows a dot until the viewer opens the dialog (seen flag in localStorage cloudlab:news). */
-const CHANGELOG_VERSION="2026-10-20e";
+const CHANGELOG_VERSION="2026-10-22a";
 const CHANGELOG=[
+  {id:"gcp",icon:"G",title:"Google Cloud, messaging và giá",sum:"Trang mới cho Google Cloud viết bằng Terraform, thêm Kafka, Redis, RabbitMQ, WebSocket cho cả AWS lẫn Google Cloud, và giá niêm yết trên từng khối.",items:[
+    ["22/10","Trang mới cloudlab/gcp: viết Terraform (provider google) hoặc kéo thả; Cloud Run, Memorystore (Redis, Valkey), Managed Kafka, RabbitMQ / Redis / Kafka tự cài trên VM, WebSocket trên Cloud Run, Pub/Sub, budget. 7 bài, xoay quanh việc học bằng $300 credit dùng thử mà không đốt hết."],
+    ["22/10","Credit dùng thử dưới đồng hồ chi phí: còn bao nhiêu, đủ bao nhiêu ngày theo mức tiêu hiện tại; hết credit hoặc hết 90 ngày thì tài nguyên dừng, như tài khoản thật. Budget mặc định trừ credit nên không báo: bài 1 dạy cách sửa."],
+    ["22/10","AWS: thêm Amazon MSK (có broker và Serverless), ElastiCache Serverless (Valkey / Redis OSS), Amazon MQ for RabbitMQ, API Gateway WebSocket; 2 bài mới (bảng tỷ giá realtime, hàng đợi lệnh)."],
+    ["22/10","Mỗi khối hiện giá niêm yết $/giờ và $/tháng ngay khi thêm vào, trước cả khi chạy; khung chi tiết tách phần cố định và phần theo lượng dùng. Trang So sánh giá: bốn dịch vụ trên AWS, Google Cloud và tự cài, kèm tính $300 đủ bao nhiêu ngày. Giá đọc từ trang giá chính thức ngày 22/10/2026."]]},
   {id:"k8s",icon:"☸",title:"CloudLab Kubernetes",sum:"Cùng giao diện, cho Kubernetes: kéo thả Deployment, Service, Ingress… hoặc viết manifest, rồi xem pod lên và request đi qua.",items:[
     ["20/10","Trang Kubernetes có bản văn bản (k8s/learn.html, llms.txt) với hướng dẫn nhờ Gemini viết manifest, và nút ✦ WebMCP: trợ lý AI của trình duyệt mở manifest, chạy mô phỏng, kiểm tra bài."],
     ["20/10","Thêm 17 loại tài nguyên: Ingress controller (ingress-nginx, AWS Load Balancer Controller), load balancer NLB / Classic, internet-facing / internal, giới hạn tốc độ theo IP, Gateway API (Gateway, HTTPRoute, canary theo trọng số), RBAC (ServiceAccount, Role, ClusterRole, RoleBinding, ClusterRoleBinding), PodDisruptionBudget, ResourceQuota, LimitRange, DaemonSet, Job, StorageClass."],

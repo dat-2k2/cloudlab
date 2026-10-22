@@ -1,0 +1,284 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CloudLab GCP · Nội dung bài học</title><meta name="description" content="CloudLab GCP là trang học Google Cloud chạy trong trình duyệt bằng Terraform, đặt trong bối cảnh một ngân hàng (project anphat-lab, region asia-southeast1). Người học kéo thả hoặc viết Terraform cho Cloud Run, Memorystore (Redis, Valkey), Managed Service for Apache Kafka, RabbitMQ trên VM, WebSocket trên Cloud Run, Pub/Sub; mỗi khối hiện giá niêm yết theo giờ và tháng; mô phỏng cho thấy mạng nội bộ, firewall, quyền IAM, tải và credit dùng thử $300 bị đốt nhanh thế nào. Xuất ra main.tf sạch để terraform apply. Mô phỏng chạy hoàn toàn trong trình duyệt, không gọi Google Cloud thật."><link rel="canonical" href="https://dat-2k2.github.io/cloudlab/gcp/learn.html"><link rel="alternate" type="text/markdown" href="llms-full.txt">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Course","name":"CloudLab GCP","description":"CloudLab GCP là trang học Google Cloud chạy trong trình duyệt bằng Terraform, đặt trong bối cảnh một ngân hàng (project anphat-lab, region asia-southeast1). Người học kéo thả hoặc viết Terraform cho Cloud Run, Memorystore (Redis, Valkey), Managed Service for Apache Kafka, RabbitMQ trên VM, WebSocket trên Cloud Run, Pub/Sub; mỗi khối hiện giá niêm yết theo giờ và tháng; mô phỏng cho thấy mạng nội bộ, firewall, quyền IAM, tải và credit dùng thử $300 bị đốt nhanh thế nào. Xuất ra main.tf sạch để terraform apply. Mô phỏng chạy hoàn toàn trong trình duyệt, không gọi Google Cloud thật.","inLanguage":"vi","url":"https://dat-2k2.github.io/cloudlab/gcp/","provider":{"@type":"Person","name":"Nguyen Quoc Dat","url":"https://dat-2k2.github.io/"},"hasPart":[{"@type":"LearningResource","name":"Bài 1: Cảnh báo trước khi đốt hết $300","description":"Budget thấy tiền credit đang bị đốt và gửi cảnh báo vào hộp thư của bạn khi tiêu tới 50% hạn mức.","url":"https://dat-2k2.github.io/cloudlab/gcp/learn.html#credit","teaches":"Free trial $300 / 90 ngày, Cloud Billing budget, credit_types_treatment, notification channel, budget chỉ báo, không chặn"},{"@type":"LearningResource","name":"Bài 2: API trả 403 cho khách","description":"Khách trên Internet gọi được API tỷ giá; service vẫn chỉ có đúng quyền cần thiết.","url":"https://dat-2k2.github.io/cloudlab/gcp/learn.html#public","teaches":"Cloud Run, roles/run.invoker, allUsers, ingress"},{"@type":"LearningResource","name":"Bài 3: Cloud Run không với tới Memorystore","description":"API đọc được Redis qua mạng nội bộ, khách gọi thành công, và Redis có cỡ hợp lý cho môi trường học.","url":"https://dat-2k2.github.io/cloudlab/gcp/learn.html#redis","teaches":"Memorystore for Redis, IP nội bộ, authorized_network, Direct VPC egress, Basic vs Standard HA"},{"@type":"LearningResource","name":"Bài 4: RabbitMQ trên VM: tường lửa và cỡ máy","description":"Chỉ app trong subnet nói chuyện được với RabbitMQ, VM không lộ ra Internet, và chịu được tải giờ cao điểm.","url":"https://dat-2k2.github.io/cloudlab/gcp/learn.html#rabbitmq","teaches":"RabbitMQ, AMQP 5672 / 15672, firewall source_ranges + target_tags, IP public, cỡ máy e2"},{"@type":"LearningResource","name":"Bài 5: Managed Kafka: endpoint và quyền","description":"API ghi được giao dịch vào topic Kafka bằng đúng quyền cần thiết, và bạn biết giá tối thiểu của cluster.","url":"https://dat-2k2.github.io/cloudlab/gcp/learn.html#kafka","teaches":"Managed Service for Apache Kafka, vCPU / RAM tối thiểu, endpoint trong subnet (PSC), roles/managedkafka.client, service account"},{"@type":"LearningResource","name":"Bài 6: Bảng giá realtime: WebSocket trên Cloud Run","description":"Cả 3.000 khách giữ được kết nối, không bị cắt mỗi 5 phút, và service WebSocket tốn không quá $350/tháng (tính cả truyền dữ liệu ra Internet).","url":"https://dat-2k2.github.io/cloudlab/gcp/learn.html#websocket","teaches":"WebSocket, request timeout (tối đa 60 phút), max_instance_request_concurrency, max_instance_count, instance-giờ"},{"@type":"LearningResource","name":"Bài 7: Đủ 90 ngày với $300","description":"Giữ đủ bốn dịch vụ đang chạy được cho khách, mà một ngày tốn không quá $5 (credit đủ ít nhất 60 ngày).","url":"https://dat-2k2.github.io/cloudlab/gcp/learn.html#burn","teaches":"giá cố định vs theo lượng dùng, Managed Kafka vs Pub/Sub vs Kafka tự cài, Memorystore Basic vs Standard HA, IP public, concurrency"}]}</script>
+<style>:root{color-scheme:light dark;--bg:#fff;--fg:#111827;--mut:#4b5563;--line:#e5e7eb;--acc:#4f46e5}@media (prefers-color-scheme:dark){:root{--bg:#0b0d12;--fg:#e5e7eb;--mut:#9ca3af;--line:#1f2937;--acc:#818cf8}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,sans-serif}main{max-width:760px;margin:0 auto;padding:24px 16px 64px}a{color:var(--acc)}h2{margin-top:40px;padding-top:16px;border-top:1px solid var(--line)}h3{margin-top:24px}.mut{color:var(--mut)}li{margin:4px 0}code{overflow-wrap:anywhere}table{border-collapse:collapse;width:100%}td,th{border-top:1px solid var(--line);padding:6px;text-align:left;vertical-align:top}td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}</style></head>
+<body><main><p><a href="./">← Mở CloudLab GCP</a> · <a href="../pricing.html">So sánh giá</a> · <a href="../learn.html">Bài học AWS</a></p><h1>CloudLab GCP · Nội dung bài học</h1><p>CloudLab GCP là trang học Google Cloud chạy trong trình duyệt bằng Terraform, đặt trong bối cảnh một ngân hàng (project anphat-lab, region asia-southeast1). Người học kéo thả hoặc viết Terraform cho Cloud Run, Memorystore (Redis, Valkey), Managed Service for Apache Kafka, RabbitMQ trên VM, WebSocket trên Cloud Run, Pub/Sub; mỗi khối hiện giá niêm yết theo giờ và tháng; mô phỏng cho thấy mạng nội bộ, firewall, quyền IAM, tải và credit dùng thử $300 bị đốt nhanh thế nào. Xuất ra main.tf sạch để terraform apply. Mô phỏng chạy hoàn toàn trong trình duyệt, không gọi Google Cloud thật.</p>
+<nav aria-label="Mục lục"><ul><li><a href="#gemini">Dùng với Gemini</a></li><li><a href="#prices">Giá niêm yết</a></li><li><a href="#credit">Bài 1: Cảnh báo trước khi đốt hết $300</a></li><li><a href="#public">Bài 2: API trả 403 cho khách</a></li><li><a href="#redis">Bài 3: Cloud Run không với tới Memorystore</a></li><li><a href="#rabbitmq">Bài 4: RabbitMQ trên VM: tường lửa và cỡ máy</a></li><li><a href="#kafka">Bài 5: Managed Kafka: endpoint và quyền</a></li><li><a href="#websocket">Bài 6: Bảng giá realtime: WebSocket trên Cloud Run</a></li><li><a href="#burn">Bài 7: Đủ 90 ngày với $300</a></li><li><a href="#components">Tài nguyên Google Cloud</a></li></ul></nav>
+<section id="gemini"><h2>Dùng CloudLab GCP với Gemini: dựng hạ tầng của riêng bạn</h2>
+<ol><li>Mở Gemini, dán câu lệnh mẫu bên dưới và thay phần [mô tả tình huống].</li><li>Gemini trả về một file Terraform.</li><li>Mở <a href="./#/import">CloudLab GCP → Dán template</a>, dán Terraform, bấm “Mở trong sandbox”. Xem giá trên từng khối; bấm ▶ Chạy để thấy traffic, lỗi, chi phí và credit còn lại.</li></ol>
+<h3>Câu lệnh mẫu</h3><pre style="white-space:pre-wrap;overflow:auto;background:var(--line);padding:12px;border-radius:8px">Bạn là kỹ sư Google Cloud. Hãy viết Terraform (provider hashicorp/google) để tôi mở trong CloudLab GCP (https://dat-2k2.github.io/cloudlab/gcp/) và mô phỏng tình huống sau:
+
+[mô tả tình huống của bạn, ví dụ: &quot;ngân hàng cần hàng đợi lệnh chuyển tiền bằng RabbitMQ, cache số dư bằng Redis, luồng giao dịch thẻ vào Kafka, bảng giá realtime qua WebSocket; tôi chỉ có $300 credit dùng thử trong 90 ngày&quot;]
+
+Yêu cầu:
+- Đọc hướng dẫn tại https://dat-2k2.github.io/cloudlab/gcp/learn.html#gemini (hoặc https://dat-2k2.github.io/cloudlab/gcp/llms-full.txt). Chỉ dùng các resource google_* được liệt kê ở đó; region asia-southeast1.
+- Thêm resource &quot;cloudlab_client&quot; (target, rate_per_second, hoặc protocol = &quot;websocket&quot; với connections, messages_per_minute) để tôi bấm Chạy là thấy traffic, và resource &quot;cloudlab_inbox&quot; để nhận cảnh báo budget.
+- App trên Cloud Run gọi Redis / Kafka / VM qua biến môi trường tham chiếu tới resource; cần vpc_access (Direct VPC egress) và service account với đúng role.
+- Có google_billing_budget với budget_filter { credit_types_treatment = &quot;EXCLUDE_ALL_CREDITS&quot; } gửi tới notification channel email.
+- Chỉ trả về một khối Terraform hoàn chỉnh, sau đó giải thích ngắn gọn từng resource và ước tính chi phí mỗi tháng bằng tiếng Việt cho người không chuyên kỹ thuật.</pre>
+<h3>Trợ lý AI trong trình duyệt (WebMCP)</h3><p>Khi trình duyệt hỗ trợ <a href="https://github.com/webmachinelearning/webmcp">WebMCP</a>, trang tự đăng ký 16 công cụ để trợ lý AI đọc và thao tác trực tiếp: đọc trạng thái, mở bài, mở Terraform (<code>load_template</code>), thêm, nối, đổi thuộc tính, chạy mô phỏng (<code>run_simulation</code>), kiểm tra bài và xuất main.tf.</p>
+<h3>Định dạng Terraform CloudLab đọc được</h3><ul><li>Terraform HCL chuẩn (provider hashicorp/google 6.x): resource &quot;loại&quot; &quot;tên&quot; { … }, block lồng nhau, tham chiếu như google_compute_network.main.id hoặc &quot;${google_redis_instance.cache.host}&quot; trong chuỗi. Mũi tên trên sơ đồ được suy ra từ các tham chiếu này.</li><li>Giữ nguyên terraform {}, provider, variable, output, data khi đọc và xuất lại; module chưa được hỗ trợ.</li><li>VM tự cài phần mềm: đặt labels = { app = &quot;rabbitmq&quot; } (hoặc redis, kafka, web) để CloudLab biết VM chạy gì và cổng nào (5672, 6379, 9092, 80).</li><li>Phần chỉ dành cho mô phỏng là resource cloudlab_client và cloudlab_inbox; tab “Cho project thật” bỏ chúng đi.</li><li>Giá niêm yết Singapore (asia-southeast1), đọc ngày 2026-10-22, chưa trừ free tier. Free trial: $300 trong 90 ngày; hết credit hoặc hết hạn thì tài nguyên dừng.</li></ul>
+<p><b>Resource được hỗ trợ:</b></p><ul><li><code>google_compute_network</code> (VPC network): <span class="mut">name</span></li><li><code>google_compute_subnetwork</code> (Subnet): <span class="mut">name, ip_cidr_range, network</span></li><li><code>google_compute_firewall</code> (Firewall rule): <span class="mut">name, network, allow, source_ranges, target_tags</span></li><li><code>google_compute_instance</code> (VM (Compute Engine)): <span class="mut">name, machine_type, zone, network_interface.subnetwork, network_interface.access_config, tags, boot_disk.initialize_params.size</span></li><li><code>google_cloud_run_v2_service</code> (Cloud Run service): <span class="mut">name, template.containers.image, template.containers.resources.limits.cpu, template.containers.resources.limits.memory, template.max_instance_request_concurrency, template.scaling.min_instance_count, template.scaling.max_instance_count, template.containers.resources.cpu_idle, template.timeout, ingress, template.containers.env, template.vpc_access, template.service_account</span></li><li><code>google_cloud_run_v2_service_iam_member</code> (Quyền gọi Cloud Run): <span class="mut">name, role, member</span></li><li><code>google_service_account</code> (Service account): <span class="mut">account_id, display_name</span></li><li><code>google_project_iam_member</code> (IAM binding (project)): <span class="mut">role, member</span></li><li><code>google_redis_instance</code> (Memorystore for Redis): <span class="mut">tier, memory_size_gb, authorized_network</span></li><li><code>google_memorystore_instance</code> (Memorystore for Valkey): <span class="mut">node_type, shard_count, replica_count, desired_auto_created_endpoints.network</span></li><li><code>google_storage_bucket</code> (Cloud Storage bucket): <span class="mut">name, location, public_access_prevention</span></li><li><code>google_managed_kafka_cluster</code> (Managed Kafka cluster): <span class="mut">capacity_config.vcpu_count, capacity_config.memory_bytes, gcp_config.access_config.network_configs.subnet</span></li><li><code>google_managed_kafka_topic</code> (Kafka topic): <span class="mut">cluster, partition_count, replication_factor</span></li><li><code>google_pubsub_topic</code> (Pub/Sub topic): <span class="mut">name</span></li><li><code>google_billing_budget</code> (Budget): <span class="mut">display_name, amount.specified_amount.units, threshold_rules, budget_filter.credit_types_treatment, all_updates_rule.monitoring_notification_channels</span></li><li><code>google_monitoring_notification_channel</code> (Notification channel): <span class="mut">display_name, labels.email_address</span></li></ul>
+<p><b>Biến thể trên canvas:</b></p><ul><li>RabbitMQ trên VM: <code>google_compute_instance</code></li><li>Redis tự cài trên VM: <code>google_compute_instance</code></li><li>Kafka tự cài trên VM: <code>google_compute_instance</code></li><li>WebSocket server (Cloud Run): <code>google_cloud_run_v2_service</code></li></ul>
+<p><b>Resource chỉ cho mô phỏng:</b></p><ul><li><code>cloudlab_client</code> (Client / người dùng): target, protocol, rate_per_second, connections, messages_per_minute, expect</li><li><code>cloudlab_inbox</code> (Hộp thư email): address</li></ul>
+<h3>Ví dụ hoàn chỉnh</h3><pre style="white-space:pre;overflow:auto;background:var(--line);padding:12px;border-radius:8px"># CloudLab GCP · sandbox · bốn dịch vụ, bản rẻ để học
+terraform {
+  required_providers {
+    google = { source = &quot;hashicorp/google&quot;, version = &quot;~&gt; 6.0&quot; }
+  }
+}
+
+provider &quot;google&quot; {
+  project = var.project_id
+  region  = &quot;asia-southeast1&quot;
+}
+
+variable &quot;project_id&quot; {
+  type    = string
+  default = &quot;anphat-lab&quot;
+}
+
+resource &quot;google_compute_network&quot; &quot;main&quot; {
+  name                    = &quot;anphat-vpc&quot;
+  auto_create_subnetworks = false
+}
+
+resource &quot;google_compute_subnetwork&quot; &quot;app&quot; {
+  name          = &quot;app&quot;
+  ip_cidr_range = &quot;10.10.0.0/24&quot;
+  region        = &quot;asia-southeast1&quot;
+  network       = google_compute_network.main.id
+}
+
+resource &quot;google_compute_firewall&quot; &quot;amqp_from_app&quot; {
+  name          = &quot;amqp-from-app&quot;
+  network       = google_compute_network.main.name
+  source_ranges = [&quot;10.10.0.0/24&quot;]
+  target_tags   = [&quot;rabbitmq&quot;, &quot;redis&quot;]
+
+  allow {
+    protocol = &quot;tcp&quot;
+    ports    = [&quot;5672&quot;, &quot;6379&quot;]
+  }
+}
+
+resource &quot;google_compute_instance&quot; &quot;rabbitmq&quot; {
+  name         = &quot;rabbitmq-1&quot;
+  machine_type = &quot;e2-small&quot;
+  zone         = &quot;asia-southeast1-a&quot;
+  tags         = [&quot;rabbitmq&quot;]
+  labels       = { app = &quot;rabbitmq&quot; }
+  metadata_startup_script = &lt;&lt;-EOT
+    apt-get update
+    apt-get install -y rabbitmq-server
+  EOT
+
+  boot_disk {
+    initialize_params {
+      image = &quot;debian-cloud/debian-12&quot;
+      size  = 20
+      type  = &quot;pd-balanced&quot;
+    }
+  }
+
+  network_interface {
+    subnetwork = google_compute_subnetwork.app.id
+  }
+}
+
+resource &quot;google_compute_instance&quot; &quot;redis&quot; {
+  name         = &quot;redis-1&quot;
+  machine_type = &quot;e2-micro&quot;
+  zone         = &quot;asia-southeast1-a&quot;
+  tags         = [&quot;redis&quot;]
+  labels       = { app = &quot;redis&quot; }
+
+  boot_disk {
+    initialize_params {
+      image = &quot;debian-cloud/debian-12&quot;
+      size  = 10
+    }
+  }
+
+  network_interface {
+    subnetwork = google_compute_subnetwork.app.id
+  }
+}
+
+resource &quot;google_pubsub_topic&quot; &quot;trades&quot; {
+  name = &quot;trades&quot;
+}
+
+resource &quot;google_service_account&quot; &quot;api&quot; {
+  account_id   = &quot;api&quot;
+  display_name = &quot;api&quot;
+}
+
+resource &quot;google_project_iam_member&quot; &quot;api_pubsub&quot; {
+  project = &quot;anphat-lab&quot;
+  role    = &quot;roles/pubsub.publisher&quot;
+  member  = &quot;serviceAccount:${google_service_account.api.email}&quot;
+}
+
+resource &quot;google_cloud_run_v2_service&quot; &quot;api&quot; {
+  name                = &quot;api&quot;
+  location            = &quot;asia-southeast1&quot;
+  ingress             = &quot;INGRESS_TRAFFIC_ALL&quot;
+  deletion_protection = false
+
+  template {
+    service_account                  = google_service_account.api.email
+    max_instance_request_concurrency = 80
+    timeout                          = &quot;300s&quot;
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 20
+    }
+
+    containers {
+      image = &quot;asia-southeast1-docker.pkg.dev/anphat-lab/app/api:1.0&quot;
+
+      resources {
+        limits = { cpu = &quot;1&quot;, memory = &quot;512Mi&quot; }
+      }
+
+      env {
+        name  = &quot;AMQP_URL&quot;
+        value = &quot;amqp://${google_compute_instance.rabbitmq.network_interface[0].network_ip}:5672&quot;
+      }
+
+      env {
+        name  = &quot;REDIS_HOST&quot;
+        value = &quot;${google_compute_instance.redis.network_interface[0].network_ip}&quot;
+      }
+
+      env {
+        name  = &quot;PUBSUB_TOPIC&quot;
+        value = &quot;${google_pubsub_topic.trades.id}&quot;
+      }
+    }
+
+    vpc_access {
+      egress = &quot;PRIVATE_RANGES_ONLY&quot;
+
+      network_interfaces {
+        network    = google_compute_network.main.id
+        subnetwork = google_compute_subnetwork.app.id
+      }
+    }
+  }
+}
+
+resource &quot;google_cloud_run_v2_service_iam_member&quot; &quot;public&quot; {
+  name     = google_cloud_run_v2_service.api.name
+  location = &quot;asia-southeast1&quot;
+  role     = &quot;roles/run.invoker&quot;
+  member   = &quot;allUsers&quot;
+}
+
+resource &quot;google_cloud_run_v2_service&quot; &quot;prices&quot; {
+  name                = &quot;prices&quot;
+  location            = &quot;asia-southeast1&quot;
+  ingress             = &quot;INGRESS_TRAFFIC_ALL&quot;
+  deletion_protection = false
+  labels              = { protocol = &quot;websocket&quot; }
+
+  template {
+    max_instance_request_concurrency = 1000
+    timeout                          = &quot;3600s&quot;
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 5
+    }
+
+    containers {
+      image = &quot;asia-southeast1-docker.pkg.dev/anphat-lab/app/prices:1.0&quot;
+
+      resources {
+        limits = { cpu = &quot;1&quot;, memory = &quot;512Mi&quot; }
+      }
+
+      env {
+        name  = &quot;REDIS_HOST&quot;
+        value = &quot;${google_compute_instance.redis.network_interface[0].network_ip}&quot;
+      }
+    }
+
+    vpc_access {
+      egress = &quot;PRIVATE_RANGES_ONLY&quot;
+
+      network_interfaces {
+        network    = google_compute_network.main.id
+        subnetwork = google_compute_subnetwork.app.id
+      }
+    }
+  }
+}
+
+resource &quot;google_cloud_run_v2_service_iam_member&quot; &quot;prices_public&quot; {
+  name     = google_cloud_run_v2_service.prices.name
+  location = &quot;asia-southeast1&quot;
+  role     = &quot;roles/run.invoker&quot;
+  member   = &quot;allUsers&quot;
+}
+
+resource &quot;cloudlab_client&quot; &quot;orders&quot; {
+  target = google_cloud_run_v2_service.api.uri
+  rate_per_second = 30
+}
+
+resource &quot;cloudlab_client&quot; &quot;board&quot; {
+  target = google_cloud_run_v2_service.prices.uri
+  protocol            = &quot;websocket&quot;
+  connections         = 2000
+  messages_per_minute = 12
+}</pre></section>
+<section id="prices"><h2>Giá niêm yết một số cấu hình</h2><p class="mut">asia-southeast1 · đọc ngày 2026-10-22 · chưa trừ free tier. Bảng so sánh đầy đủ với AWS và tự cài: <a href="../pricing.html">So sánh giá</a>.</p>
+<table><thead><tr><th>Cấu hình</th><th>USD / giờ</th><th>USD / tháng (730 giờ)</th></tr></thead><tbody><tr><td>VM e2-micro (20 GB balanced, không IP public)</td><td class="n">$0.0133</td><td class="n">$9.74</td></tr><tr><td>VM e2-small (20 GB, không IP public)</td><td class="n">$0.0237</td><td class="n">$17.29</td></tr><tr><td>Memorystore for Redis Basic 1 GB</td><td class="n">$0.0650</td><td class="n">$47.45</td></tr><tr><td>Memorystore for Redis Standard HA 5 GB</td><td class="n">$0.3750</td><td class="n">$274</td></tr><tr><td>Memorystore for Valkey 1 node shared-core-nano</td><td class="n">$0.0392</td><td class="n">$28.62</td></tr><tr><td>Managed Kafka 3 vCPU / 3 GiB (tối thiểu)</td><td class="n">$0.3084</td><td class="n">$225</td></tr><tr><td>Cloud Run 1 instance thường trực (min 1, request-based, lúc rảnh)</td><td class="n">$0.0189</td><td class="n">$13.80</td></tr></tbody></table></section>
+<article id="credit"><h2>Bài 1: Cảnh báo trước khi đốt hết $300</h2><p class="mut">Chi phí · Budget + credit</p>
+<p><b>Mục tiêu:</b> Budget thấy tiền credit đang bị đốt và gửi cảnh báo vào hộp thư của bạn khi tiêu tới 50% hạn mức.</p><p><b>Tình huống:</b> Tôi vừa mở tài khoản dùng thử Google Cloud với $300 credit và dựng thử Redis, RabbitMQ, một API. Đã đặt budget $100/tháng báo ở 50% và 90%. Chạy gần một tháng, credit tụt mà không có email nào.</p>
+<h3>Nhiệm vụ</h3><ol><li>Budget thấy chi tiêu thật (không trừ credit) <span class="mut">(budget_filter.credit_types_treatment = EXCLUDE_ALL_CREDITS.)</span></li><li>Cảnh báo có đường tới hộp thư <span class="mut">(Budget gửi tới notification channel email của bạn (hoặc người nhận mặc định).)</span></li><li>Chạy 30 ngày: hộp thư nhận cảnh báo 50% <span class="mut">(Thư “đã tiêu 50%” tới trước cuối tháng.)</span></li></ol>
+<h3>Các khối</h3><ul><li><b>budget/credit</b>: Hạn mức $100 mỗi tháng (≈ $300 trong 90 ngày), báo ở 50% và 90%. Mở phần Cấu hình: xem dòng Credit và Gửi tới.</li><li><b>channel/email</b>: Kênh email đã tạo sẵn, nhưng chưa budget nào gửi tới nó.</li><li><b>inbox/me</b>: Hộp thư của bạn. Cảnh báo budget tới đây.</li><li><b>vm/rabbitmq</b>: RabbitMQ thử nghiệm trên một VM e2-medium, chạy suốt ngày đêm.</li><li><b>redis/cache</b>: Memorystore Redis 2 GB, tính tiền theo GB-giờ.</li><li><b>run/api</b>: API giữ 1 instance tối thiểu nên tốn tiền cả khi không ai gọi.</li><li><b>client/customers</b>: Vài request mỗi giây để thử.</li></ul>
+<p><b>Khái niệm:</b> Free trial $300 / 90 ngày, Cloud Billing budget, credit_types_treatment, notification channel, budget chỉ báo, không chặn</p><p><b>Sau khi đạt:</b> Budget chỉ là cảnh báo: nó không dừng tài nguyên. Khi dùng thử, nhớ hai điều: (1) budget mặc định trừ credit nên không báo gì cho tới khi credit hết; (2) hết $300 hoặc hết 90 ngày thì tài nguyên dừng. Muốn tự động tắt khi chạm ngưỡng phải tự làm (budget → Pub/Sub → Cloud Function tắt billing).</p>
+<p><a href="./#/lesson/credit">Mở bài này trong CloudLab GCP →</a></p></article>
+<article id="public"><h2>Bài 2: API trả 403 cho khách</h2><p class="mut">Nền tảng · Cloud Run + run.invoker</p>
+<p><b>Mục tiêu:</b> Khách trên Internet gọi được API tỷ giá; service vẫn chỉ có đúng quyền cần thiết.</p><p><b>Tình huống:</b> API tra cứu tỷ giá mới deploy lên Cloud Run, trang web gọi vào thì nhận 403 Forbidden. Dev nói container chạy bình thường.</p>
+<h3>Nhiệm vụ</h3><ol><li>Service nhận request từ Internet <span class="mut">(ingress = INGRESS_TRAFFIC_ALL.)</span></li><li>Khách không cần đăng nhập vẫn gọi được <span class="mut">(Có binding roles/run.invoker cho allUsers trên service.)</span></li><li>Trang web gọi API thành công <span class="mut">(Hơn 95% request trả 200.)</span></li></ol>
+<h3>Các khối</h3><ul><li><b>client/website</b>: Trang web ngân hàng gọi API tỷ giá khoảng 40 lần mỗi giây.</li><li><b>run/rates</b>: API tỷ giá trên Cloud Run. Mặc định Cloud Run yêu cầu người gọi có quyền roles/run.invoker.</li></ul>
+<p><b>Khái niệm:</b> Cloud Run, roles/run.invoker, allUsers, ingress</p><p><b>Sau khi đạt:</b> Cloud Run có hai lớp cửa: ingress (traffic từ đâu được vào) và IAM (ai được gọi). API công khai cần cả hai mở. API nội bộ thì ngược lại: giữ ingress internal và chỉ cấp run.invoker cho service account của bên gọi.</p>
+<p><a href="./#/lesson/public">Mở bài này trong CloudLab GCP →</a></p></article>
+<article id="redis"><h2>Bài 3: Cloud Run không với tới Memorystore</h2><p class="mut">Redis · Memorystore + VPC egress</p>
+<p><b>Mục tiêu:</b> API đọc được Redis qua mạng nội bộ, khách gọi thành công, và Redis có cỡ hợp lý cho môi trường học.</p><p><b>Tình huống:</b> API tra cứu số dư dùng Redis làm cache. Lên Cloud Run thì mọi request treo rồi lỗi 500: không kết nối được Redis. Thêm vào đó, hóa đơn ước tính cho Redis cao bất thường.</p>
+<h3>Nhiệm vụ</h3><ol><li>Cloud Run có đường vào VPC của Redis <span class="mut">(vpc_access qua subnet app (Direct VPC egress).)</span></li><li>Khách xem số dư thành công <span class="mut">(Hơn 95% request trả 200.)</span></li><li>Redis cho môi trường học ≤ $60/tháng <span class="mut">(Basic tier, dung lượng nhỏ (cache có thể mất).)</span></li></ol>
+<h3>Các khối</h3><ul><li><b>client/customers</b>: Khách mở app xem số dư, khoảng 30 lần mỗi giây.</li><li><b>run/balance</b>: API số dư: đọc cache Redis qua biến REDIS_HOST.</li><li><b>redis/cache</b>: Memorystore Redis chỉ có IP nội bộ trong VPC main. Đang để Standard HA 5 GB.</li><li><b>vpc/main</b>: VPC của project.</li><li><b>subnet/app</b>: Subnet app: Cloud Run có thể mượn đường qua đây để vào VPC.</li></ul>
+<p><b>Khái niệm:</b> Memorystore for Redis, IP nội bộ, authorized_network, Direct VPC egress, Basic vs Standard HA</p><p><b>Sau khi đạt:</b> Memorystore (Redis, Valkey) và Managed Kafka không có IP public: chỉ ai trong VPC mới tới được. Cloud Run, Cloud Functions chạy ngoài VPC nên cần Direct VPC egress (hoặc VPC connector). Còn giá: Memorystore tính theo dung lượng đã chọn, chạy suốt; với cache, Basic rẻ và đủ.</p>
+<p><a href="./#/lesson/redis">Mở bài này trong CloudLab GCP →</a></p></article>
+<article id="rabbitmq"><h2>Bài 4: RabbitMQ trên VM: tường lửa và cỡ máy</h2><p class="mut">RabbitMQ · VM + firewall</p>
+<p><b>Mục tiêu:</b> Chỉ app trong subnet nói chuyện được với RabbitMQ, VM không lộ ra Internet, và chịu được tải giờ cao điểm.</p><p><b>Tình huống:</b> Hàng đợi lệnh chuyển tiền chạy RabbitMQ trên một VM. Bảo mật báo VM này mở cổng AMQP và trang quản trị ra Internet. Giờ cao điểm, API báo lỗi publish.</p>
+<h3>Nhiệm vụ</h3><ol><li>Firewall chỉ cho subnet app vào RabbitMQ <span class="mut">(source_ranges không có 0.0.0.0/0; app vẫn kết nối được.)</span></li><li>VM RabbitMQ không có IP public <span class="mut">(Bỏ access_config.)</span></li><li>Chịu được giờ cao điểm <span class="mut">(Hơn 95% lệnh được nhận.)</span></li></ol>
+<h3>Các khối</h3><ul><li><b>client/customers</b>: Giờ cao điểm: khoảng 900 lệnh chuyển tiền mỗi giây.</li><li><b>run/transfers</b>: API nhận lệnh, đẩy vào hàng đợi RabbitMQ qua IP nội bộ (vpc_access qua subnet app).</li><li><b>vm/rabbitmq</b>: RabbitMQ tự cài trên VM e2-micro, đang có IP public.</li><li><b>fw/rabbitmq</b>: Luật firewall mở 5672 (AMQP) và 15672 (trang quản trị) cho VM có tag rabbitmq.</li></ul>
+<p><b>Khái niệm:</b> RabbitMQ, AMQP 5672 / 15672, firewall source_ranges + target_tags, IP public, cỡ máy e2</p><p><b>Sau khi đạt:</b> Google Cloud không có RabbitMQ được quản lý sẵn, nên phần vận hành là của bạn: tường lửa, vá lỗi, sao lưu, cỡ máy. Firewall của GCP áp theo network tag, không theo từng máy như security group của AWS. Mở theo dải subnet của app, không bao giờ 0.0.0.0/0 cho 5672 hay 15672.</p>
+<p><a href="./#/lesson/rabbitmq">Mở bài này trong CloudLab GCP →</a></p></article>
+<article id="kafka"><h2>Bài 5: Managed Kafka: endpoint và quyền</h2><p class="mut">Kafka · Managed Kafka + IAM</p>
+<p><b>Mục tiêu:</b> API ghi được giao dịch vào topic Kafka bằng đúng quyền cần thiết, và bạn biết giá tối thiểu của cluster.</p><p><b>Tình huống:</b> Luồng giao dịch thẻ cần ghi vào Kafka để chống gian lận đọc lại. Cluster đã tạo, nhưng API ghi vào thì lỗi. Sếp hỏi thêm: cluster này tốn bao nhiêu mỗi tháng?</p>
+<h3>Nhiệm vụ</h3><ol><li>API có đường vào subnet chứa endpoint Kafka <span class="mut">(vpc_access qua subnet app.)</span></li><li>Service account có đúng quyền Kafka <span class="mut">(roles/managedkafka.client cho sa card_api; không dùng editor / owner.)</span></li><li>Giao dịch được ghi vào topic <span class="mut">(Hơn 95% request thành công.)</span></li></ol>
+<h3>Các khối</h3><ul><li><b>client/pos</b>: Máy POS gửi giao dịch thẻ, khoảng 200 mỗi giây.</li><li><b>run/card_api</b>: API nhận giao dịch và ghi vào topic Kafka, chạy bằng service account card_api.</li><li><b>sa/card_api</b>: Danh tính của API. Chưa có role nào.</li><li><b>kafka/events</b>: Cluster Kafka managed 3 vCPU, 3 GiB, endpoint ở subnet app.</li><li><b>topic/card_txn</b>: Topic card-transactions, 6 partition, 3 bản sao.</li></ul>
+<p><b>Khái niệm:</b> Managed Service for Apache Kafka, vCPU / RAM tối thiểu, endpoint trong subnet (PSC), roles/managedkafka.client, service account</p><p><b>Sau khi đạt:</b> Managed Kafka lo broker, bản sao và nâng cấp, đổi lại có giá tối thiểu (3 vCPU, 3 GiB) chạy suốt tháng dù không có message. Với $300 credit: bật khi học, terraform destroy khi xong, hoặc học API Kafka trên một VM nhỏ; còn Pub/Sub thì không có giá cố định.</p>
+<p><a href="./#/lesson/kafka">Mở bài này trong CloudLab GCP →</a></p></article>
+<article id="websocket"><h2>Bài 6: Bảng giá realtime: WebSocket trên Cloud Run</h2><p class="mut">WebSocket · WebSocket + concurrency</p>
+<p><b>Mục tiêu:</b> Cả 3.000 khách giữ được kết nối, không bị cắt mỗi 5 phút, và service WebSocket tốn không quá $350/tháng (tính cả truyền dữ liệu ra Internet).</p><p><b>Tình huống:</b> Bảng giá chứng khoán realtime cho 3.000 khách mở cùng lúc, server đẩy giá mới 12 lần mỗi phút. Nhiều khách không kết nối được, người còn lại bị rớt kết nối mỗi 5 phút. Ước tính chi phí cũng quá cao.</p>
+<h3>Nhiệm vụ</h3><ol><li>Cả 3.000 khách kết nối được <span class="mut">(Không kết nối nào bị từ chối.)</span></li><li>Kết nối không bị cắt mỗi 5 phút <span class="mut">(timeout = 3600s (tối đa).)</span></li><li>Service WebSocket ≤ $350/tháng <span class="mut">(Chạy một ngày mô phỏng, nhân 30.)</span></li></ol>
+<h3>Các khối</h3><ul><li><b>client/traders</b>: 3.000 nhà đầu tư mở bảng giá cùng lúc, mỗi người nhận 12 lần cập nhật mỗi phút.</li><li><b>run/prices</b>: Server WebSocket trên Cloud Run. Mỗi kết nối chiếm một suất request đồng thời cho tới khi đóng.</li></ul>
+<p><b>Khái niệm:</b> WebSocket, request timeout (tối đa 60 phút), max_instance_request_concurrency, max_instance_count, instance-giờ</p><p><b>Sau khi đạt:</b> WebSocket trên Cloud Run: mỗi kết nối là một request kéo dài, giữ instance bận và bị tính tiền suốt thời gian mở, bị cắt khi hết timeout (tối đa 60 phút). Thứ quyết định giá là số kết nối mỗi instance. Trên AWS, API Gateway WebSocket tính theo phút-kết nối và số message thay vì theo instance: so ở trang so sánh giá.</p>
+<p><a href="./#/lesson/websocket">Mở bài này trong CloudLab GCP →</a></p></article>
+<article id="burn"><h2>Bài 7: Đủ 90 ngày với $300</h2><p class="mut">Chi phí · Cả bốn dịch vụ</p>
+<p><b>Mục tiêu:</b> Giữ đủ bốn dịch vụ đang chạy được cho khách, mà một ngày tốn không quá $5 (credit đủ ít nhất 60 ngày).</p><p><b>Tình huống:</b> Tôi muốn dựng cả Kafka, Redis, RabbitMQ và WebSocket để học trong 3 tháng dùng thử. Bản đầu tiên tôi chọn toàn dịch vụ “chuẩn production”: chạy chưa tới hai tuần đã hết $300.</p>
+<h3>Nhiệm vụ</h3><ol><li>Cả hai nhóm khách đều phục vụ được <span class="mut">(Lệnh đặt &gt; 95% thành công; 500 kết nối bảng giá mở đủ.)</span></li><li>Vẫn đủ bốn loại: Kafka (hoặc Pub/Sub), Redis, RabbitMQ, WebSocket <span class="mut">(API vẫn dùng một hàng đợi RabbitMQ, một cache Redis và một luồng sự kiện (Kafka hoặc Pub/Sub); bảng giá vẫn là WebSocket.)</span></li><li>Một ngày tốn ≤ $5 (đủ 60 ngày) <span class="mut">(Chạy một ngày mô phỏng, tính cả giá cố định và theo lượng dùng.)</span></li></ol>
+<h3>Các khối</h3><ul><li><b>client/orders</b>: Lệnh đặt từ app thử nghiệm, khoảng 2 mỗi giây.</li><li><b>client/board</b>: 500 người dùng thử mở bảng giá realtime, 6 cập nhật mỗi phút.</li><li><b>run/api</b>: API nhận lệnh: đẩy vào RabbitMQ, ghi sự kiện vào Kafka, đọc Redis. Giữ 2 instance thường trực.</li><li><b>run/prices</b>: Server WebSocket đẩy giá, 100 kết nối mỗi instance.</li><li><b>vm/rabbitmq</b>: RabbitMQ trên e2-standard-4, ổ 100 GB, có IP public.</li><li><b>redis/cache</b>: Memorystore Standard HA 5 GB.</li><li><b>kafka/events</b>: Managed Kafka 3 vCPU, 3 GiB.</li><li><b>pubsub/trades</b>: Một topic Pub/Sub, chưa ai dùng: có thể thay Kafka để học khái niệm publish / subscribe.</li></ul>
+<p><b>Khái niệm:</b> giá cố định vs theo lượng dùng, Managed Kafka vs Pub/Sub vs Kafka tự cài, Memorystore Basic vs Standard HA, IP public, concurrency</p><p><b>Sau khi đạt:</b> Hóa đơn cloud chia hai phần: giá cố định (tài nguyên tồn tại là tính: VM, Memorystore, Kafka, instance thường trực, IPv4) và giá theo lượng dùng (request, GB, message). Khi học bằng credit, cắt phần cố định trước. Muốn đủ cả 90 ngày ($3,30/ngày) thì còn phải cắt nữa: Redis tự cài trên e2-micro thay Memorystore, hoặc chỉ bật Kafka / WebSocket vào buổi học rồi terraform destroy.</p>
+<p><a href="./#/lesson/burn">Mở bài này trong CloudLab GCP →</a></p></article>
+<section id="components"><h2>Tài nguyên Google Cloud, giải thích bằng ví dụ ngân hàng</h2><h3 id="c-google-compute-network">VPC network <span class="mut">google_compute_network</span></h3><p>Như mạng nội bộ của cả ngân hàng: mọi chi nhánh (subnet) nối chung một đường truyền riêng, không đi qua Internet.</p><p class="mut">Mạng riêng của project. Khác AWS: VPC của Google là toàn cầu, subnet mới theo region. Đặt auto_create_subnetworks = false để tự chia subnet.</p><h3 id="c-google-compute-subnetwork">Subnet <span class="mut">google_compute_subnetwork</span></h3><p>Như một chi nhánh trong mạng nội bộ: có dải địa chỉ riêng ở một thành phố (region).</p><p class="mut">Dải IP trong một region. VM, endpoint Kafka và đường ra VPC của Cloud Run (Direct VPC egress) đều lấy IP từ subnet.</p><h3 id="c-google-compute-firewall">Firewall rule <span class="mut">google_compute_firewall</span></h3><p>Như bảo vệ ở cổng tòa nhà, giữ danh sách: cổng nào mở, cho ai vào, áp cho phòng nào (network tag).</p><p class="mut">Luật tường lửa của cả VPC. Mặc định chặn mọi traffic vào. Một luật INGRESS mở cổng cho nguồn (source_ranges) tới các VM có network tag trùng target_tags; bỏ target_tags là mở cho mọi VM.</p><h3 id="c-google-compute-instance">VM (Compute Engine) <span class="mut">google_compute_instance</span></h3><p>Như thuê nguyên một phòng làm việc theo giờ: có người hay không vẫn trả tiền phòng.</p><p class="mut">Máy ảo chạy liên tục, tính tiền theo giây dù có request hay không. Muốn nhận traffic Internet phải có IP public (access_config) và firewall mở cổng cho tag của VM.</p><h3 id="c-google-cloud-run-v2-service">Cloud Run service <span class="mut">google_cloud_run_v2_service</span></h3><p>Như quầy giao dịch tự mở thêm khi đông khách và đóng hết khi vắng: chỉ trả lương cho giờ quầy đang phục vụ.</p><p class="mut">Chạy container theo request, tự thêm bớt instance, về 0 khi không ai gọi. Tính tiền theo vCPU-giây và GiB-giây khi đang xử lý request, cộng số request. Mặc định không ai gọi được: phải cấp roles/run.invoker cho allUsers mới công khai.</p><h3 id="c-google-cloud-run-v2-service-iam-member">Quyền gọi Cloud Run <span class="mut">google_cloud_run_v2_service_iam_member</span></h3><p>Như tấm biển “mời vào” ở cửa quầy: không có biển thì quầy mở mà khách vẫn bị bảo vệ chặn lại.</p><p class="mut">Ai được gọi service. member = &quot;allUsers&quot; với role roles/run.invoker là công khai cho cả Internet (cần cho web, API, WebSocket công khai).</p><h3 id="c-google-service-account">Service account <span class="mut">google_service_account</span></h3><p>Như thẻ nhân viên của một phần mềm: hệ thống nhìn thẻ để biết phần mềm này được làm gì.</p><p class="mut">Danh tính của app (giống IAM role của AWS). Cloud Run chạy bằng service account này; quyền đến từ các IAM binding gán role cho nó.</p><h3 id="c-google-project-iam-member">IAM binding (project) <span class="mut">google_project_iam_member</span></h3><p>Như quyết định phân quyền: ghi rõ thẻ nhân viên nào được vào kho nào. Ghi “toàn quyền” cho tiện là rủi ro.</p><p class="mut">Gán một role cho một member trên cả project. roles/editor hay roles/owner cho app là quá rộng: chỉ gán đúng role app cần.</p><h3 id="c-google-redis-instance">Memorystore for Redis <span class="mut">google_redis_instance</span></h3><p>Như bảng tỷ giá dán ở quầy: giao dịch viên nhìn bảng thay vì gọi về hội sở mỗi lần, nhanh hơn và hội sở đỡ tải.</p><p class="mut">Redis do Google quản lý, chỉ có IP nội bộ trong VPC được chỉ định (authorized_network). Basic: một node, mất node là mất cache. Standard HA: có bản sao ở zone khác, giá cao hơn. Tính theo GB-giờ của dung lượng đã chọn.</p><h3 id="c-google-memorystore-instance">Memorystore for Valkey <span class="mut">google_memorystore_instance</span></h3><p>Như bảng tra nhanh, nhưng thuê theo từng tấm bảng (node): bảng nhỏ nhất rất rẻ.</p><p class="mut">Valkey (bản mã nguồn mở tách từ Redis) do Google quản lý, tính theo node-giờ. Kết nối qua Private Service Connect trong VPC bạn chỉ định.</p><h3 id="c-google-storage-bucket">Cloud Storage bucket <span class="mut">google_storage_bucket</span></h3><p>Như kho lưu trữ hồ sơ: trả tiền theo số kệ đang dùng.</p><p class="mut">Kho object (file). Tính theo GB lưu mỗi tháng và số thao tác. public_access_prevention = &quot;enforced&quot; chặn mọi cách làm bucket công khai.</p><h3 id="c-google-managed-kafka-cluster">Managed Kafka cluster <span class="mut">google_managed_kafka_cluster</span></h3><p>Như sổ cái giao dịch ghi liên tục, nhiều phòng ban cùng đọc lại được, có bản sao ở 3 nơi. Thuê cả bộ máy ghi sổ theo giờ, kể cả lúc không có giao dịch.</p><p class="mut">Apache Kafka do Google vận hành (Managed Service for Apache Kafka). Bạn chọn số vCPU và RAM của cả cluster; Google lo broker, bản sao và nâng cấp. Client kết nối qua endpoint trong subnet bạn chỉ định và xác thực bằng IAM (roles/managedkafka.client). Tính theo vCPU-giờ + GiB-giờ + ổ đĩa, kể cả khi không có message.</p><h3 id="c-google-managed-kafka-topic">Kafka topic <span class="mut">google_managed_kafka_topic</span></h3><p>Như một cuốn sổ trong sổ cái, chia thành nhiều quyển (partition) để nhiều người ghi và đọc song song.</p><p class="mut">Một luồng message trong cluster. partition_count quyết định bao nhiêu consumer đọc song song; replication_factor 3 = mỗi message có 3 bản ở 3 zone.</p><h3 id="c-google-pubsub-topic">Pub/Sub topic <span class="mut">google_pubsub_topic</span></h3><p>Như dịch vụ chuyển phát: không thuê bưu cục riêng, gửi bao nhiêu trả bấy nhiêu.</p><p class="mut">Hàng đợi / phát tin không cần máy chủ của Google: không có giá cố định, trả theo dung lượng message (mỗi lần publish tính tối thiểu 1 KB). Hợp khi lưu lượng nhỏ hoặc thất thường; Kafka hợp khi cần giữ lại và đọc lại luồng sự kiện.</p><h3 id="c-google-billing-budget">Budget <span class="mut">google_billing_budget</span></h3><p>Như hạn mức chi tiêu thẻ công ty có tin nhắn báo khi tiêu tới 50%, 90%: chỉ báo, không khóa thẻ.</p><p class="mut">Theo dõi chi tiêu của billing account và gửi cảnh báo khi vượt các ngưỡng %. Budget chỉ báo, không tự dừng chi tiêu. Mặc định chi tiêu được trừ credit (INCLUDE_ALL_CREDITS): trong thời gian dùng thử, credit trả hết nên budget thấy $0 và không báo.</p><h3 id="c-google-monitoring-notification-channel">Notification channel <span class="mut">google_monitoring_notification_channel</span></h3><p>Như số điện thoại đăng ký nhận tin nhắn biến động số dư.</p><p class="mut">Nơi nhận cảnh báo (email, SMS, Slack…). Budget và alert policy gửi tới đây.</p><h3 id="c-google-compute-instance-rabbitmq">RabbitMQ trên VM <span class="mut">google_compute_instance</span></h3><p>Như phòng văn thư tự lập để nhận và chuyển công văn giữa các phòng ban: rẻ, nhưng bạn tự thuê người trực, tự lo khi phòng mất điện.</p><p class="mut">Google Cloud không có RabbitMQ được quản lý sẵn, nên tự chạy RabbitMQ trên một VM (hoặc mua qua Marketplace / CloudAMQP). Bạn trả tiền VM + ổ đĩa, và tự lo cập nhật, sao lưu. Cổng 5672 (AMQP), 15672 (trang quản trị).</p><h3 id="c-google-compute-instance-redis">Redis tự cài trên VM <span class="mut">google_compute_instance</span></h3><p>Như tự đặt một tủ hồ sơ tra nhanh ở sảnh: rẻ, nhưng hỏng tủ thì không ai thay giúp.</p><p class="mut">Redis tự chạy trên VM: rẻ hơn Memorystore ở cỡ nhỏ, nhưng không có failover, backup hay vá lỗi tự động.</p><h3 id="c-google-compute-instance-kafka">Kafka tự cài trên VM <span class="mut">google_compute_instance</span></h3><p>Như tự ghi sổ cái giao dịch bằng tay trên một cuốn sổ duy nhất: học được cách làm, nhưng mất sổ là mất hết.</p><p class="mut">Kafka một node trên VM: rẻ để học, nhưng không có bản sao, mất VM là mất dữ liệu. Managed Service for Apache Kafka lo việc này với giá tối thiểu cao hơn nhiều.</p><h3 id="c-google-cloud-run-v2-service-ws">WebSocket server (Cloud Run) <span class="mut">google_cloud_run_v2_service</span></h3><p>Như tổng đài đọc tỷ giá cho khách giữ máy: mỗi khách đang giữ máy chiếm một đường dây, và tổng đài phải trả tiền suốt thời gian có người giữ máy.</p><p class="mut">Cloud Run nhận WebSocket như một request kéo dài: mỗi kết nối chiếm một suất concurrency cho tới khi đóng hoặc hết timeout (tối đa 60 phút), và instance được tính tiền suốt thời gian có kết nối mở.</p><h3 id="c-cloudlab-client">Client / người dùng <span class="mut">cloudlab_client</span></h3><p>Khách hàng hoặc hệ thống bên ngoài gọi vào: gửi request, hoặc mở bảng giá và giữ kết nối để nhận giá mới liên tục.</p><p class="mut">Người hoặc chương trình gọi vào hệ thống từ Internet. HTTP: số request mỗi giây. WebSocket: số kết nối mở cùng lúc, mỗi kết nối nhận tin đẩy từ server.</p><h3 id="c-cloudlab-inbox">Hộp thư email <span class="mut">cloudlab_inbox</span></h3><p>Hộp thư của bạn: nơi cảnh báo budget tới.</p><p class="mut">Hộp thư của bạn. Nhận cảnh báo budget (qua notification channel, hoặc mặc định gửi cho admin của billing account).</p></section>
+<p class="mut">© 2026 Nguyen Quoc Dat · Google Cloud là nhãn hiệu của Google LLC; không liên kết với Google · <a href="../credits.html">Nguồn và bản quyền</a></p></main></body></html>
