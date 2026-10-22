@@ -162,4 +162,6 @@ function fromYaml(text,keep){let doc;
   if(typeof seatIgws==="function")seatIgws(m);
   return{ok:true,model:m}}
 /* lesson templates are authored as YAML + a layout table */
-function loadTemplate(yaml,layout,name,manual){const r=fromYaml(yaml,{name,pos:layout||{},manual:manual||{}});if(!r.ok)throw new Error(name+": "+r.err+(r.line?" @"+r.line:""));return r.model}
+/* layouts are written for the big cards; packs with compact cards squeeze them (DOMAIN.layoutScale = [x, y]) */
+const LP=(x,y)=>{const s=DOMAIN.layoutScale||[1,1];return[Math.round(x*s[0]),Math.round(y*s[1])]};
+function loadTemplate(yaml,layout,name,manual){const r=fromYaml(yaml,{name,pos:Object.fromEntries(Object.entries(layout||{}).map(([k,p])=>[k,LP(p[0],p[1])])),manual:manual||{}});if(!r.ok)throw new Error(name+": "+r.err+(r.line?" @"+r.line:""));return r.model}

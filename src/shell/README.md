@@ -89,6 +89,18 @@ descriptions keyed `tool` or `tool.param`, e.g. `load_template.yaml`), `guide()`
 `setProp(raw, path, value)` (return `true` when it handled a path itself; otherwise the path is set under `Properties`).
 `export_iac` offers the keys of `EXPORTS`.
 
+## Compact cards (opt-in)
+
+`DOMAIN.compact = true` (set before `src/shell/editor.js` loads) draws small cards: icon, type, name and one status pill,
+inside a shape that says the kind of block; the view rows go to the drawer ("Đang chạy") and the hover title.
+- `DOMAIN.iconOf(def)` → `{src, tile?}` (an image; `tile` puts it on a light tile) or `null` (the text badge).
+  `DOMAIN.boxIconDef(box)` picks the def whose icon a box header shows.
+- `DOMAIN.kindOf(node)` → `rect` (compute), `cyl` (stored data), `pipe` (messaging), `hex` (entry), `cut` (policy, rule),
+  `pill` (outside). The canvas has a legend ("Chú giải"); `DOMAIN.texts.iconCredit` is its footnote.
+- `def.keepRows`: this type keeps its rows on the card (a monitor's charts).
+- `DOMAIN.layoutScale = [x, y]`: lesson layouts are written for big cards; `loadTemplate` scales them, `LP(x, y)` does the
+  same for positions in steps.
+
 ## Text versions
 
 `tools/export-text.js` (AWS: `llms.txt`, `llms-full.txt`, `learn.html`, `credits.html`) and `tools/export-k8s.js`

@@ -765,3 +765,39 @@ fieldset.probe .frow:last-of-type{grid-template-columns:1fr 1fr 1fr}
 .gnode.walk,.gbox.walk{outline:2px dashed var(--accent);outline-offset:3px;animation:walkpulse 1.6s ease-in-out infinite}
 @keyframes walkpulse{50%{outline-offset:6px}}
 @media (prefers-reduced-motion:reduce){.gnode.walk,.gbox.walk{animation:none}}
+/* ---------- block icons (AWS Architecture Icons) ---------- */
+.side-ic.ic-img{background:none;padding:0;overflow:hidden}
+.side-ic.ic-img img{display:block;width:100%;height:100%;object-fit:contain}
+.side-ic.ic-img.tile{background:#fff;border:1px solid var(--line);padding:2px;box-sizing:border-box}
+/* ---------- compact cards: a shape per kind, icon + type + name + one status pill ---------- */
+.gnode.cmp{background:none;border:0;border-radius:0;box-shadow:none}
+.gnode.cmp:hover{box-shadow:none}
+.gnode.cmp .gshape{position:absolute;inset:0;overflow:visible;pointer-events:none;transition:filter .12s}
+.gnode.cmp .gshape .sh{fill:var(--surface);stroke:var(--line-strong);stroke-width:1.25}
+.gnode.cmp .gshape .sh2{fill:none;stroke:var(--line-strong);stroke-width:1.25}
+.gnode.cmp:hover .gshape{filter:drop-shadow(0 5px 10px rgba(17,24,39,.16))}
+.gnode.cmp .gn{position:relative;border-radius:10px;overflow:visible}
+.gnode.cmp .gh{height:64px;padding:0 14px 0 12px;gap:10px}
+.gnode.cmp.k-hex .gh{padding:0 18px 0 18px}.gnode.cmp.k-pipe .gh{padding:0 22px 0 14px}.gnode.cmp.k-pill .gh{padding:0 24px 0 18px}.gnode.cmp.k-cyl .gh{padding-top:6px}
+.gnode.cmp .gh .side-ic{width:34px;height:34px;font-size:11px;border-radius:6px}
+.gnode.cmp .gtt small{font:500 10.5px/14px var(--font-body);letter-spacing:0;text-transform:none;color:var(--subtle)}
+.gnode.cmp .gtt b{font:600 14px/19px var(--font-body)}
+.gnode.cmp .gm{border-top:1px solid var(--line);margin:0 12px;padding:6px 0 8px}
+.gnode.cmp.st-warn .gshape .sh,.gnode.cmp.st-warn .gshape .sh2{stroke:var(--warn);stroke-width:1.75}
+.gnode.cmp.st-bad .gshape .sh,.gnode.cmp.st-bad .gshape .sh2{stroke:var(--bad);stroke-width:1.75}
+.gnode.cmp.st-bad .gshape .sh{fill:var(--bad-soft)} .gnode.cmp.st-bad .gh{background:none}
+.gnode.cmp.ghost{border:0;background:none}.gnode.cmp.ghost .gshape .sh{fill:none;stroke-dasharray:5 4}
+.gnode.cmp.sel{border:0;box-shadow:none}.gnode.cmp.sel .gshape .sh,.gnode.cmp.sel .gshape .sh2{stroke:var(--accent);stroke-width:2.25}
+.gnode.cmp.sel .gshape{filter:drop-shadow(0 0 4px var(--accent-soft)) drop-shadow(0 0 1px var(--accent))}
+.gnode.cmp.valid .gshape .sh{stroke:var(--accent)}
+.gnode.cmp .gp{top:26px}.gnode.cmp button.gp.out.on{top:24px}
+.gnode.cmp .gpill{top:-9px;right:16px}
+.gnode.cmp.walk{outline-offset:6px}
+/* the canvas legend */
+.glegend{position:absolute;right:12px;top:12px;z-index:4;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow);padding:8px 10px;max-width:250px;font-size:12px;line-height:16px}
+.glegend b{display:block;font:500 11px/16px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--subtle);margin-bottom:6px}
+.glegend ul{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+.glegend li{display:flex;align-items:center;gap:10px;color:var(--ink)}
+.glegend .gshape{flex:none;overflow:visible}.glegend .gshape .sh{fill:var(--surface);stroke:var(--muted);stroke-width:1.25}.glegend .gshape .sh2{fill:none;stroke:var(--muted);stroke-width:1.25}
+.glegend small{display:block;margin-top:8px;color:var(--subtle);font-size:11px;line-height:15px}
+.rowsv dd.v.ok{color:var(--ok)}.rowsv dd.v.bad{color:var(--bad)}.rowsv dd.v.warn{color:var(--warn)}.rowsv dd.v.none{color:var(--subtle)}

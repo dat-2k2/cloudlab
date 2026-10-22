@@ -17,6 +17,36 @@ Object.assign(DOMAIN.texts,{
   importPh:"Resources:\n  MyBucket:\n    Type: AWS::S3::Bucket",importEmpty:"Template không có tài nguyên nào trong Resources.",
   tourWelcome:"Ở đây bạn học AWS bằng cách sửa một hệ thống mẫu có lỗi, rồi chạy thử xem nó hoạt động thế nào. Không gọi AWS thật, không tốn tiền. Xem qua màn hình mất khoảng 1 phút.",
   tourCode:"Canvas cũng là một file CloudFormation. Chế độ YAML cho xem template và xuất ra Terraform hoặc CDK. Nếu không làm kỹ thuật, bạn có thể bỏ qua."});
+/* ---------------- block look: AWS Architecture Icons + a shape per kind ----------------
+   Icons: the official AWS Architecture Icons (© Amazon Web Services), unmodified, from the npm package aws-icons over
+   jsDelivr; AWS allows them in architecture diagrams. Service icons (coloured squares) as they are; resource / general
+   icons (a glyph on transparent) on a light tile so they read in dark mode too. A missing icon falls back to the text badge. */
+DOMAIN.compact=true;DOMAIN.layoutScale=[0.8,0.6];
+const ICON_CDN="https://cdn.jsdelivr.net/npm/aws-icons@3.3.0/icons/";
+const ICONS={"CloudLab::Client":"r/User","CloudLab::Uploader":"r/Mobileclient","CloudLab::Inbox":"r/Email","CloudLab::Monitor":"r/Metrics",
+  "AWS::ApiGatewayV2::Api":"s/AmazonAPIGateway","AWS::ApiGatewayV2::Api#ws":"s/AmazonAPIGateway","AWS::Lambda::Function":"s/AWSLambda","AWS::IAM::Role":"r/AWSIdentityAccessManagementRole",
+  "AWS::S3::Bucket":"s/AmazonSimpleStorageService","AWS::S3::BucketPolicy":"r/AWSIdentityAccessManagementPermissions","AWS::DynamoDB::Table":"s/AmazonDynamoDB",
+  "AWS::SNS::Topic":"s/AmazonSimpleNotificationService","AWS::SQS::Queue":"s/AmazonSimpleQueueService","AWS::Events::Rule":"r/AmazonEventBridgeRule","AWS::Logs::LogGroup":"r/AmazonCloudWatchLogs",
+  "AWS::CloudWatch::Alarm":"r/AmazonCloudWatchAlarm","AWS::Budgets::Budget":"s/AWSBudgets","AWS::EC2::VPC":"g/VirtualprivatecloudVPC","AWS::EC2::InternetGateway":"r/AmazonVPCInternetGateway",
+  "AWS::EC2::RouteTable":"r/AmazonVPCRouter","AWS::EC2::SecurityGroup":"r/Firewall","AWS::EC2::Instance":"s/AmazonEC2","AWS::ElasticLoadBalancingV2::LoadBalancer":"r/ElasticLoadBalancingApplicationLoadBalancer",
+  "AWS::ElasticLoadBalancingV2::TargetGroup":"s/ElasticLoadBalancing","AWS::CloudFront::Distribution":"s/AmazonCloudFront","AWS::Route53::RecordSet":"s/AmazonRoute53","AWS::RDS::DBInstance":"s/AmazonRDS",
+  "AWS::ElastiCache::CacheCluster":"s/AmazonElastiCache","AWS::ElastiCache::ServerlessCache":"s/AmazonElastiCache","AWS::MSK::Cluster":"s/AmazonManagedStreamingforApacheKafka","AWS::MSK::ServerlessCluster":"s/AmazonManagedStreamingforApacheKafka",
+  "AWS::AmazonMQ::Broker":"s/AmazonMQ","AWS::Organizations::Organization":"s/AWSOrganizations","AWS::Organizations::OrganizationalUnit":"r/AWSOrganizationsOrganizationalUnit","AWS::Organizations::Account":"r/AWSOrganizationsAccount",
+  "AWS::Organizations::Policy":"r/AWSIdentityAccessManagementPermissions","AWS::ControlTower::LandingZone":"s/AWSControlTower"};
+const ICON_DIR={s:"architecture-service",r:"resource",g:"architecture-group"};
+DOMAIN.iconOf=d=>{const k=ICONS[d.type]||ICONS[baseType(d.type)];if(!k)return null;const[dir,name]=k.split("/");return{src:ICON_CDN+ICON_DIR[dir]+"/"+name+".svg",tile:dir==="r"}};
+/* subnet boxes use AWS's public / private subnet group icons */
+DOMAIN.boxIconDef=b=>b.type==="AWS::EC2::Subnet"?{...b.def,type:b.pub?"#publicsubnet":"#privatesubnet"}:b.def;
+Object.assign(ICONS,{"#publicsubnet":"g/Publicsubnet","#privatesubnet":"g/Privatesubnet"});
+/* shape by kind (shell/editor.js SHAPE_KINDS) */
+const KIND={"AWS::Lambda::Function":"rect","AWS::EC2::Instance":"rect","AWS::Organizations::Account":"rect","AWS::Organizations::Organization":"rect",
+  "AWS::S3::Bucket":"cyl","AWS::DynamoDB::Table":"cyl","AWS::RDS::DBInstance":"cyl","AWS::ElastiCache::CacheCluster":"cyl","AWS::ElastiCache::ServerlessCache":"cyl","AWS::Logs::LogGroup":"cyl",
+  "AWS::SNS::Topic":"pipe","AWS::SQS::Queue":"pipe","AWS::MSK::Cluster":"pipe","AWS::MSK::ServerlessCluster":"pipe","AWS::AmazonMQ::Broker":"pipe","AWS::Events::Rule":"pipe",
+  "AWS::ApiGatewayV2::Api":"hex","AWS::ElasticLoadBalancingV2::LoadBalancer":"hex","AWS::ElasticLoadBalancingV2::TargetGroup":"hex","AWS::CloudFront::Distribution":"hex","AWS::Route53::RecordSet":"hex","AWS::EC2::InternetGateway":"hex",
+  "AWS::IAM::Role":"cut","AWS::EC2::SecurityGroup":"cut","AWS::S3::BucketPolicy":"cut","AWS::EC2::RouteTable":"cut","AWS::Organizations::Policy":"cut","AWS::Budgets::Budget":"cut","AWS::CloudWatch::Alarm":"cut","AWS::ControlTower::LandingZone":"cut"};
+DOMAIN.kindOf=n=>n.ext?"pill":KIND[n.type]||"rect";
+T["CloudLab::Monitor"].keepRows=true;
+DOMAIN.texts.iconCredit="Biểu tượng: AWS Architecture Icons © Amazon Web Services.";
 DOMAIN.relDoc={calls:"Client gửi request (HTTP hoặc S3 API) tới tài nguyên này.",uploads:"Mỗi file là một s3:PutObject vào bucket.",invokes:"Gọi Lambda: API gọi đồng bộ (chờ kết quả), S3 / lịch gọi bất đồng bộ.",
   delivers:"Topic đẩy mỗi message tới subscription này. Email cần được xác nhận.",notifies:"Khi vượt ngưỡng / chuyển ALARM, publish một message vào topic.",uses:"Code của Lambda dùng tài nguyên này qua biến môi trường. Role phải cho phép thao tác tương ứng.",
   assumes:"Mượn quyền của role (Lambda khi chạy, hoặc người qua STS AssumeRole).",grants:"Một statement trong policy của role nhắc tới tài nguyên này.",applies:"Bucket policy (resource-based) áp cho bucket này.",
@@ -161,9 +191,9 @@ DOMAIN.edgeState=(e,f,st,from)=>{const looping=id=>RT.n[id]&&RT.n[id].series.sli
   if(f&&f.tot&&((looping(e.to)&&e.kind==="invokes"&&(from||{}).type==="AWS::S3::Bucket")||(looping(e.from)&&e.kind==="uses"&&(nodeOf(e.to)||{}).type==="AWS::S3::Bucket")))return"loop";return st};
 
 /* ---------------- boxes: VPC wraps its subnets, a subnet wraps what is placed in it, an OU wraps its accounts ---------------- */
-Object.assign(T["AWS::EC2::VPC"],{box:{pad:24,head:34,size:[400,260]},boxLabel:b=>{const g=igwOf(b.id);return`VPC · ${b.id} · ${b.props.CidrBlock||""} · ${g?"internet gateway "+refId(g.props.InternetGatewayId):"chưa có internet gateway"}`},boxEmpty:"Kéo EC2 / RDS / internet gateway vào đây"});
-Object.assign(T["AWS::EC2::Subnet"],{box:{pad:22,head:30,size:[300,170]},boxExtra:b=>({pub:isPublicSubnet(b.id)}),boxClass:b=>b.pub?" pub":" priv",
-  boxLabel:b=>`${b.pub?"Public":"Private"} subnet · ${b.id} · ${b.props.AvailabilityZone||""} · ${b.props.CidrBlock||""}${rtOfSubnet(b.id)?" · "+rtOfSubnet(b.id):""}`,boxEmpty:"Kéo EC2 / RDS vào đây"});
+Object.assign(T["AWS::EC2::VPC"],{box:{pad:24,head:34,size:[400,260]},boxLabel:b=>{const g=igwOf(b.id);return`${b.id} · ${b.props.CidrBlock||""} · ${g?"gắn "+refId(g.props.InternetGatewayId):"chưa gắn internet gateway"}`},boxEmpty:"Kéo EC2 / RDS / internet gateway vào đây"});
+Object.assign(T["AWS::EC2::Subnet"],{box:{pad:22,head:30,size:[260,110]},boxExtra:b=>({pub:isPublicSubnet(b.id)}),boxClass:b=>b.pub?" pub":" priv",
+  boxLabel:b=>`${b.id} · ${b.pub?"public":"private"} · ${String(b.props.AvailabilityZone||"").replace(/^.*-(\d[a-z])$/,"$1")} · ${b.props.CidrBlock||""}${rtOfSubnet(b.id)?" · "+rtOfSubnet(b.id):""}`,boxEmpty:"Kéo EC2 / RDS vào đây"});
 Object.assign(T["AWS::Organizations::OrganizationalUnit"],{box:{pad:22,head:34,size:[320,190]},boxExtra:b=>({reg:typeof ouRegistered==="function"&&ouRegistered(b.id)}),boxClass:b=>b.reg?" reg":"",
   boxLabel:b=>`OU · ${b.props.Name||b.id} · ${b.reg?"đã register":"chưa register"}`,boxEmpty:"Kéo account vào đây"});
 DOMAIN.parentOf=n=>{const c=n.def.container;if(c==="subnet")return refId(n.props.VpcId);if(c)return null;
