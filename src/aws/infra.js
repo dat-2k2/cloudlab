@@ -27,7 +27,7 @@ def("AWS::EC2::InternetGateway",{label:"Internet gateway",short:"IGW",cat:"infra
   doc:"Cửa ra vào Internet của VPC. Gắn vào VPC (VPCGatewayAttachment) thì các public subnet mới nhận và gửi được traffic Internet. Miễn phí.",
   defaults:id=>({Tags:nameTag(id)}),name:p=>tagName(p),fields:[]});
 def("AWS::EC2::VPCGatewayAttachment",{label:"Gateway attachment",short:"ATT",cat:"infra",edge:true,
-  doc:"Gắn internet gateway vào VPC.",defaults:()=>({VpcId:null,InternetGatewayId:null}),edgeOf:p=>[{from:refId(p.InternetGatewayId),to:refId(p.VpcId),kind:"attaches",label:"attach"}]});
+  doc:"Gắn internet gateway vào VPC.",defaults:()=>({VpcId:null,InternetGatewayId:null}),edgeOf:p=>[{from:refId(p.InternetGatewayId),to:refId(p.VpcId),kind:"attaches",label:"attach",hidden:true}]});
 def("AWS::EC2::SecurityGroup",{label:"Security group",short:"SG",cat:"sec",
   doc:"Tường lửa gắn vào từng tài nguyên (EC2, load balancer, RDS). Mặc định chặn mọi traffic vào; mỗi inbound rule mở một cổng cho một nguồn: dải IP (0.0.0.0/0 = cả Internet) hoặc một security group khác.",
   defaults:id=>({GroupDescription:kebab(id),VpcId:null,SecurityGroupIngress:[]}),name:p=>p.GroupName||p.GroupDescription,
@@ -126,7 +126,8 @@ function CONNECT_X(a,b,A,B,say){const ta=A.type,tb=B.type;
   if(tb==="AWS::EC2::VPC"&&["AWS::EC2::Subnet","AWS::EC2::SecurityGroup","AWS::ElasticLoadBalancingV2::TargetGroup"].includes(ta))return say("thuộc VPC này",()=>{A.props.VpcId=R(b);
     if(ta==="AWS::EC2::Subnet"){const vc=ip4(B.props.CidrBlock),c=ip4(A.props.CidrBlock),clash=allNodes().some(s=>s.id!==a&&s.type==="AWS::EC2::Subnet"&&refId(s.props.VpcId)===b&&cidrOverlap(c,ip4(s.props.CidrBlock)));
       if(vc&&(!c||!cidrIn(c,vc)||clash)){const tmp=newSubnetIn(b);A.props.CidrBlock=M.res[tmp].Properties.CidrBlock;A.props.AvailabilityZone=M.res[tmp].Properties.AvailabilityZone;delete M.res[tmp]}}});
-  if(ta==="AWS::EC2::InternetGateway"&&tb==="AWS::EC2::VPC")return say("gắn vào VPC (VPCGatewayAttachment)",()=>{M.res[freeId(a+"Attach")]={Type:"AWS::EC2::VPCGatewayAttachment",Properties:{VpcId:R(b),InternetGatewayId:R(a)}}});
+  if(ta==="AWS::EC2::InternetGateway"&&tb==="AWS::EC2::VPC")return say("gắn vào VPC (VPCGatewayAttachment)",()=>{for(const k of Object.keys(M.res))if(M.res[k].Type==="AWS::EC2::VPCGatewayAttachment"&&refId(M.res[k].Properties.InternetGatewayId)===a)delete M.res[k];
+    M.res[freeId(a+"Attach")]={Type:"AWS::EC2::VPCGatewayAttachment",Properties:{VpcId:R(b),InternetGatewayId:R(a)}};if(typeof seatIgw==="function")seatIgw(a,b)});
   if(tb==="AWS::EC2::SecurityGroup"&&SG_PATH[ta])return say("gắn security group",sub(SG_PATH[ta],"GroupId"));
   if(ta==="AWS::EC2::SecurityGroup"&&tb==="AWS::EC2::SecurityGroup")return say(`cho phép ${a} vào ${b} (tcp/80)`,()=>sgRule(b,a,80).apply());
   if(tb==="AWS::EC2::Subnet"){

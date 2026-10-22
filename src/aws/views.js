@@ -133,12 +133,13 @@ DOMAIN.edgeState=(e,f,st,from)=>{const looping=id=>RT.n[id]&&RT.n[id].series.sli
   if(f&&f.tot&&((looping(e.to)&&e.kind==="invokes"&&(from||{}).type==="AWS::S3::Bucket")||(looping(e.from)&&e.kind==="uses"&&(nodeOf(e.to)||{}).type==="AWS::S3::Bucket")))return"loop";return st};
 
 /* ---------------- boxes: VPC wraps its subnets, a subnet wraps what is placed in it, an OU wraps its accounts ---------------- */
-Object.assign(T["AWS::EC2::VPC"],{box:{pad:24,head:34,size:[400,260]},boxLabel:b=>`VPC · ${b.id} · ${b.props.CidrBlock||""}`,boxEmpty:"Kéo EC2 / RDS vào đây"});
+Object.assign(T["AWS::EC2::VPC"],{box:{pad:24,head:34,size:[400,260]},boxLabel:b=>{const g=igwOf(b.id);return`VPC · ${b.id} · ${b.props.CidrBlock||""} · ${g?"internet gateway "+refId(g.props.InternetGatewayId):"chưa có internet gateway"}`},boxEmpty:"Kéo EC2 / RDS / internet gateway vào đây"});
 Object.assign(T["AWS::EC2::Subnet"],{box:{pad:22,head:30,size:[300,170]},boxExtra:b=>({pub:isPublicSubnet(b.id)}),boxClass:b=>b.pub?" pub":" priv",
   boxLabel:b=>`${b.pub?"Public":"Private"} subnet · ${b.id} · ${b.props.AvailabilityZone||""} · ${b.props.CidrBlock||""}`,boxEmpty:"Kéo EC2 / RDS vào đây"});
 Object.assign(T["AWS::Organizations::OrganizationalUnit"],{box:{pad:22,head:34,size:[320,190]},boxExtra:b=>({reg:typeof ouRegistered==="function"&&ouRegistered(b.id)}),boxClass:b=>b.reg?" reg":"",
   boxLabel:b=>`OU · ${b.props.Name||b.id} · ${b.reg?"đã register":"chưa register"}`,boxEmpty:"Kéo account vào đây"});
 DOMAIN.parentOf=n=>{const c=n.def.container;if(c==="subnet")return refId(n.props.VpcId);if(c)return null;
+  if(n.type==="AWS::EC2::InternetGateway"){const v=igwVpc(n.id);return v&&nodeOf(v)?v:null}
   if(n.type==="AWS::Organizations::Account")return refId(arr(n.props.ParentIds)[0]);
   const ss=subnetsOf(n);if(ss.length===1&&nodeOf(ss[0]))return ss[0];const v=vpcOf(n);return v&&nodeOf(v)?v:null};
 
@@ -211,12 +212,24 @@ function placeIn(id,sid){const n=nodeOf(id);if(!n||!PLACEABLE.includes(n.type))r
     else{let g=refId(nn.props.DBSubnetGroupName);if(!sid){if(g&&nodeOf(g))nodeOf(g).props.SubnetIds=[];return}if(!g||!nodeOf(g)){g=freeId(id+"Subnets");M.res[g]={Type:"AWS::RDS::DBSubnetGroup",Properties:{DBSubnetGroupDescription:kebab(id)+" subnets",SubnetIds:[]}};nn.props.DBSubnetGroupName={Ref:g}}
       const G=nodeOf(g);G.props.SubnetIds=[{Ref:sid},...arr(G.props.SubnetIds).filter(x=>refId(x)!==sid)].slice(0,3)}});
   log("CloudLab","editor","place",sid?`${id} → subnet ${sid}`:`${id} ra khỏi subnet`,"ok");return true}
-DOMAIN.onDrop=(id,type,x,y,boxes)=>{const ob=boxAt(boxes,x,y,"ou");if(ob&&type==="AWS::Organizations::Account")moveAcctTo(id,ob.id);const sb=boxAt(boxes,x,y,"subnet"),vb=boxAt(boxes,x,y,"vpc");if(sb)placeIn(id,sb.id);else if(vb&&PLACEABLE.includes(type))autoSubnet(id,vb.id);
+/* an internet gateway attached to a VPC is drawn inside the VPC box (AWS diagrams put it on the VPC edge). Dropping it on
+   a VPC box attaches it; dragging it out of the box detaches it; attaching it with an arrow moves it into the box. */
+const igwAttachments=id=>Object.keys(M.res).filter(k=>M.res[k].Type==="AWS::EC2::VPCGatewayAttachment"&&refId(M.res[k].Properties.InternetGatewayId)===id);
+function igwVpc(id){const k=igwAttachments(id)[0];return k?refId(M.res[k].Properties.VpcId):null}
+/* keep the gateway clear of the other blocks: inside the VPC box, below what is already there */
+function seatIgw(id,vpc){const L=typeof GLAST!=="undefined"&&GLAST;if(!L)return;const box=L.by[vpc],me=L.by[id];if(!box)return;const p=M.pos[id]||[0,0],h=(me&&me.h)||110;
+  const inside=p[0]>=box.x&&p[0]+GW<=box.x+box.w&&p[1]>=box.y&&p[1]<=box.y+box.h;
+  const hits=L.nodes.some(o=>o.id!==id&&p[0]<o.x+o.w+12&&p[0]+GW>o.x-12&&p[1]<o.y+o.h+12&&p[1]+h>o.y-12)||L.boxes.some(b=>b.id!==vpc&&b.box!=="vpc"&&p[0]<b.x+b.w&&p[0]+GW>b.x&&p[1]<b.y+b.h&&p[1]+h>b.y);
+  if(inside&&!hits)return;const pad=(T["AWS::EC2::VPC"].box||{}).pad||24;M.pos[id]=[Math.round(box.x+pad),Math.round(box.y+box.h-pad+18)]}
+function attachIgw(id,vpc){const n=nodeOf(id);if(!n||n.type!=="AWS::EC2::InternetGateway"||!vpc)return false;if(igwVpc(id)===vpc){seatIgw(id,vpc);return false}const r=connectRule(id,vpc);if(!r)return false;
+  edit(`${id} → ${vpc}`,()=>{for(const k of igwAttachments(id))delete M.res[k];r.apply(true);seatIgw(id,vpc)});log("CloudLab","editor","connect",`${id} → ${vpc}: ${r.label}`,"ok");return true}
+function detachIgw(id){const ks=igwAttachments(id);if(!ks.length)return false;const v=igwVpc(id);edit(`tháo ${id} khỏi ${v}`,()=>{for(const k of ks)delete M.res[k]});log("CloudLab","editor","detach",`${id} không còn gắn vào ${v}: public subnet mất đường ra Internet`,"warn");gNote(`${id} đã tháo khỏi ${v}. Kéo lại vào khung VPC để gắn.`,"info");return true}
+DOMAIN.onDrop=(id,type,x,y,boxes)=>{if(type==="AWS::EC2::InternetGateway"){const vb=boxAt(boxes,x,y,"vpc");if(vb)attachIgw(id,vb.id);return}const ob=boxAt(boxes,x,y,"ou");if(ob&&type==="AWS::Organizations::Account")moveAcctTo(id,ob.id);const sb=boxAt(boxes,x,y,"subnet"),vb=boxAt(boxes,x,y,"vpc");if(sb)placeIn(id,sb.id);else if(vb&&PLACEABLE.includes(type))autoSubnet(id,vb.id);
   else if(vb&&["AWS::EC2::Subnet","AWS::EC2::SecurityGroup","AWS::ElasticLoadBalancingV2::TargetGroup"].includes(type))edit("vpc",()=>{nodeOf(id).props.VpcId={Ref:vb.id}})};
-DOMAIN.dropHint=(type,x,y,boxes)=>{const b=boxAt(boxes,x,y,"subnet")||boxAt(boxes,x,y,"vpc");return b?b.id:null};
-DOMAIN.dragHint=(n,c,boxes)=>{let h;if(n.type==="AWS::Organizations::Account"){const b=boxAt(boxes,c[0],c[1],"ou");h=b?b.id:null}
+DOMAIN.dropHint=(type,x,y,boxes)=>{if(type==="AWS::EC2::InternetGateway"){const v=boxAt(boxes,x,y,"vpc");return v?v.id:null}const b=boxAt(boxes,x,y,"subnet")||boxAt(boxes,x,y,"vpc");return b?b.id:null};
+DOMAIN.dragHint=(n,c,boxes)=>{let h;if(n.type==="AWS::EC2::InternetGateway"){const v=boxAt(boxes,c[0],c[1],"vpc");return v&&v.id!==igwVpc(n.id)?v.id:null}if(n.type==="AWS::Organizations::Account"){const b=boxAt(boxes,c[0],c[1],"ou");h=b?b.id:null}
   if(PLACEABLE.includes(n.type)){const b=boxAt(boxes.filter(x=>!x.members.includes(n.id)||x.box==="subnet"),c[0],c[1],"subnet");h=b?b.id:null}return h};
-DOMAIN.onDragEnd=(n,c,boxes)=>{if(n.type==="AWS::Organizations::Account"){const ob=boxAt(boxes,c[0],c[1],"ou");if(ob)moveAcctTo(n.id,ob.id)}
+DOMAIN.onDragEnd=(n,c,boxes)=>{if(n.type==="AWS::EC2::InternetGateway"){const v=boxAt(boxes,c[0],c[1],"vpc");if(v)attachIgw(n.id,v.id);else detachIgw(n.id);return}if(n.type==="AWS::Organizations::Account"){const ob=boxAt(boxes,c[0],c[1],"ou");if(ob)moveAcctTo(n.id,ob.id)}
   if(PLACEABLE.includes(n.type)){const sb=boxAt(boxes,c[0],c[1],"subnet"),cur=subnetsOf(n)[0]||null;const vb=!sb&&boxAt(boxes,c[0],c[1],"vpc");
     if(sb&&sb.id!==cur)placeIn(n.id,sb.id);else if(vb&&!cur)autoSubnet(n.id,vb.id);else if(!sb&&cur&&!vb)placeIn(n.id,null)}};
 /* extra entry points on window.CloudLab (tests, WebMCP, the browser console) */

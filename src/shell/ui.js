@@ -306,7 +306,7 @@ document.addEventListener("pointermove",e=>{if(!GD||GD.kind==="edge")return;cons
   else if(GD.kind==="node"){M.pos[GD.id]=[Math.round(GD.pos0[0]+dx/z),Math.round(GD.pos0[1]+dy/z)];const n=nodeOf(GD.id);
     if(n&&DOMAIN.dragHint){const c=[M.pos[GD.id][0]+GW/2,M.pos[GD.id][1]+40],h=DOMAIN.dragHint(n,c,GD.boxes);if(h!==undefined)UI.gdropBox=h}gRefresh()}
   else if(GD.kind==="box"){for(const k of Object.keys(GD.pos0))M.pos[k]=[Math.round(GD.pos0[k][0]+dx/z),Math.round(GD.pos0[k][1]+dy/z)];gRefresh()}
-  else{const el=document.elementFromPoint&&document.elementFromPoint(e.clientX,e.clientY),on=el&&el.closest&&el.closest(".gnode");UI.gdrag.at=toWorld(e.clientX,e.clientY);UI.gdrag.over=on?on.dataset.gid:null;gRefresh();GD.gx.classList.add("connecting");gDirty()}});
+  else{const el=document.elementFromPoint&&document.elementFromPoint(e.clientX,e.clientY),on=el&&el.closest&&(el.closest(".gnode")||el.closest(".gbox"));UI.gdrag.at=toWorld(e.clientX,e.clientY);UI.gdrag.over=on?on.dataset.gid:null;gRefresh();GD.gx.classList.add("connecting");gDirty()}});
 function gEnd(cancel){if(!GD)return;const d=GD;GD=null;if(!d.moved)return;GSUP=Date.now();
   if(d.kind==="node"){const n=nodeOf(d.id);if(n&&DOMAIN.onDragEnd)DOMAIN.onDragEnd(n,[M.pos[d.id][0]+GW/2,M.pos[d.id][1]+40],d.boxes);UI.gdropBox=null;saveSandbox();render()}
   if(d.kind==="box")saveSandbox();

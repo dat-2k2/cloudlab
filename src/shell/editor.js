@@ -64,7 +64,8 @@ function spark(series,key){const pts=series.map(x=>(x[key]||0)/(x.dt||1)),mx=Mat
    a simulation tick or a drag usually touches a few nodes, and the rest of the DOM (and its focus) stays put.
    gWorld(L) still returns the whole markup, identical to joining the parts. */
 function gParts(L){const G=gs(),sel=UI.sel||{},drag=UI.gdrag;
-  const valid=drag?Object.fromEntries(L.nodes.map(n=>[n.id,n.id!==drag.from&&connectRule(drag.from,n.id)])):null;
+  /* a connection can end on a block or on a box (VPC, subnet, namespace…) */
+  const valid=drag?Object.fromEntries([...L.nodes,...L.boxes].map(n=>[n.id,n.id!==drag.from&&connectRule(drag.from,n.id)])):null;
   /* edge bundling per side so several edges into one side don't overlap */
   const sideUse={};const plan=L.edges.map(e=>{const A=L.by[e.from],B=L.by[e.to],[sa,sb]=sidesFor(A,B);const ka=e.from+sa,kb2=e.to+sb;(sideUse[ka]=sideUse[ka]||[]).push(e.id);(sideUse[kb2]=sideUse[kb2]||[]).push(e.id);return{e,A,B,sa,sb,ka,kb:kb2}});
   const trace=G.trace?new Set(L.edges.filter(e=>{const f=RT.flow[e.id];return f&&(f.tk||f.tke)}).flatMap(e=>[e.from,e.to])):null;
@@ -77,7 +78,7 @@ function gParts(L){const G=gs(),sel=UI.sel||{},drag=UI.gdrag;
   if(drag&&drag.at){const A=L.by[drag.from],over=drag.over&&valid[drag.over]?L.by[drag.over]:null,p1=gAnchor(A,"r",0,1),p2=over?gAnchor(over,"l",0,1):drag.at,c=gCurve(p1,"r",p2,over?"l":null);
     svg+=`<path d="${c.d}" class="ge s-drag" marker-end="url(#ga-drag)"/>`;if(over){const q=c.at(.5);chips+=`<span class="gchip s-drag" style="left:${q[0]}px;top:${q[1]}px">thả để nối · ${esc(valid[drag.over].label)}</span>`}}
   const boxes=[];for(const b of L.boxes){const d=b.def,label=d.boxLabel?d.boxLabel(b):`${d.label} · ${b.id}`;
-    boxes.push({id:b.id,a:`<div class="gbox ${b.box}${d.boxClass?d.boxClass(b):""}${sel.node===b.id?" sel":""}${UI.gdropBox===b.id?" drop":""}" data-gid="${b.id}" data-box="${b.box}"`,st:`left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px`,
+    boxes.push({id:b.id,a:`<div class="gbox ${b.box}${d.boxClass?d.boxClass(b):""}${sel.node===b.id?" sel":""}${UI.gdropBox===b.id||(drag&&drag.over===b.id&&valid[b.id])?" drop":""}" data-gid="${b.id}" data-box="${b.box}"`,st:`left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px`,
       b:`><button class="gbox-h" data-node="${b.id}" aria-label="${esc(label)}"><span class="side-ic" style="--cat:var(--c-${d.cat})" aria-hidden="true">${esc(d.short)}</span>${esc(label)}</button>${b.members.length?"":`<span class="gbox-empty">${esc(d.boxEmpty||"")}</span>`}</div>`})}
   const nodes=[];for(const n of L.nodes){const v=n.v,isSel=sel.node===n.id,vt=valid?(n.id===drag.from?"":valid[n.id]?" valid":" invalid"):"",dim=trace&&!trace.has(n.id)?" dim":"";
     const desc=`${n.id}, ${n.def.label}${v.st?", "+v.st[1]:""}`;
@@ -107,7 +108,7 @@ function gSnap(w,P,bk,nk){w.__g={bk:bk!=null?bk:P.boxes.map(x=>x.id).join("|"),n
 const gWorldStyle=(W,H,pan,z)=>`width:${W}px;height:${H}px;transform:translate(${pan[0]}px,${pan[1]}px) scale(${z})`;
 function gSetStyle(w,s){if(w.getAttribute("style")!==s)w.setAttribute("style",s)}
 function gMenuHtml(L,list){const M_=UI.gmenu;if(!M_||!L.by[M_.from])return"";const src=L.by[M_.from];
-  const opts=L.nodes.filter(n=>n.id!==M_.from).map(n=>({n,r:connectRule(M_.from,n.id)})).sort((a,b)=>(b.r?1:0)-(a.r?1:0));M_.ids=opts.map(o=>o.n.id);const ai=Math.min(M_.active||0,opts.length-1);
+  const opts=[...L.nodes,...L.boxes].filter(n=>n.id!==M_.from).map(n=>({n,r:connectRule(M_.from,n.id)})).sort((a,b)=>(b.r?1:0)-(a.r?1:0));M_.ids=opts.map(o=>o.n.id);const ai=Math.min(M_.active||0,opts.length-1);
   let style="";if(!list){const z=GCUR.z,cw=(document.querySelector(".gx")||{}).clientWidth||880,l=(src.x+src.w)*z+GCUR.pan[0]+10;style=` style="left:${Math.max(8,Math.min(l,cw-316))}px;top:${Math.max(8,src.y*z+GCUR.pan[1])}px"`}
   return`<div class="gmenu${list?" inline":""}"${style}><p class="cap">Nối từ</p><b class="gmt">${esc(src.id)} →</b>
     <ul class="gopts" id="glist" role="listbox" tabindex="0" aria-label="Chọn khối để nối" aria-activedescendant="gopt-${ai}">${opts.map(({n,r},i)=>`<li id="gopt-${i}" role="option" class="gopt${r?"":" bad"}${i===ai?" on":""}" aria-selected="${i===ai}" aria-disabled="${!r}" data-act="gPick" data-arg="${n.id}"><span class="side-ic" style="--cat:var(--c-${n.def.cat})" aria-hidden="true">${esc(n.def.short)}</span><span class="gtt"><b>${esc(n.id)}</b><small>${esc(r?r.label:whyNot(M_.from,n.id))}</small></span><span class="k" aria-hidden="true">${r?(i===ai?"↵":""):"✕"}</span></li>`).join("")||`<li class="gopt bad">Canvas chưa có khối nào khác để nối</li>`}</ul>
