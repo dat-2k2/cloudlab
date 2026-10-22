@@ -49,7 +49,7 @@ function lambdaRun(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,d=ev.data||{};
   if(!exists(id)){if(ev.from)flow(ev.from,id,ev.kind||"invokes",w,"ResourceNotFound: function chưa được deploy");return{ok:false,err:"ResourceNotFound"}}
   const p=n.props,mem=+p.MemorySize||128,to=(+p.Timeout||3)*1000,work=+(metaOf(n).WorkMs||300),need=Math.round(work*128/mem),timed=need>to,dur=timed?to:need,role=refId(p.Role);
   /* a self-feeding S3 loop at its fixed point: fold the hops that fit in this tick into one batch */
-  let k=1,delay=dur/1000;const vars=getP(p,"Environment.Variables")||{},outBucket=Object.values(vars).map(refId).find(x=>x&&(nodeOf(x)||{}).type==="AWS::S3::Bucket");
+  let k=1,delay=dur/1000;const vars=getP(p,"Environment.Variables")||{},outBucket=Object.values(vars).map(refOrName).find(x=>x&&(nodeOf(x)||{}).type==="AWS::S3::Bucket");
   const outKey=d.key&&outBucket?(vars.OUTPUT_PREFIX||"")+d.key.split("/").pop()+".json":null;
   if(d.src==="s3"&&outBucket===d.bucket&&outKey&&depthCap(outKey)===d.key){const per=dur/1000+0.3;k=Math.max(1,Math.floor((T1-ev.at)/per)+1);delay=k*per-0.3}
   const W=w*k;if(d.src==="s3"&&outBucket===d.bucket&&/\.json$/.test(d.key||"")){bump(id,"loop",W);RT.loop[id]=(RT.loop[id]||0)+W}bump(id,"inv",W);charge(id,W*PRICE.lambdaReq,"request");charge(id,W*mem/1024*Math.ceil(dur)/1000*PRICE.lambdaGBs,"GB-giây");bump(id,"dur",W*dur);
@@ -59,7 +59,7 @@ function lambdaRun(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,d=ev.data||{};
   else if(timed){err=`Task timed out after ${(to/1000).toFixed(2)} seconds`;lines.push(`${rq} ${err}`)}
   else{if(role)flow(id,role,"assumes",W);
     if(d.src==="s3"){const e=evalRole(role,"s3:GetObject",arnOf(d.bucket)+"/"+d.key);lines.push(`[INFO] đọc s3://${refValue(d.bucket)}/${d.key}`);if(!e.allow){err=`AccessDenied: s3:GetObject trên ${d.key} (${e.by})`;lines.push("[ERROR] "+err)}}
-    if(!err)for(const[name,v]of Object.entries(vars)){const x=refId(v),xn=x&&nodeOf(x);if(!xn)continue;
+    if(!err)for(const[name,v]of Object.entries(vars)){const x=refOrName(v),xn=x&&nodeOf(x);if(!xn)continue;
       if(xn.type==="AWS::S3::Bucket"){const key=outKey||((vars.OUTPUT_PREFIX||"")+"result-"+(++RT.seq)+".json"),e=evalRole(role,"s3:PutObject",arnOf(x)+"/"+depthCap(key));
         if(!e.allow){err=`AccessDenied: s3:PutObject (${e.by})`;flow(id,x,"uses",W,err);lines.push("[ERROR] "+err);break}
         lines.push(`[INFO] ghi s3://${refValue(x)}/${depthCap(key)}`);push({at:ev.at+delay,to:x,from:id,kind:"uses",w,type:"s3",data:{action:"s3:PutObject",key:depthCap(key),kb:1,who:{role},by:id}})}
@@ -92,7 +92,8 @@ function s3Op(ev){const id=ev.to,b=nodeOf(id),w=ev.w,d=ev.data,who=d.who||{admin
   const keys=Object.keys(store);if(keys.length>400){const victim=keys.find(k=>k.startsWith("incoming/photo-"));if(victim){const v=store[victim];delete store[victim];const agg=store["…/(gộp)"]||(store["…/(gộp)"]={kb:v.kb,n:0});agg.n+=v.n}}
   for(const c of arr(getP(b.props,"NotificationConfiguration.LambdaConfigurations"))){const fn=refId(c&&c.Function);if(!fn)continue;
     const rules=arr(getP(c,"Filter.S3Key.Rules")),pre=(rules.find(r=>/prefix/i.test(r.Name))||{}).Value||"",suf=(rules.find(r=>/suffix/i.test(r.Name))||{}).Value||"";
-    if(d.key.startsWith(pre)&&d.key.endsWith(suf))push({at:ev.at+0.3,to:fn,from:id,kind:"invokes",w,type:"inv",data:{src:"s3",bucket:id,key:d.key}})}
+    if(!(d.key.startsWith(pre)&&d.key.endsWith(suf)))continue;const pm=canInvoke(fn,PRINCIPAL.s3,id);if(!pm.ok){flow(id,fn,"invokes",w,"S3 không gọi được Lambda: "+pm.why);continue}
+    push({at:ev.at+0.3,to:fn,from:id,kind:"invokes",w,type:"inv",data:{src:"s3",bucket:id,key:d.key}})}
   return{ok:true}}
 function publish(ev){const id=ev.to,t=nodeOf(id),w=ev.w,d=ev.data||{};
   if(!exists(id)){if(ev.from)flow(ev.from,id,ev.kind,w,"NotFound: topic chưa được deploy");return}
@@ -101,7 +102,7 @@ function publish(ev){const id=ev.to,t=nodeOf(id),w=ev.w,d=ev.data||{};
     if(s.Protocol==="email"){const st=RT.subs[id+"|"+s.Endpoint],inb=Object.keys(M.ext).find(x=>M.ext[x].Type==="CloudLab::Inbox"&&(M.ext[x].Properties||{}).Address===s.Endpoint);
       if(st!=="Confirmed"){if(inb)flow(id,inb,"delivers",w,"PendingConfirmation: email chưa xác nhận nên SNS không gửi (mở thư xác nhận trong hộp thư, bấm Confirm subscription)");return}
       charge(id,w*PRICE.snsEmail,"email");if(inb)flow(id,inb,"delivers",w);mail(s.Endpoint,{kind:d.kind||"msg",subject:d.subject||"SNS message",body:d.body||"",n:w})}
-    else if(s.Protocol==="lambda"){const f=refId(s.Endpoint);if(f)push({at:ev.at+0.1,to:f,from:id,kind:"delivers",w,type:"inv",data:{src:"sns"}})}
+    else if(s.Protocol==="lambda"){const f=refId(s.Endpoint);if(!f)return;const pm=canInvoke(f,PRINCIPAL.sns,id);if(!pm.ok){flow(id,f,"delivers",w,"SNS không gọi được Lambda: "+pm.why);return}push({at:ev.at+0.1,to:f,from:id,kind:"delivers",w,type:"inv",data:{src:"sns"}})}
     else if(s.Protocol==="sqs"){const q=refId(s.Endpoint);if(q)push({at:ev.at+0.1,to:q,from:id,kind:"delivers",w,type:"sqs"})}})}
 /* an HTTP request arriving at a node: API Gateway, Route 53 alias, CloudFront, load balancer or EC2 directly */
 function request(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,kind=ev.kind||"calls",inet=!!(ev.data&&ev.data.internet);
@@ -111,13 +112,15 @@ function request(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,kind=ev.kind||"calls"
     case"AWS::ApiGatewayV2::Api":{bump(id,"req",w);charge(id,w*PRICE.apiReq,"request");if(ev.from)flow(ev.from,id,kind,w);const fn=targetOf(n.props.Target),tn=nodeOf(fn);
       if(!fn||!tn)return fail("404: API chưa có integration (nối API tới một Lambda)");
       if(tn.type!=="AWS::Lambda::Function"){const r=request({...ev,to:fn,from:id,kind:"invokes",data:{internet:true}},T1);if(!r.ok){bump(id,"err",r.errW||w);return{ok:false,err:"502 · "+r.err,errW:r.errW}}return{ok:true}}
+      const pm=canInvoke(fn,PRINCIPAL.api,id);if(!pm.ok){flow(id,fn,"invokes",w,"API Gateway không có quyền gọi Lambda: "+pm.why);return fail("500 Internal Server Error · "+pm.why)}
       const r=lambdaRun({...ev,to:fn,from:id,kind:"invokes",data:{src:"api"}},T1);if(!r.ok){bump(id,"err",w);return{ok:false,err:"502 · "+r.err}}return{ok:true}}
     case"AWS::Route53::RecordSet":{bump(id,"req",w);if(ev.from)flow(ev.from,id,kind,w);const t=refId(getP(n.props,"AliasTarget.DNSName"));if(!t)return fail("NXDOMAIN: record chưa trỏ tới đâu (nối record tới load balancer hoặc CloudFront)");
       return request({...ev,to:t,from:id,kind:"alias"},T1)}
     case"AWS::CloudFront::Distribution":{if(getP(n.props,"DistributionConfig.Enabled")===false)return fail("Distribution đang tắt (bật lại trong khung chi tiết của CloudFront)");bump(id,"req",w);charge(id,w*PRICE.cfReq,"request");charge(id,w*20/1048576*PRICE.cfGB,"truyền ra");if(ev.from)flow(ev.from,id,kind,w);
       const h=Math.max(0,Math.min(1,+(getP(n.raw,"Metadata.CloudLab.HitRatio")??0.9))),miss=w*(1-h);bump(id,"hit",w*h);const o=arr(getP(n.props,"DistributionConfig.Origins"))[0],oid=o&&refId(o.DomainName);
       if(!oid)return fail("CloudFront chưa có origin (nối CloudFront tới S3, load balancer hoặc API)");if(miss<=0)return{ok:true};const on=nodeOf(oid);
-      if(on&&on.type==="AWS::S3::Bucket"){const r=s3Op({to:oid,from:id,kind:"origin",w:miss,at:ev.at,data:{action:"s3:GetObject",key:"index.html",who:{admin:true}}});return r.ok?{ok:true}:{ok:false,err:r.err}}
+      if(on&&on.type==="AWS::S3::Bucket"){const cr=cfReads(id,oid,"index.html");if(!cr.ok){flow(id,oid,"origin",miss,"403 AccessDenied: "+cr.why);bump(id,"err",miss);nrt(id).lastErr=cr.why;return{ok:false,err:"CloudFront trả 403 cho request trượt cache: "+cr.why,errW:miss}}
+        const r=s3Op({to:oid,from:id,kind:"origin",w:miss,at:ev.at,data:{action:"s3:GetObject",key:"index.html",who:{admin:true}}});return r.ok?{ok:true}:{ok:false,err:r.err,errW:miss}}
       return request({...ev,to:oid,from:id,kind:"origin",w:miss,data:{internet:true}},T1)}
     case"AWS::ElasticLoadBalancingV2::LoadBalancer":{if(inet){const rr=reachFromInternet(id);if(!rr.ok)return fail(rr.why);const sg=sgAllows(id,80,{internet:true});if(!sg.ok)return fail(sg.why)}
       bump(id,"req",w);if(ev.from)flow(ev.from,id,kind,w);charge(id,w*20/1048576*PRICE.dtoGB,"truyền ra");
@@ -170,7 +173,7 @@ function fire(n,c,at){const p=n.props,tg=refId(p.Target);bump(n.id,"sent",c);
     if(tn.type!=="AWS::S3::Bucket")push({at,to:tg,from:n.id,kind:"calls",w:c,type:"req",data:{port:+p.Port||0,ip:p.SourceIp||null}});
     else if(tn.type==="AWS::S3::Bucket"){const role=refId(p.As),who=role?{role}:{anon:true};if(role)flow(n.id,role,"assumes",c);push({at,to:tg,from:n.id,kind:"calls",w:c,type:"s3",data:{action:p.Action||"s3:GetObject",key:p.Key||"report.csv",who,client:n.id,kb:1}})}}
   else if(n.type==="CloudLab::Uploader"){if(!tg)return;const key=(p.Prefix||"")+"photo-"+(++RT.seq)+(p.Suffix||"");push({at,to:tg,from:n.id,kind:"uploads",w:c,type:"s3",data:{action:"s3:PutObject",key,kb:+p.SizeKB||240,client:n.id}})}
-  else if(n.type==="AWS::Events::Rule")for(const t of arr(p.Targets)){const f=refId(t&&t.Arn);if(f)push({at,to:f,from:n.id,kind:"invokes",w:c,type:"inv",data:{src:"rule"}})}}
+  else if(n.type==="AWS::Events::Rule")for(const t of arr(p.Targets)){const f=refId(t&&t.Arn);if(!f)continue;const pm=canInvoke(f,PRINCIPAL.rule,n.id);if(!pm.ok){flow(n.id,f,"invokes",c,"EventBridge không gọi được Lambda: "+pm.why);continue}push({at,to:f,from:n.id,kind:"invokes",w:c,type:"inv",data:{src:"rule"}})}}
 function periodic(t0,dt){const t1=t0+dt,h=dt/3600,zones=new Set();
   for(const n of allNodes()){if(!exists(n.id))continue;const p=n.props;if(n.def.tick)n.def.tick(n,dt);
     if(n.type==="AWS::EC2::Instance"){charge(n.id,(PRICE.ec2[p.InstanceType]||0.0132)*h,"giờ chạy");const s=subnetsOf(n)[0];if(!s||isPublicSubnet(s))charge(n.id,PRICE.ipv4H*h,"IPv4 public")}
@@ -190,4 +193,4 @@ function periodic(t0,dt){const t1=t0+dt,h=dt/3600,zones=new Set();
       for(const ns of arr(n.props.NotificationsWithSubscribers)){const th=+getP(ns,"Notification.Threshold")||0;if(!th||b.fired.includes(th)||RT.total<lim*th/100)continue;b.fired.push(th);
         const subj=`AWS Budgets: ${getP(n.props,"Budget.BudgetName")} has exceeded your alert threshold (${th}%)`,body=`ACTUAL cost ${money(RT.total)} > ${th}% of ${money(lim)}.`;
         const subs=arr(ns.Subscribers);if(!subs.length)log("Sự kiện","budgets","alert",`${getP(n.props,"Budget.BudgetName")} vượt ${th}% nhưng chưa có nơi nhận cảnh báo (nối budget tới một SNS topic)`,"bad");else log("Sự kiện","budgets","alert",`vượt ${th}% (${money(RT.total)} / ${money(lim)})`,"warn");
-        for(const s of subs){const tp=refId(s.Address);if(tp)push({at:t1,to:tp,from:n.id,kind:"notifies",w:1,type:"pub",data:{kind:"alert",subject:subj,body}});else if(s.SubscriptionType==="EMAIL")mail(s.Address,{kind:"alert",subject:subj,body})}}}}}
+        for(const s of subs){const tp=refId(s.Address);if(tp){const ta=topicAllows(tp,"budgets.amazonaws.com");if(!ta.ok){flow(n.id,tp,"notifies",1,"AWS Budgets không publish được: "+ta.why);log("Sự kiện","budgets","alert",`vượt ${th}% nhưng không gửi được tới ${tp}: ${ta.why}`,"bad");continue}push({at:t1,to:tp,from:n.id,kind:"notifies",w:1,type:"pub",data:{kind:"alert",subject:subj,body}})}else if(s.SubscriptionType==="EMAIL")mail(s.Address,{kind:"alert",subject:subj,body})}}}}}

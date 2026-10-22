@@ -35,7 +35,8 @@ Resources:
     Properties:
       FunctionName: fx-push
       Runtime: python3.12
-      Handler: app.handler
+      Handler: index.handler
+      Code: {ZipFile: "def handler(event, context):\\n    return {'statusCode': 200}"}
       MemorySize: 128
       Timeout: 10
       Role: !GetAtt RateRole.Arn
@@ -45,7 +46,7 @@ Resources:
       RoleName: fx-push-role
 ${ASSUME_LAMBDA}
       ManagedPolicyArns: [${BASIC}]
-`,layout:{Customers:[40,120],RateSocket:[400,120],RateFn:[760,120],RateRole:[760,400]},
+${API_INVOKE("RateSocket","RateFn")}`,layout:{Customers:[40,120],RateSocket:[400,120],RateFn:[760,120],RateRole:[760,400]},
   explain:{Customers:"2.000 khách mở bảng tỷ giá, mỗi người nhận 12 lần cập nhật mỗi phút.",RateSocket:"WebSocket API: giữ kết nối với từng khách. Tính tiền theo phút-kết nối và theo từng message.",
     RateFn:"Lambda đẩy tỷ giá mới xuống mọi kết nối qua @connections API.",RateRole:"Role của Lambda: mới có quyền ghi log."},
   tasks:[{t:"Khách nhận được giá mới",c:"Lambda đẩy tin xuống kết nối không bị AccessDenied.",test:()=>{const S=simStats(300,60);return((S.Customers||{m:{}}).m.recv||0)>0&&!((S.Customers||{m:{}}).m.err)}},
@@ -74,6 +75,9 @@ Resources:
   PrivateB: {Type: AWS::EC2::Subnet, Properties: {VpcId: !Ref Vpc, CidrBlock: 10.0.12.0/24, AvailabilityZone: ap-southeast-2b, MapPublicIpOnLaunch: false}}
   Igw: {Type: AWS::EC2::InternetGateway}
   IgwAttach: {Type: AWS::EC2::VPCGatewayAttachment, Properties: {VpcId: !Ref Vpc, InternetGatewayId: !Ref Igw}}
+  PublicRt: {Type: AWS::EC2::RouteTable, Properties: {VpcId: !Ref Vpc}}
+  PublicRtInternet: {Type: AWS::EC2::Route, DependsOn: IgwAttach, Properties: {RouteTableId: !Ref PublicRt, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref Igw}}
+  PublicARoutes: {Type: AWS::EC2::SubnetRouteTableAssociation, Properties: {SubnetId: !Ref PublicA, RouteTableId: !Ref PublicRt}}
   AppSg:
     Type: AWS::EC2::SecurityGroup
     Properties: {GroupDescription: order-app, VpcId: !Ref Vpc, SecurityGroupIngress: [{IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0}]}
@@ -102,7 +106,7 @@ Resources:
     Metadata:
       CloudLab: {Partitions: 6}
     Properties: {ClusterName: audit, VpcConfigs: [{SubnetIds: [!Ref PrivateA, !Ref PrivateB], SecurityGroups: [!GetAtt BrokerSg.GroupId]}], ClientAuthentication: {Sasl: {Iam: {Enabled: true}}}}
-`,layout:{Traders:[40,140],Vpc:[340,40],PublicA:[380,110],OrderApp:[410,170],PrivateA:[760,110],PrivateB:[760,420],Orders:[790,170],Audit:[790,480],AppSg:[380,700],BrokerSg:[720,760],AppRole:[1180,700],Igw:[40,500]},
+`,layout:{Traders:[40,140],Vpc:[340,40],PublicA:[380,110],OrderApp:[410,170],PrivateA:[760,110],PrivateB:[760,420],Orders:[790,170],Audit:[790,480],AppSg:[380,700],BrokerSg:[720,860],AppRole:[1180,700],PublicRt:[380,940],Igw:[40,500]},
   explain:{Traders:"Nhà đầu tư đặt lệnh, 50 lệnh mỗi giây.",OrderApp:"App đặt lệnh: đẩy lệnh vào RabbitMQ, ghi một bản vào Kafka cho kiểm toán.",Orders:"Amazon MQ for RabbitMQ: đang là cluster 3 × mq.m5.large ở 3 AZ.",
     Audit:"MSK Serverless: Kafka không chọn broker, có phí cluster-giờ.",BrokerSg:"Security group của cả hai broker: chưa có inbound rule nào.",AppRole:"Role của app: được ghi vào Kafka (IAM)."},
   tasks:[{t:"Chỉ app vào được broker",c:"BrokerSg mở 5671 (AMQPS) và 9098 (Kafka IAM) từ AppSg, không mở cho 0.0.0.0/0.",test:()=>sgAllows("Orders",5671,{node:"OrderApp"}).ok&&sgAllows(nodeOf("Audit")?"Audit":(allNodes().find(n=>/^AWS::MSK::/.test(n.type))||{}).id,9098,{node:"OrderApp"}).ok&&!arr(getP(nodeOf("BrokerSg").props,"SecurityGroupIngress")).some(r=>r.CidrIp==="0.0.0.0/0")},

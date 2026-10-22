@@ -18,6 +18,10 @@ function resolve(v){if(v==null)return v;if(typeof v!=="object")return v;
   if("Fn::Join" in v){const[sep,list]=v["Fn::Join"];return arr(list).map(resolve).join(sep)}
   const o={};for(const k in v)o[k]=resolve(v[k]);return o}
 function refId(v){if(!v||typeof v!=="object")return null;if("Ref" in v)return v.Ref;if("Fn::GetAtt" in v){const g=v["Fn::GetAtt"];return Array.isArray(g)?g[0]:String(g).split(".")[0]}return null}
+/* a plain string that names a resource of the template: its physical name (bucket name, table name) or its ARN.
+   Templates write a name instead of !Ref to break a dependency cycle (S3 notification → function → bucket). */
+function idByName(v){if(typeof v!=="string"||!v||!M)return null;for(const id of Object.keys(M.res)){const n=nodeOf(id);if(!n||n.def.edge)continue;if(physName(n)===v||arnOf(id)===v)return id}return null}
+const refOrName=v=>refId(v)||idByName(v);
 /* where an integration points: a Ref/GetAtt, or the first \${X...} inside a !Sub URL */
 function targetOf(v){const r=refId(v);if(r)return r;const s=v&&typeof v==="object"&&v["Fn::Sub"];const t=Array.isArray(s)?s[0]:s;const m=typeof t==="string"&&/\$\{([A-Za-z0-9]+)[.}]/.exec(t);return m?m[1]:null}
 /* visit every reference inside a value: cb(path, targetId) */
@@ -37,6 +41,7 @@ function edges(){const out=[],seen=new Set(),add=e=>{const k=e.from+">"+e.to+">"
       if(r.kind==="grants"){const ks=path.split("."),si=ks.indexOf("Statement"),st=si>0?getP(n.props,ks.slice(0,si+2).join(".")):null;label=st?(st.Effect==="Deny"?"deny ":"")+arr(st.Action).join(", "):"cho phép";if(label.length>34)label=label.slice(0,33)+"…"}
       if(typeof label==="function")label=label(n.props,path,to);
       const e=r.reverse?{from:to,to:id}:{from:id,to};add({...e,kind:r.kind,label:label||"",owner:id,path,hidden:r.kind==="contains",deny:r.kind==="grants"&&/^deny /.test(label||"")})});
+    if(n.type==="AWS::Lambda::Function")for(const[k,v]of Object.entries(getP(n.props,"Environment.Variables")||{}))if(typeof v==="string"&&idByName(v)){const to=idByName(v),tn=nodeOf(to);add({from:id,to,kind:"uses",label:(USE_LABEL[tn.type]||"dùng")+" · "+k,owner:id,path:"Environment.Variables."+k})}
     arr(getP(n.raw,"Metadata.CloudLab.Uses")).forEach(u=>{const t=refId(u)||(typeof u==="string"?u:null);if(t&&rawOf(t))add({from:id,to:t,kind:"uses",label:"app gọi",owner:id,path:"@Uses"})});
     if(n.type==="AWS::SNS::Topic")arr(n.props.Subscription).forEach((s,i)=>{if(s&&s.Protocol==="email")for(const x of Object.keys(M.ext))if(M.ext[x].Type==="CloudLab::Inbox"&&(M.ext[x].Properties||{}).Address===s.Endpoint)add({from:id,to:x,kind:"delivers",label:"email",owner:id,path:"Subscription."+i})})}
   return out}
@@ -53,9 +58,11 @@ function stripRefs(v,id){if(v==null||typeof v!=="object")return v;if(refId(v)===
   if(Array.isArray(v)){const o=[];for(const x of v){const y=stripRefs(x,id);if(y!==undefined&&!(y&&typeof y==="object"&&!Array.isArray(y)&&Object.keys(y).length===0&&Object.keys(x).length>0&&Object.values(x).some(z=>refId(z)===id)))o.push(y)}return o}
   const o={};for(const k of Object.keys(v)){const y=stripRefs(v[k],id);if(y!==undefined)o[k]=y;else if(["Target","Role","Bucket","As"].includes(k))o[k]=null}return o}
 function removeNode(id){const sc=scopeOf(id);if(!sc)return;delete M[sc][id];delete M.pos[id];
-  for(const s of ["res","ext","manual"])for(const k of Object.keys(M[s])){const r=M[s][k];
+  for(const s of ["res","ext","manual"])for(const k of Object.keys(M[s])){const r=M[s][k],before=JSON.stringify(r.Properties||{});
     r.Properties=stripRefs(r.Properties||{},id);const mu=getP(r,"Metadata.CloudLab.Uses");if(mu)r.Metadata.CloudLab.Uses=arr(mu).filter(u=>(refId(u)||u)!==id);
-    const d=T[r.Type];if(d&&d.edge&&d.edgeOf&&!(d.edgeOf(r.Properties,k)||[]).some(e=>e.from&&e.to))delete M[s][k]}}
+    if(r.DependsOn!==undefined){const d=arr(r.DependsOn).filter(x=>x!==id);if(!d.length)delete r.DependsOn;else r.DependsOn=d.length===1?d[0]:d}
+    /* an edge-type resource (attachment, route, permission…) that lost one of its ends goes too */
+    const d=T[r.Type];if(d&&d.edge&&JSON.stringify(r.Properties)!==before)delete M[s][k]}}
 function renameRefs(v,a,b){if(v==null||typeof v!=="object")return v;
   if(Array.isArray(v))return v.map(x=>renameRefs(x,a,b));
   if("Ref" in v&&v.Ref===a)return{Ref:b};
@@ -64,7 +71,8 @@ function renameRefs(v,a,b){if(v==null||typeof v!=="object")return v;
   const o={};for(const k of Object.keys(v))o[k]=renameRefs(v[k],a,b);return o}
 function renameNode(a,b){if(a===b)return{ok:true};if(!/^[A-Za-z][A-Za-z0-9]{0,254}$/.test(b))return{ok:false,err:"Logical ID chỉ gồm chữ và số, bắt đầu bằng chữ."};if(rawOf(b))return{ok:false,err:`${b} đã tồn tại.`};
   const sc=scopeOf(a);const reb=o=>{const n={};for(const k of Object.keys(o))n[k===a?b:k]=o[k];return n};M[sc]=reb(M[sc]);M.pos=reb(M.pos);
-  for(const s of ["res","ext","manual"])for(const k of Object.keys(M[s])){M[s][k].Properties=renameRefs(M[s][k].Properties||{},a,b);if(M[s][k].Metadata)M[s][k].Metadata=renameRefs(M[s][k].Metadata,a,b)}return{ok:true}}
+  for(const s of ["res","ext","manual"])for(const k of Object.keys(M[s])){M[s][k].Properties=renameRefs(M[s][k].Properties||{},a,b);if(M[s][k].Metadata)M[s][k].Metadata=renameRefs(M[s][k].Metadata,a,b);
+    if(M[s][k].DependsOn!==undefined)M[s][k].DependsOn=Array.isArray(M[s][k].DependsOn)?M[s][k].DependsOn.map(x=>x===a?b:x):M[s][k].DependsOn===a?b:M[s][k].DependsOn}return{ok:true}}
 /* remove the reference an edge comes from */
 function removeEdge(e){const o=nodeOf(e.owner);if(!o)return;
   if(o.def.edge){delete M[o.scope][o.id];return}
@@ -82,6 +90,7 @@ function addStmt(roleId,actions,resource,sid){const r=nodeOf(roleId);if(!r)retur
 const roleOfFn=f=>refId((nodeOf(f)||{props:{}}).props.Role);
 function connectRule(a,b){const A=nodeOf(a),B=nodeOf(b);if(!A||!B||a===b)return null;const ta=A.type,tb=B.type,Bn=physName(B);
   const say=(label,apply,grant)=>({label,apply,grant});
+  if(typeof CONNECT_A==="function"){const x=CONNECT_A(a,b,A,B,say);if(x)return x}
   if(typeof CONNECT_X==="function"){const x=CONNECT_X(a,b,A,B,say);if(x)return x}
   if(typeof CONNECT_ORG==="function"){const x=CONNECT_ORG(a,b,A,B,say);if(x)return x}
   if(typeof CONNECT_S==="function"){const x=CONNECT_S(a,b,A,B,say);if(x)return x}
@@ -100,7 +109,9 @@ function connectRule(a,b){const A=nodeOf(a),B=nodeOf(b);if(!A||!B||a===b)return 
       if(tb==="AWS::Logs::LogGroup")return say("ghi log vào đây",()=>{B.props.LogGroupName={"Fn::Sub":"/aws/lambda/${"+a+"}"}});
       if(USE_ENV[tb]){const act={"AWS::S3::Bucket":["s3:PutObject"],"AWS::DynamoDB::Table":["dynamodb:PutItem"],"AWS::SNS::Topic":["sns:Publish"],"AWS::SQS::Queue":["sqs:SendMessage"]}[tb];
         const res=tb==="AWS::S3::Bucket"?{"Fn::Sub":"${"+b+".Arn}/*"}:tb==="AWS::SNS::Topic"?R(b):GA(b);
-        return say(`${USE_LABEL[tb]} (biến ${USE_ENV[tb]})`,grant=>{const vars=getP(A.props,"Environment.Variables")||{};let k=USE_ENV[tb];if(vars[k]&&refId(vars[k])!==b)k=k+"_"+Object.keys(vars).length;vars[k]=R(b);setP(A.props,"Environment.Variables",vars);if(grant&&role)addStmt(role,act,res,"Use"+b)},role?{actions:act,role}:null)}
+        /* a bucket that already triggers this function: name it as text, or the stack has a dependency cycle */
+        const loop=tb==="AWS::S3::Bucket"&&arr(getP(B.props,"NotificationConfiguration.LambdaConfigurations")).some(c=>refId(c.Function)===a);
+        return say(`${USE_LABEL[tb]} (biến ${USE_ENV[tb]})`,grant=>{const vars=getP(A.props,"Environment.Variables")||{};let k=USE_ENV[tb];if(vars[k]&&refOrName(vars[k])!==b)k=k+"_"+Object.keys(vars).length;vars[k]=loop?Bn:R(b);setP(A.props,"Environment.Variables",vars);if(grant&&role)addStmt(role,act,loop?`arn:aws:s3:::${Bn}/*`:res,"Use"+b)},role?{actions:act,role}:null)}
       if(tb==="CloudLab::Monitor")break;break}
     case"AWS::SNS::Topic":if(tb==="CloudLab::Inbox")return say(`subscription email → ${B.props.Address}`,()=>{A.props.Subscription=arr(A.props.Subscription).concat([{Protocol:"email",Endpoint:B.props.Address}])});
       if(tb==="AWS::Lambda::Function")return say("subscription → Lambda",()=>{A.props.Subscription=arr(A.props.Subscription).concat([{Protocol:"lambda",Endpoint:GA(b)}])});

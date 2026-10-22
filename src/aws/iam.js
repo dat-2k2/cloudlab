@@ -13,7 +13,9 @@ function trusts(roleId,who){const r=nodeOf(roleId);if(!r)return false;
   return arr(getP(r.props,"AssumeRolePolicyDocument.Statement")).some(s=>s.Effect==="Allow"&&(who==="lambda"?arr(s.Principal&&s.Principal.Service).includes("lambda.amazonaws.com"):!!(s.Principal&&(s.Principal.AWS||s.Principal==="*"))))}
 const isPublicPrincipal=p=>p==="*"||(p&&(p.AWS==="*"||arr(p.AWS).includes("*")));
 function bucketPolicies(bucketId){return Object.keys({...M.res,...M.manual}).map(nodeOf).filter(n=>n&&n.type==="AWS::S3::BucketPolicy"&&refId(n.props.Bucket)===bucketId)}
-const bpa=b=>b.props.PublicAccessBlockConfiguration||{};
+/* Block Public Access: a bucket created without the property gets all four settings on (S3 default since April 2023) */
+const BPA_ON={BlockPublicAcls:true,IgnorePublicAcls:true,BlockPublicPolicy:true,RestrictPublicBuckets:true};
+const bpa=b=>b.props.PublicAccessBlockConfiguration||BPA_ON;
 /* who = {role:id} or {anon:true} */
 function evalS3(who,bucketId,action,key){const b=nodeOf(bucketId);if(!b)return{allow:false,kind:"implicit",by:"bucket không tồn tại"};
   const res=action==="s3:ListBucket"?arnOf(bucketId):arnOf(bucketId)+"/"+key;

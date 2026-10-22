@@ -21,6 +21,7 @@ const ELI5={
   "AWS::Budgets::Budget":"Hạn mức chi tiêu cho tài khoản cloud: chạm 80%, 100% hạn mức thì báo cho người phụ trách, như cảnh báo hạn mức thẻ.",
   "AWS::EC2::VPC":"Khuôn viên chi nhánh có tường rào riêng: mọi máy chủ, database nằm bên trong; bên ngoài chỉ vào được qua cổng bạn mở.",
   "AWS::EC2::Subnet":"Một khu trong chi nhánh. Khu public giống sảnh giao dịch, khách vào được; khu private giống kho tiền, chỉ người bên trong đi tới.",
+  "AWS::EC2::RouteTable":"Bảng chỉ đường dán ở mỗi tầng: đi tới đâu thì ra cửa nào. Tầng nào có dòng “mọi nơi bên ngoài → cổng chính” thì khách từ đường lớn mới tìm được tới; tầng không có dòng đó là khu nội bộ.",
   "AWS::EC2::InternetGateway":"Cổng chính của chi nhánh ra đường lớn (Internet). Không gắn cổng thì sảnh cũng không đón được khách.",
   "AWS::EC2::VPCGatewayAttachment":"Việc lắp cổng chính vào tường rào chi nhánh.",
   "AWS::EC2::SecurityGroup":"Bảo vệ đứng ở cửa từng phòng với danh sách được vào: cổng nào, từ đâu. Không có trong danh sách thì không qua.",

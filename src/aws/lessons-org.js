@@ -77,7 +77,7 @@ ${OU("Legacy","Legacy")}${OU("Workloads","Workloads")}${SCP_DENY}${ACC("LegacyBi
     {t:"Cả 4 account qua precheck",c:"có execution role, không còn Config recorder cũ",test:()=>accs().every(a=>!acctBlockers(a).length)}],
   diagnose(n){if((orgNode()||{props:{}}).props.FeatureSet!=="ALL")return["Landing zone sẽ không set up được.","Xem khối Org.","Đổi FeatureSet sang All features. Account được mời phải chấp thuận handshake."][Math.min(n,2)];
     if(orgNodes("AWS::Organizations::OrganizationalUnit").some(o=>blockingScps(o.id).length))return["Mọi account trong OU Legacy sẽ fail khi register.","Có policy nào trên OU chặn AWS Config?","Gỡ DenyConfigChanges khỏi Legacy (nút Gỡ SCP trong khung chi tiết của OU, hoặc xóa mũi tên “áp lên”)."][Math.min(n,2)];
-    const a=accs().find(x=>acctBlockers(x).length);return[`${physName(a)} vẫn sẽ fail precheck.`,"Mở tab Vấn đề hoặc chọn account để xem lý do.",acctBlockers(a)[0].fix][Math.min(n,2)]},
+    const a=accs().find(x=>acctBlockers(x).length);if(!a)return["Gần xong.","Bấm Kiểm tra lại.","Bấm Kiểm tra lại."][Math.min(n,2)];return[`${physName(a)} vẫn sẽ fail precheck.`,"Mở tab Vấn đề hoặc chọn account để xem lý do.",acctBlockers(a)[0].fix][Math.min(n,2)]},
   hints:()=>["Enroll fail vì ba lý do: thiếu role AWSControlTowerExecution, Config recorder cũ (mỗi region chỉ một recorder), SCP chặn config:*. Org phải bật All features.","Org: All features. Gỡ DenyConfigChanges khỏi Legacy. acquired-startup: tạo execution role. legacy-billing và app-prod: xóa recorder cũ."],
   solve(){edit("prep",()=>{M.res.Org.Properties.FeatureSet="ALL";M.res.DenyConfigChanges.Properties.TargetIds=[];
     for(const a of accs()){const m=M.res[a.id].Metadata.CloudLab;m.ExecutionRole=true;m.LegacyConfigRecorder=false}})},

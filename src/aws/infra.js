@@ -1,13 +1,14 @@
 "use strict";
 /* Classic infrastructure: VPC, subnets, gateways, security groups, EC2, load balancer, RDS, ElastiCache, CloudFront, Route 53.
-   Templates stay valid CloudFormation; two simplifications, stated in the docs: no route tables (a subnet is public when
-   MapPublicIpOnLaunch is true and the VPC has an attached internet gateway), and app behaviour of EC2 lives in Metadata.CloudLab. */
+   Templates stay valid CloudFormation. A subnet is public when its route table has 0.0.0.0/0 → an internet gateway that is
+   attached to the VPC (as on AWS); EC2 also needs a public IP (MapPublicIpOnLaunch). Not modelled: NAT gateways and traffic
+   going out of private subnets. App behaviour of EC2 lives in Metadata.CloudLab. */
 const AZS=["ap-southeast-2a","ap-southeast-2b","ap-southeast-2c"];
 const EC2_TYPES={"t3.micro":{cap:40,vcpu:2,mem:1},"t3.small":{cap:80,vcpu:2,mem:2},"t3.medium":{cap:160,vcpu:2,mem:4},"m5.large":{cap:320,vcpu:2,mem:8},"c5.large":{cap:380,vcpu:2,mem:4}};
 const RDS_TYPES={"db.t3.micro":{qps:300},"db.t3.small":{qps:600},"db.t3.medium":{qps:1200},"db.m5.large":{qps:3000}};
 const CACHE_TYPES={"cache.t4g.micro":{},"cache.t4g.small":{},"cache.t3.micro":{},"cache.t3.small":{}};
 const AL2023="{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}";
-Object.assign(REL,{contains:{style:"role"},attaches:{style:"role"},secured:{style:"role"},allows:{style:"grant"},forwards:{style:"flow"},listens:{style:"flow"},origin:{style:"flow"},alias:{style:"flow"}});
+Object.assign(REL,{routes:{style:"flow"},associates:{style:"role"},contains:{style:"role"},attaches:{style:"role"},secured:{style:"role"},allows:{style:"grant"},forwards:{style:"flow"},listens:{style:"flow"},origin:{style:"flow"},alias:{style:"flow"}});
 const nameTag=id=>[{Key:"Name",Value:kebab(id)}];
 const tagName=p=>(arr(p.Tags).find(t=>t&&t.Key==="Name")||{}).Value;
 const portOfRule=r=>r.FromPort===r.ToPort?String(r.FromPort):`${r.FromPort}-${r.ToPort}`;
@@ -21,11 +22,21 @@ def("AWS::EC2::Subnet",{label:"Subnet",short:"SN",cat:"infra",container:"subnet"
   doc:"Một dải IP con của VPC, nằm trong đúng một Availability Zone. Public subnet có đường ra Internet qua internet gateway; private subnet thì không — nơi đặt database và app server.",
   defaults:id=>({VpcId:null,CidrBlock:"10.0.1.0/24",AvailabilityZone:"ap-southeast-2a",MapPublicIpOnLaunch:false,Tags:nameTag(id)}),name:p=>tagName(p),
   fields:[{k:"VpcId",label:"VPC",type:"ref",to:["AWS::EC2::VPC"]},{k:"CidrBlock",label:"CIDR",type:"text"},{k:"AvailabilityZone",label:"Availability Zone",type:"select",options:AZS},
-    {k:"MapPublicIpOnLaunch",label:"Public subnet",type:"select",options:[[true,"Public (gán IP public, ra Internet qua IGW)"],[false,"Private"]],bool:true}],
+    {k:"MapPublicIpOnLaunch",label:"Tự gán IP public cho EC2",type:"select",options:[[true,"Có"],[false,"Không"]],bool:true,help:"Subnet là public khi route table của nó có route 0.0.0.0/0 → internet gateway. Tùy chọn này chỉ quyết định EC2 mới có IP public hay không."},
+    {k:"#rt",label:"Route table",type:"subnetrt"}],
   rel:{VpcId:{kind:"contains",label:""}}});
 def("AWS::EC2::InternetGateway",{label:"Internet gateway",short:"IGW",cat:"infra",
   doc:"Cửa ra vào Internet của VPC. Gắn vào VPC (VPCGatewayAttachment) thì các public subnet mới nhận và gửi được traffic Internet. Miễn phí.",
   defaults:id=>({Tags:nameTag(id)}),name:p=>tagName(p),fields:[]});
+def("AWS::EC2::RouteTable",{label:"Route table",short:"RT",cat:"infra",
+  doc:"Bảng chỉ đường của subnet: gói tin tới địa chỉ nào thì đi qua cửa nào. Subnet chỉ là public khi route table của nó có route 0.0.0.0/0 → internet gateway. Mỗi subnet gắn đúng một route table; chưa gắn thì dùng main route table của VPC, chỉ có route local. Miễn phí.",
+  defaults:id=>({VpcId:null,Tags:nameTag(id)}),name:p=>tagName(p),
+  fields:[{k:"VpcId",label:"VPC",type:"ref",to:["AWS::EC2::VPC"]},{k:"#routes",label:"Route",type:"rtroutes"},{k:"#subnets",label:"Subnet dùng route table này",type:"rtsubnets"}],
+  rel:{VpcId:{kind:"contains",label:""}}});
+def("AWS::EC2::Route",{label:"Route",short:"RTE",cat:"infra",edge:true,doc:"Một dòng trong route table: đích (0.0.0.0/0 = mọi địa chỉ ngoài VPC) → cửa đi (internet gateway).",
+  defaults:()=>({RouteTableId:null,DestinationCidrBlock:"0.0.0.0/0",GatewayId:null}),edgeOf:p=>[{from:refId(p.RouteTableId),to:refId(p.GatewayId),kind:"routes",label:p.DestinationCidrBlock||"0.0.0.0/0"}]});
+def("AWS::EC2::SubnetRouteTableAssociation",{label:"Gắn route table",short:"ASC",cat:"infra",edge:true,doc:"Gắn một subnet vào một route table.",
+  defaults:()=>({SubnetId:null,RouteTableId:null}),edgeOf:p=>[{from:refId(p.RouteTableId),to:refId(p.SubnetId),kind:"associates",label:"",hidden:true}]});
 def("AWS::EC2::VPCGatewayAttachment",{label:"Gateway attachment",short:"ATT",cat:"infra",edge:true,
   doc:"Gắn internet gateway vào VPC.",defaults:()=>({VpcId:null,InternetGatewayId:null}),edgeOf:p=>[{from:refId(p.InternetGatewayId),to:refId(p.VpcId),kind:"attaches",label:"attach",hidden:true}]});
 def("AWS::EC2::SecurityGroup",{label:"Security group",short:"SG",cat:"sec",
@@ -57,8 +68,9 @@ def("AWS::ElasticLoadBalancingV2::Listener",{label:"Listener",short:"LIS",cat:"i
   defaults:()=>({LoadBalancerArn:null,Port:80,Protocol:"HTTP",DefaultActions:[]}),edgeOf:p=>arr(p.DefaultActions).map(a=>({from:refId(p.LoadBalancerArn),to:refId(a&&a.TargetGroupArn),kind:"listens",label:`${p.Protocol||"HTTP"} :${p.Port||80}`}))});
 def("AWS::CloudFront::Distribution",{label:"CloudFront",short:"CF",cat:"infra",
   doc:"CDN: cache nội dung ở edge gần người dùng. Request trúng cache trả ngay; request trượt mới đi về origin (S3, load balancer, API). Tính tiền theo request và GB truyền ra.",
-  defaults:()=>({DistributionConfig:{Enabled:true,Origins:[],DefaultCacheBehavior:{TargetOriginId:"",ViewerProtocolPolicy:"redirect-to-https",CachePolicyId:"658327ea-f89d-4fab-a63d-7e88639e58f6"}}}),meta:{HitRatio:0.9},
-  fields:[{k:"@HitRatio",label:"Tỉ lệ trúng cache (0–1)",type:"number",step:"0.05",min:0,max:1},{k:"DistributionConfig.Enabled",label:"Bật",type:"select",options:[[true,"Enabled"],[false,"Disabled"]],bool:true}],
+  defaults:()=>({DistributionConfig:{Enabled:true,DefaultRootObject:"index.html",Origins:[],DefaultCacheBehavior:{TargetOriginId:"",ViewerProtocolPolicy:"redirect-to-https",CachePolicyId:"658327ea-f89d-4fab-a63d-7e88639e58f6"}}}),meta:{HitRatio:0.9},
+  fields:[{k:"@HitRatio",label:"Tỉ lệ trúng cache (0–1)",type:"number",step:"0.05",min:0,max:1},{k:"DistributionConfig.Enabled",label:"Bật",type:"select",options:[[true,"Enabled"],[false,"Disabled"]],bool:true},
+    {k:"DistributionConfig.DefaultRootObject",label:"Default root object",type:"text",help:"File trả về khi khách mở tên miền không kèm đường dẫn, thường là index.html."},{k:"#oac",label:"Origin S3",type:"oac"}],
   rel:{"DistributionConfig.Origins.*":{kind:"origin",label:"origin"}}});
 def("AWS::Route53::RecordSet",{label:"Route 53 record",short:"R53",cat:"infra",
   doc:"Tên miền trỏ tới tài nguyên. Alias record tới load balancer / CloudFront được truy vấn miễn phí; hosted zone tính $0,50 mỗi tháng.",
@@ -72,7 +84,7 @@ def("AWS::RDS::DBInstance",{label:"RDS database",short:"RDS",cat:"db",
   name:p=>p.DBInstanceIdentifier||p.Engine,
   fields:[{k:"Engine",label:"Engine",type:"select",options:["postgres","mysql"]},{k:"DBInstanceClass",label:"Instance class",type:"select",options:Object.keys(RDS_TYPES)},{k:"AllocatedStorage",label:"Dung lượng (GB)",type:"number",min:20},
     {k:"MultiAZ",label:"Multi-AZ",type:"select",options:[[false,"Không (1 AZ)"],[true,"Có (standby ở AZ khác, giá ×2)"]],bool:true},{k:"PubliclyAccessible",label:"Public",type:"select",options:[[false,"Không"],[true,"Có (không nên)"]],bool:true},
-    {k:"VPCSecurityGroups",label:"Security group",type:"refs",to:["AWS::EC2::SecurityGroup"],att:"GroupId"}],
+    {k:"VPCSecurityGroups",label:"Security group",type:"refs",to:["AWS::EC2::SecurityGroup"],att:"GroupId"},{k:"#subnets",label:"DB subnet group",type:"dbsubnets"}],
   rel:{"VPCSecurityGroups.*":{kind:"secured",label:"SG"}}});
 def("AWS::RDS::DBSubnetGroup",{label:"DB subnet group",short:"DSG",cat:"db",edge:true,doc:"Các subnet mà RDS được đặt vào.",defaults:id=>({DBSubnetGroupDescription:kebab(id),SubnetIds:[]})});
 def("AWS::ElastiCache::CacheCluster",{label:"ElastiCache (Redis)",short:"RDS⚡",cat:"db",
@@ -91,10 +103,21 @@ function subnetsOf(n){if(!n)return[];switch(n.type){
   case"AWS::RDS::DBInstance":{const g=nodeOf(refId(n.props.DBSubnetGroupName));return g?arr(g.props.SubnetIds).map(refId).filter(Boolean):[]}
   case"AWS::Lambda::Function":return arr(getP(n.props,"VpcConfig.SubnetIds")).map(refId).filter(Boolean)}
   if(typeof STREAM_SUBNETS!=="undefined"&&STREAM_SUBNETS[n.type])return arr(getP(n.props,STREAM_SUBNETS[n.type])).map(refId).filter(Boolean);return[]}
-function vpcOf(n){if(!n)return null;if(n.type==="AWS::EC2::VPC")return n.id;if(["AWS::EC2::Subnet","AWS::EC2::SecurityGroup","AWS::ElasticLoadBalancingV2::TargetGroup"].includes(n.type))return refId(n.props.VpcId);
+function vpcOf(n){if(!n)return null;if(n.type==="AWS::EC2::VPC")return n.id;if(["AWS::EC2::Subnet","AWS::EC2::SecurityGroup","AWS::ElasticLoadBalancingV2::TargetGroup","AWS::EC2::RouteTable"].includes(n.type))return refId(n.props.VpcId);
   const s=subnetsOf(n)[0];if(s)return vpcOf(nodeOf(s));const g=sgsOf(n.id)[0];return g?refId((nodeOf(g)||{props:{}}).props.VpcId):null}
 const igwOf=vpc=>Object.keys({...M.res,...M.manual}).map(nodeOf).find(x=>x&&x.type==="AWS::EC2::VPCGatewayAttachment"&&refId(x.props.VpcId)===vpc);
-const isPublicSubnet=s=>{const n=nodeOf(s);return!!n&&n.props.MapPublicIpOnLaunch===true&&!!igwOf(refId(n.props.VpcId))};
+/* routing: which route table a subnet uses, and whether it has a way to the Internet */
+const resOfType=t=>Object.keys(M.res).filter(k=>M.res[k].Type===t);
+const rtAssocs=rt=>resOfType("AWS::EC2::SubnetRouteTableAssociation").filter(k=>refId(M.res[k].Properties.RouteTableId)===rt);
+const rtOfSubnet=s=>{const a=resOfType("AWS::EC2::SubnetRouteTableAssociation").find(k=>refId(M.res[k].Properties.SubnetId)===s);return a?refId(M.res[a].Properties.RouteTableId):null};
+const rtRoutes=rt=>resOfType("AWS::EC2::Route").filter(k=>refId(M.res[k].Properties.RouteTableId)===rt);
+const igwRouteOf=rt=>rtRoutes(rt).find(k=>{const p=M.res[k].Properties,g=refId(p.GatewayId);return p.DestinationCidrBlock==="0.0.0.0/0"&&g&&(nodeOf(g)||{}).type==="AWS::EC2::InternetGateway"})||null;
+function subnetInet(s){const n=nodeOf(s);if(!n)return{ok:false,why:"subnet không tồn tại"};const v=refId(n.props.VpcId),rt=rtOfSubnet(s);
+  if(!rt||!nodeOf(rt))return{ok:false,why:`${s} chưa gắn route table nào nên dùng main route table của VPC, chỉ có route local: không có đường ra Internet. Gắn ${s} vào một route table có 0.0.0.0/0 → internet gateway`};
+  const r=igwRouteOf(rt);if(!r)return{ok:false,why:`Route table ${rt} (của ${s}) chưa có route 0.0.0.0/0 → internet gateway`};
+  const g=refId(M.res[r].Properties.GatewayId),att=igwOf(v);if(!att||refId(att.props.InternetGatewayId)!==g)return{ok:false,why:`Route 0.0.0.0/0 của ${rt} trỏ tới ${g}, nhưng ${g} chưa gắn vào ${v||"VPC"} (kéo ${g} vào khung VPC)`};
+  return{ok:true,rt,igw:g}}
+const isPublicSubnet=s=>subnetInet(s).ok;
 const dbPort=n=>n.type==="AWS::ElastiCache::CacheCluster"?6379:n.props.Engine==="mysql"?3306:5432;
 const appPort=n=>n.type==="AWS::EC2::Instance"?+(getP(n.raw,"Metadata.CloudLab.AppPort")||80):n.type==="AWS::RDS::DBInstance"||n.type==="AWS::ElastiCache::CacheCluster"?dbPort(n):80;
 /* is traffic from `src` ({internet:true} or {node:id}) allowed into dst on port? returns {ok, why} */
@@ -110,8 +133,9 @@ function sgAllows(dstId,port,src){const dst=nodeOf(dstId),sgs=sgsOf(dstId),srcSg
   return{ok:false,why:`Security group ${sgs.join(", ")} không cho phép tcp/${port} từ ${src.internet?(src.ip?"IP "+src.ip:"Internet"):(srcSgs.join(", ")||src.node||"?")}`}}
 function reachFromInternet(id){const n=nodeOf(id);
   if(n.type==="AWS::ElasticLoadBalancingV2::LoadBalancer"){if(n.props.Scheme==="internal")return{ok:false,why:"Load balancer là internal nên không nhận traffic từ Internet (đổi Scheme sang internet-facing)"};const ss=subnetsOf(n);
-    if(!ss.length)return{ok:false,why:"Load balancer chưa có subnet (nối nó tới 2 public subnet ở 2 AZ)"};if(!ss.some(isPublicSubnet))return{ok:false,why:"Subnet của load balancer không phải public (cần chọn Public subnet và gắn internet gateway vào VPC)"};return{ok:true}}
-  if(n.type==="AWS::EC2::Instance"){const s=subnetsOf(n)[0];if(!s)return{ok:true,note:"default VPC"};if(!isPublicSubnet(s))return{ok:false,why:`${id} ở private subnet ${s} nên không có IP public (đặt vào public subnet, hoặc cho traffic đi qua load balancer)`};return{ok:true}}
+    if(!ss.length)return{ok:false,why:"Load balancer chưa có subnet (nối nó tới 2 public subnet ở 2 AZ)"};if(!ss.some(isPublicSubnet))return{ok:false,why:"Load balancer internet-facing nằm ở subnet không có đường ra Internet: "+subnetInet(ss[0]).why};return{ok:true}}
+  if(n.type==="AWS::EC2::Instance"){const s=subnetsOf(n)[0];if(!s)return{ok:true,note:"default VPC"};const si=subnetInet(s);if(!si.ok)return{ok:false,why:`${id} ở ${s}, subnet không có đường ra Internet: ${si.why}`};
+    if(nodeOf(s).props.MapPublicIpOnLaunch!==true)return{ok:false,why:`${id} không có IP public: ${s} không tự gán IP public (bật “Tự gán IP public” của ${s}, hoặc cho traffic đi qua load balancer)`};return{ok:true}}
   return{ok:true}}
 function targetsOf(albId){const out=[];for(const id of Object.keys(M.res)){const r=M.res[id];if(r.Type!=="AWS::ElasticLoadBalancingV2::Listener"||refId(r.Properties.LoadBalancerArn)!==albId)continue;
     for(const a of arr(r.Properties.DefaultActions)){const tg=refId(a&&a.TargetGroupArn),tn=nodeOf(tg);if(!tn)continue;for(const t of arr(tn.props.Targets)){const x=refId(t&&t.Id);if(x)out.push({tg,id:x,port:+(t.Port||tn.props.Port||80)})}}}return out}
@@ -123,11 +147,13 @@ function addUse(A,b){A.raw.Metadata=A.raw.Metadata||{};A.raw.Metadata.CloudLab=A
 function CONNECT_X(a,b,A,B,say){const ta=A.type,tb=B.type;
   const sub=(path,att)=>()=>{const v=arr(getP(A.props,path));if(!v.some(x=>refId(x)===b))v.push(att?GA(b,att):R(b));setP(A.props,path,v)};
   if(ta==="CloudLab::Client"&&["AWS::ElasticLoadBalancingV2::LoadBalancer","AWS::CloudFront::Distribution","AWS::Route53::RecordSet","AWS::EC2::Instance"].includes(tb))return say("gửi request tới "+B.def.label,()=>{A.props.Target=R(b);delete A.props.Action;delete A.props.Key});
-  if(tb==="AWS::EC2::VPC"&&["AWS::EC2::Subnet","AWS::EC2::SecurityGroup","AWS::ElasticLoadBalancingV2::TargetGroup"].includes(ta))return say("thuộc VPC này",()=>{A.props.VpcId=R(b);
+  if(ta==="AWS::EC2::RouteTable"&&tb==="AWS::EC2::InternetGateway")return say("route 0.0.0.0/0 → internet gateway",()=>addIgwRoute(a,b));
+  if(ta==="AWS::EC2::RouteTable"&&tb==="AWS::EC2::Subnet")return say(`gắn route table cho ${b}`,()=>{associate(b,a);if(!refId(A.props.VpcId))A.props.VpcId=B.props.VpcId});
+  if(tb==="AWS::EC2::VPC"&&["AWS::EC2::Subnet","AWS::EC2::SecurityGroup","AWS::ElasticLoadBalancingV2::TargetGroup","AWS::EC2::RouteTable"].includes(ta))return say("thuộc VPC này",()=>{A.props.VpcId=R(b);
     if(ta==="AWS::EC2::Subnet"){const vc=ip4(B.props.CidrBlock),c=ip4(A.props.CidrBlock),clash=allNodes().some(s=>s.id!==a&&s.type==="AWS::EC2::Subnet"&&refId(s.props.VpcId)===b&&cidrOverlap(c,ip4(s.props.CidrBlock)));
       if(vc&&(!c||!cidrIn(c,vc)||clash)){const tmp=newSubnetIn(b);A.props.CidrBlock=M.res[tmp].Properties.CidrBlock;A.props.AvailabilityZone=M.res[tmp].Properties.AvailabilityZone;delete M.res[tmp]}}});
   if(ta==="AWS::EC2::InternetGateway"&&tb==="AWS::EC2::VPC")return say("gắn vào VPC (VPCGatewayAttachment)",()=>{for(const k of Object.keys(M.res))if(M.res[k].Type==="AWS::EC2::VPCGatewayAttachment"&&refId(M.res[k].Properties.InternetGatewayId)===a)delete M.res[k];
-    M.res[freeId(a+"Attach")]={Type:"AWS::EC2::VPCGatewayAttachment",Properties:{VpcId:R(b),InternetGatewayId:R(a)}};if(typeof seatIgw==="function")seatIgw(a,b)});
+    const att=freeId(a+"Attach");M.res[att]={Type:"AWS::EC2::VPCGatewayAttachment",Properties:{VpcId:R(b),InternetGatewayId:R(a)}};igwDeps(a);if(typeof seatIgw==="function")seatIgw(a,b)});
   if(tb==="AWS::EC2::SecurityGroup"&&SG_PATH[ta])return say("gắn security group",sub(SG_PATH[ta],"GroupId"));
   if(ta==="AWS::EC2::SecurityGroup"&&tb==="AWS::EC2::SecurityGroup")return say(`cho phép ${a} vào ${b} (tcp/80)`,()=>sgRule(b,a,80).apply());
   if(tb==="AWS::EC2::Subnet"){
@@ -153,13 +179,26 @@ function CONNECT_X(a,b,A,B,say){const ta=A.type,tb=B.type;
     dc.Origins=dc.Origins.filter(x=>x.Id!==b).concat([o]);if(!dc.DefaultCacheBehavior.TargetOriginId)dc.DefaultCacheBehavior.TargetOriginId=b});
   if(ta==="AWS::Route53::RecordSet"&&["AWS::ElasticLoadBalancingV2::LoadBalancer","AWS::CloudFront::Distribution"].includes(tb))return say("alias record → "+B.def.label,()=>{A.props.AliasTarget={DNSName:GA(b,tb==="AWS::CloudFront::Distribution"?"DomainName":"DNSName"),HostedZoneId:tb==="AWS::CloudFront::Distribution"?"Z2FDTNDATAQYW2":GA(b,"CanonicalHostedZoneID")}});
   return null}
+/* routes to an internet gateway must wait for the gateway to be attached: DependsOn the attachment (CloudFormation
+   otherwise may create the route first and fail) */
+function igwDeps(igw){const att=Object.keys(M.res).find(k=>M.res[k].Type==="AWS::EC2::VPCGatewayAttachment"&&refId(M.res[k].Properties.InternetGatewayId)===igw);
+  for(const k of resOfType("AWS::EC2::Route"))if(refId(M.res[k].Properties.GatewayId)===igw){if(att)M.res[k].DependsOn=att;else delete M.res[k].DependsOn}}
+function addIgwRoute(rt,igw){if(!igwRouteOf(rt)){const id=freeId(rt+"Internet");M.res[id]={Type:"AWS::EC2::Route",Properties:{RouteTableId:R(rt),DestinationCidrBlock:"0.0.0.0/0",GatewayId:R(igw)}}}
+  else{const k=igwRouteOf(rt);M.res[k].Properties.GatewayId=R(igw)}igwDeps(igw)}
+/* a subnet has exactly one route table: drop its old association first */
+function associate(subnet,rt){for(const k of resOfType("AWS::EC2::SubnetRouteTableAssociation"))if(refId(M.res[k].Properties.SubnetId)===subnet)delete M.res[k];
+  if(rt)M.res[freeId(subnet+"Routes")]={Type:"AWS::EC2::SubnetRouteTableAssociation",Properties:{SubnetId:R(subnet),RouteTableId:R(rt)}}}
+/* "make this subnet public": a route table of the VPC with 0.0.0.0/0 → its internet gateway (made if missing), associated */
+function publicRouteTable(vpc){const att=igwOf(vpc);if(!att)return null;const igw=refId(att.props.InternetGatewayId);
+  let rt=resOfType("AWS::EC2::RouteTable").find(k=>refId(M.res[k].Properties.VpcId)===vpc&&igwRouteOf(k));
+  if(!rt){rt=freeId("PublicRt");M.res[rt]={Type:"AWS::EC2::RouteTable",Properties:{VpcId:R(vpc),Tags:[{Key:"Name",Value:"public-rt"}]}};const v=M.pos[vpc]||[0,0];M.pos[rt]=[v[0]+40,v[1]+60];addIgwRoute(rt,igw)}return rt}
 /* next free /24 inside the VPC, alternating AZs; used when something is dropped into a VPC that has no subnet under the cursor */
 function newSubnetIn(vpc){const v=nodeOf(vpc),vc=ip4(v&&v.props.CidrBlock)||ip4("10.0.0.0/16"),used=allNodes().filter(n=>n.type==="AWS::EC2::Subnet"&&refId(n.props.VpcId)===vpc);
   let cidr=null;for(let k=1;k<256&&!cidr;k++){const net=vc.net+k*256;if(net+256>vc.net+vc.size)break;const c=`${net>>>24}.${(net>>16)&255}.${(net>>8)&255}.0/24`;if(!used.some(s=>cidrOverlap(ip4(c),ip4(s.props.CidrBlock))))cidr=c}
   const id=freeId("Subnet"),az=AZS[used.length%2];
   M.res[id]={Type:"AWS::EC2::Subnet",Properties:{VpcId:{Ref:vpc},CidrBlock:cidr||"10.0.1.0/24",AvailabilityZone:az,MapPublicIpOnLaunch:false,Tags:[{Key:"Name",Value:kebab(id)}]}};return id}
-const WHY_X={"AWS::EC2::VPC":"(hãy nối subnet hoặc security group tới VPC)","AWS::EC2::Subnet":"VPC","AWS::EC2::InternetGateway":"VPC","AWS::EC2::SecurityGroup":"VPC hoặc security group khác",
+const WHY_X={"AWS::EC2::VPC":"(hãy nối subnet hoặc security group tới VPC)","AWS::EC2::Subnet":"VPC","AWS::EC2::RouteTable":"internet gateway (route 0.0.0.0/0), subnet hoặc VPC","AWS::EC2::InternetGateway":"VPC","AWS::EC2::SecurityGroup":"VPC hoặc security group khác",
   "AWS::EC2::Instance":"subnet, security group, role, RDS, ElastiCache, S3, DynamoDB, SNS, SQS","AWS::ElasticLoadBalancingV2::LoadBalancer":"EC2, target group, subnet, security group",
   "AWS::ElasticLoadBalancingV2::TargetGroup":"EC2 hoặc VPC","AWS::RDS::DBInstance":"subnet, security group","AWS::ElastiCache::CacheCluster":"security group","AWS::CloudFront::Distribution":"S3, load balancer hoặc API","AWS::Route53::RecordSet":"load balancer hoặc CloudFront"};
-Object.assign(BASE_ID,{"AWS::EC2::VPC":"Vpc","AWS::EC2::Subnet":"Subnet","AWS::EC2::InternetGateway":"Igw","AWS::EC2::SecurityGroup":"Sg","AWS::EC2::Instance":"Web","AWS::ElasticLoadBalancingV2::LoadBalancer":"Alb",
+Object.assign(BASE_ID,{"AWS::EC2::RouteTable":"RouteTable","AWS::EC2::VPC":"Vpc","AWS::EC2::Subnet":"Subnet","AWS::EC2::InternetGateway":"Igw","AWS::EC2::SecurityGroup":"Sg","AWS::EC2::Instance":"Web","AWS::ElasticLoadBalancingV2::LoadBalancer":"Alb",
   "AWS::ElasticLoadBalancingV2::TargetGroup":"Targets","AWS::RDS::DBInstance":"Db","AWS::ElastiCache::CacheCluster":"Cache","AWS::CloudFront::Distribution":"Cdn","AWS::Route53::RecordSet":"Dns"});

@@ -9,7 +9,7 @@ const ctx={console,setTimeout,clearTimeout,setInterval,clearInterval,
   window:{addEventListener:noop,innerWidth:1440,innerHeight:900},localStorage:{getItem:()=>null,setItem:noop},
   document:{addEventListener:noop,getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],createElement:el,body:el(),documentElement:el()}};
 ctx.window.document=ctx.document;vm.createContext(ctx);
-const files=["vendor/js-yaml.min.js","src/prices.js","src/shell/core.js","src/shell/model.js","src/shell/sim.js","src/aws/catalog.js","src/aws/cfn.js","src/aws/infra.js","src/aws/org.js","src/aws/eli5.js","src/aws/iam.js","src/aws/sim.js","src/aws/streaming.js","src/aws/lessons.js","src/aws/lessons-org.js","src/aws/lessons-stream.js","src/aws/bank.js"];
+const files=["vendor/js-yaml.min.js","src/prices.js","src/shell/core.js","src/shell/model.js","src/shell/sim.js","src/aws/catalog.js","src/aws/cfn.js","src/aws/infra.js","src/aws/org.js","src/aws/eli5.js","src/aws/iam.js","src/aws/access.js","src/aws/sim.js","src/aws/streaming.js","src/aws/lessons.js","src/aws/lessons-org.js","src/aws/lessons-stream.js","src/aws/bank.js","src/aws/steps.js"];
 vm.runInContext(files.map(f=>fs.readFileSync(path.join(root,f),"utf8").replace(/^"use strict";/,"")).join("\n;\n")+"\n;globalThis.__X={LESSONS,T,GROUPS,ELI5,STARTERS,LZ_SRC};",ctx);
 const {LESSONS,T,GROUPS,ELI5,STARTERS,LZ_SRC}=ctx.__X;
 const SITE="https://dat-2k2.github.io/cloudlab/";
@@ -61,7 +61,8 @@ ${PROMPT}
 ### Định dạng template CloudLab đọc được
 
 - CloudFormation YAML chuẩn: khóa Resources, cú pháp ngắn !Ref, !GetAtt, !Sub, !Join, !Select, !Split, !ImportValue. Mũi tên trên sơ đồ được suy ra từ các tham chiếu này.
-- Vùng mô phỏng: ap-southeast-2. Không mô phỏng route table, NAT gateway và traffic đi ra; public subnet = MapPublicIpOnLaunch: true và VPC có internet gateway gắn vào.
+- Vùng mô phỏng: ap-southeast-2. Public subnet = subnet gắn route table có route 0.0.0.0/0 → internet gateway đã gắn vào VPC (AWS::EC2::RouteTable, AWS::EC2::Route, AWS::EC2::SubnetRouteTableAssociation); EC2 cần thêm MapPublicIpOnLaunch: true để có IP public. Không mô phỏng NAT gateway và traffic đi ra.
+- Quyền giữa các dịch vụ như AWS thật: API Gateway, S3, SNS, EventBridge gọi Lambda cần AWS::Lambda::Permission; AWS Budgets gửi vào SNS cần AWS::SNS::TopicPolicy; CloudFront đọc bucket private qua AWS::CloudFront::OriginAccessControl và bucket policy cho cloudfront.amazonaws.com với điều kiện AWS:SourceArn.
 - Phần chỉ dành cho mô phỏng nằm trong Metadata.CloudLab và được bỏ khi xuất ra AWS.
 
 Loại tài nguyên AWS được hỗ trợ: ${awsTypes.map(t=>t.type).join(", ")}.
@@ -92,7 +93,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,sans-
 <ol><li>Mở Gemini, dán câu lệnh mẫu bên dưới và thay phần [mô tả tình huống].</li><li>Gemini trả về một template CloudFormation (YAML).</li><li>Mở <a href="./#/import">CloudLab → Dán template</a>, dán YAML, bấm “Mở trong sandbox”. Bấm ▶ Chạy để thấy traffic, quyền, lỗi kết nối và chi phí; tab Vấn đề liệt kê cấu hình rủi ro.</li></ol>
 <h3>Câu lệnh mẫu</h3><pre style="white-space:pre-wrap;background:var(--line);padding:12px;border-radius:8px">${esc(PROMPT)}</pre>
 <h3>Trợ lý AI trong trình duyệt (WebMCP)</h3><p>Khi trình duyệt hỗ trợ <a href="https://github.com/webmachinelearning/webmcp">WebMCP</a>, CloudLab tự đăng ký 16 công cụ để trợ lý AI đọc và thao tác trực tiếp: đọc trạng thái sơ đồ, mở bài, mở template (<code>load_template</code>), thêm, nối, đổi thuộc tính, chạy mô phỏng (<code>run_simulation</code>), kiểm tra bài và xuất Terraform/CDK. Không cần cài thêm gì.</p>
-<h3>Định dạng template CloudLab đọc được</h3><ul><li>CloudFormation YAML chuẩn: khóa Resources, cú pháp ngắn !Ref, !GetAtt, !Sub, !Join, !Select, !Split, !ImportValue. Mũi tên trên sơ đồ được suy ra từ các tham chiếu này.</li><li>Vùng mô phỏng ap-southeast-2. Không mô phỏng route table, NAT gateway và traffic đi ra; public subnet = MapPublicIpOnLaunch: true và VPC có internet gateway gắn vào.</li><li>Phần chỉ dành cho mô phỏng nằm trong <code>Metadata.CloudLab</code>, được bỏ khi xuất ra AWS.</li></ul>
+<h3>Định dạng template CloudLab đọc được</h3><ul><li>CloudFormation YAML chuẩn: khóa Resources, cú pháp ngắn !Ref, !GetAtt, !Sub, !Join, !Select, !Split, !ImportValue. Mũi tên trên sơ đồ được suy ra từ các tham chiếu này.</li><li>Vùng mô phỏng ap-southeast-2. Public subnet = route table có 0.0.0.0/0 → internet gateway đã gắn vào VPC; EC2 cần MapPublicIpOnLaunch: true để có IP public. Không mô phỏng NAT gateway.</li><li>Quyền giữa các dịch vụ như AWS thật: gọi Lambda từ API Gateway, S3, SNS, EventBridge cần <code>AWS::Lambda::Permission</code>; Budgets gửi vào SNS cần <code>AWS::SNS::TopicPolicy</code>; CloudFront đọc bucket private qua <code>AWS::CloudFront::OriginAccessControl</code>.</li><li>Phần chỉ dành cho mô phỏng nằm trong <code>Metadata.CloudLab</code>, được bỏ khi xuất ra AWS.</li></ul>
 <p><b>Loại tài nguyên AWS được hỗ trợ:</b> ${awsTypes.map(t=>`<code>${esc(t.type)}</code>`).join(", ")}.</p>
 <p><b>Nguồn tải và người nhận bên ngoài AWS</b> (trong <code>Metadata.CloudLab.External</code>, mỗi mục có Type và Properties):</p><ul>${extTypes.map(t=>`<li><code>${esc(t.type)}</code> (${esc(t.label)}): ${esc(fieldKeys(t).join(", "))}</li>`).join("")}</ul>
 <p><b>Metadata.CloudLab theo loại tài nguyên:</b></p><ul>${metaKeys.map(([ty,ks])=>`<li><code>${esc(ty)}</code>: ${esc(ks.join(", "))}</li>`).join("")}</ul>

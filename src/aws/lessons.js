@@ -15,6 +15,24 @@ const ASSUME_ACCOUNT=`      AssumeRolePolicyDocument:
             Principal: {AWS: !Sub "arn:aws:iam::\${AWS::AccountId}:root"}
             Action: sts:AssumeRole`;
 const BASIC="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole";
+/* resource-based permissions every real template needs (src/aws/access.js) */
+const API_INVOKE=(api,fn)=>`  ${api}Invoke${fn}:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ${fn}.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:\${AWS::Region}:\${AWS::AccountId}:\${${api}}/*"
+`;
+const S3_INVOKE=(b,fn,name)=>`  ${b}Invoke${fn}:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ${fn}.Arn
+      Principal: s3.amazonaws.com
+      SourceArn: arn:aws:s3:::${name}
+      SourceAccount: !Ref AWS::AccountId
+`;
 /* helpers used by task checks */
 const nodesOf=t=>allNodes().filter(n=>n.type===t);
 const budgetTh=b=>arr(b.props.NotificationsWithSubscribers).map(n=>+getP(n,"Notification.Threshold"));
@@ -53,7 +71,8 @@ Resources:
     Properties:
       FunctionName: orders
       Runtime: python3.12
-      Handler: app.handler
+      Handler: index.handler
+      Code: {ZipFile: "def handler(event, context):\\n    return {'statusCode': 200}"}
       MemorySize: 256
       Timeout: 10
       Role: !GetAtt OrdersRole.Arn
@@ -82,7 +101,7 @@ ${ASSUME_LAMBDA}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions: [{AttributeName: pk, AttributeType: S}]
       KeySchema: [{AttributeName: pk, KeyType: HASH}]
-`,layout:{Shoppers:[40,80],OrdersApi:[400,80],OrdersFn:[760,80],OrdersTable:[1120,80],OrdersRole:[760,360],Dashboard:[1120,360]}};
+${API_INVOKE("OrdersApi","OrdersFn")}`,layout:{Shoppers:[40,80],OrdersApi:[400,80],OrdersFn:[760,80],OrdersTable:[1120,80],OrdersRole:[760,360],Dashboard:[1120,360]}};
 
 const LESSONS=[
 {id:"guardrails",step:0,title:"Cảnh báo tiền trước khi tiêu tiền",tag:"Budgets + SNS",who:["M","Minh · mentor"],speed:4,
@@ -116,7 +135,8 @@ Resources:
     Properties:
       FunctionName: orders
       Runtime: python3.12
-      Handler: app.handler
+      Handler: index.handler
+      Code: {ZipFile: "def handler(event, context):\\n    return {'statusCode': 200}"}
       MemorySize: 512
       Timeout: 10
       Role: !GetAtt OrdersRole.Arn
@@ -146,7 +166,19 @@ ${ASSUME_LAMBDA}
           Subscribers:
             - SubscriptionType: SNS
               Address: !Ref BillingAlerts
-`,layout:{Customers:[40,80],OrdersApi:[400,80],OrdersFn:[760,80],OrdersRole:[760,360],MonthlyBudget:[40,360],BillingAlerts:[400,360],MyInbox:[400,620]},
+  BillingAlertsPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics: [!Ref BillingAlerts]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowBudgets
+            Effect: Allow
+            Principal: {Service: budgets.amazonaws.com}
+            Action: SNS:Publish
+            Resource: !Ref BillingAlerts
+${API_INVOKE("OrdersApi","OrdersFn")}`,layout:{Customers:[40,80],OrdersApi:[400,80],OrdersFn:[760,80],OrdersRole:[760,360],MonthlyBudget:[40,360],BillingAlerts:[400,360],MyInbox:[400,620]},
   explain:{Customers:"Khách đặt hàng qua app, khoảng 2 request mỗi giây. Đây là thứ làm hóa đơn tăng dần trong tháng — bấm ▶ để xem đồng hồ chi phí chạy.",
     OrdersApi:"Mỗi request vào API Gateway tính một ít tiền rồi chuyển cho Lambda orders.",
     OrdersFn:"512 MB × khoảng 0,9 giây mỗi lần. Phần lớn chi phí của hệ thống nằm ở GB-giây của function này.",
@@ -356,7 +388,8 @@ Resources:
     Properties:
       FunctionName: extract
       Runtime: python3.12
-      Handler: app.handler
+      Handler: index.handler
+      Code: {ZipFile: "def handler(event, context):\\n    return {'statusCode': 200}"}
       MemorySize: 128
       Timeout: 3
       Role: !GetAtt ExtractRole.Arn
@@ -396,7 +429,7 @@ ${ASSUME_LAMBDA}
       Subscription:
         - Protocol: email
           Endpoint: dat@example.com
-`,layout:{Tester:[40,80],ExtractApi:[400,80],ExtractFn:[760,80],ExtractRole:[760,360],OpsDashboard:[1120,80],ErrorsAlarm:[1120,360],OpsAlerts:[1120,620],MyInbox:[760,620]},
+${API_INVOKE("ExtractApi","ExtractFn")}`,layout:{Tester:[40,80],ExtractApi:[400,80],ExtractFn:[760,80],ExtractRole:[760,360],OpsDashboard:[1120,80],ErrorsAlarm:[1120,360],OpsAlerts:[1120,620],MyInbox:[760,620]},
   explain:{Tester:"Gửi request thử mỗi 5 giây, như health check.",ExtractApi:"Trả 502 khi Lambda lỗi.",
     ExtractFn:"Code cần khoảng 4,2 giây ở 128 MB, nhưng Timeout là 3 giây (mặc định). Thêm memory thì thêm CPU nên chạy nhanh hơn.",
     ExtractRole:"Lambda ghi log bằng chính role này. Role chỉ có quyền đọc S3, thiếu logs:CreateLogGroup / CreateLogStream / PutLogEvents → log mất mà không báo lỗi.",
@@ -440,6 +473,7 @@ Metadata:
 Resources:
   ImagesBucket:
     Type: AWS::S3::Bucket
+    DependsOn: ImagesBucketInvokeExtractFn
     Metadata:
       CloudLab:
         Objects: [{Key: incoming/cat.jpg, SizeKB: 240}, {Key: incoming/cat.jpg.json, SizeKB: 1}, {Key: incoming/cat.jpg.json.json, SizeKB: 1}]
@@ -456,13 +490,14 @@ Resources:
     Properties:
       FunctionName: extract
       Runtime: python3.12
-      Handler: app.handler
+      Handler: index.handler
+      Code: {ZipFile: "def handler(event, context):\\n    return {'statusCode': 200}"}
       MemorySize: 256
       Timeout: 10
       Role: !GetAtt ExtractRole.Arn
       Environment:
         Variables:
-          OUTPUT_BUCKET: !Ref ImagesBucket
+          OUTPUT_BUCKET: lab-images-111122223333
           OUTPUT_PREFIX: incoming/
   ExtractRole:
     Type: AWS::IAM::Role
@@ -478,8 +513,8 @@ ${ASSUME_LAMBDA}
               - Sid: ReadWriteImages
                 Effect: Allow
                 Action: [s3:GetObject, s3:PutObject]
-                Resource: !Sub "\${ImagesBucket.Arn}/*"
-`,layout:{PhoneApp:[40,80],ImagesBucket:[400,80],ExtractFn:[760,80],ExtractRole:[760,360],OpsDashboard:[400,360]},
+                Resource: arn:aws:s3:::lab-images-111122223333/*
+${S3_INVOKE("ImagesBucket","ExtractFn","lab-images-111122223333")}`,layout:{PhoneApp:[40,80],ImagesBucket:[400,80],ExtractFn:[760,80],ExtractRole:[760,360],OpsDashboard:[400,360]},
   explain:{PhoneApp:"App điện thoại upload ảnh vào incoming/, khoảng 30 ảnh mỗi giờ.",
     ImagesBucket:"Event notification gọi extract cho MỌI object mới — không có prefix hay suffix filter, nên cả file kết quả .json cũng kích hoạt.",
     ExtractFn:"Đọc ảnh, ghi kết quả <tên>.json vào OUTPUT_BUCKET/OUTPUT_PREFIX. OUTPUT_PREFIX đang là incoming/ — đúng chỗ đang bắn sự kiện.",
@@ -508,6 +543,7 @@ Resources:
   ImagesBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    DependsOn: ImagesBucketInvokeExtractFn
     Metadata:
       CloudLab:
         Objects: [{Key: archive/2025.zip, SizeKB: 209715200}, {Key: processed/cat.json, SizeKB: 1}]
@@ -525,13 +561,14 @@ Resources:
     Properties:
       FunctionName: extract
       Runtime: python3.12
-      Handler: app.handler
+      Handler: index.handler
+      Code: {ZipFile: "def handler(event, context):\\n    return {'statusCode': 200}"}
       MemorySize: 256
       Timeout: 10
       Role: !GetAtt ExtractRole.Arn
       Environment:
         Variables:
-          OUTPUT_BUCKET: !Ref ImagesBucket
+          OUTPUT_BUCKET: lab-images-111122223333
           OUTPUT_PREFIX: processed/
   ExtractRole:
     Type: AWS::IAM::Role
@@ -547,8 +584,8 @@ ${ASSUME_LAMBDA}
               - Sid: ReadWriteImages
                 Effect: Allow
                 Action: [s3:GetObject, s3:PutObject]
-                Resource: !Sub "\${ImagesBucket.Arn}/*"
-`,layout:{ImagesBucket:[40,80],ExtractFn:[400,80],ExtractRole:[400,360],ScratchBucket:[760,80]},
+                Resource: arn:aws:s3:::lab-images-111122223333/*
+${S3_INVOKE("ImagesBucket","ExtractFn","lab-images-111122223333")}`,layout:{ImagesBucket:[40,80],ExtractFn:[400,80],ExtractRole:[400,360],ScratchBucket:[760,80]},
   manual:{ScratchBucket:{Type:"AWS::S3::Bucket",Metadata:{CloudLab:{Objects:[{Key:"test-upload.jpg",SizeKB:52428800}]}},Properties:{BucketName:"lab-scratch-111122223333"}}},
   explain:{ImagesBucket:"DeletionPolicy: Retain → khi xóa stack, CloudFormation bỏ qua bucket này: nó còn đó và vẫn tính tiền 200 GB. Kể cả đổi thành Delete, CloudFormation không xóa được bucket còn object.",
     ExtractFn:"Function và role sẽ bị xóa cùng stack.",ExtractRole:"Role không tốn tiền, nhưng nên đi cùng stack.",
@@ -601,6 +638,19 @@ Resources:
     Properties:
       VpcId: !Ref Vpc
       InternetGatewayId: !Ref Igw
+  PublicRt:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref Vpc, Tags: [{Key: Name, Value: public-rt}]}
+  PublicRtInternet:
+    Type: AWS::EC2::Route
+    DependsOn: IgwAttach
+    Properties: {RouteTableId: !Ref PublicRt, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref Igw}
+  PublicARoutes:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicA, RouteTableId: !Ref PublicRt}
+  PublicBRoutes:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicB, RouteTableId: !Ref PublicRt}
   PublicA:
     Type: AWS::EC2::Subnet
     Properties: {VpcId: !Ref Vpc, CidrBlock: 10.0.1.0/24, AvailabilityZone: ap-southeast-2a, MapPublicIpOnLaunch: true}
@@ -683,6 +733,7 @@ Resources:
   Db:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       Engine: postgres
       EngineVersion: "16"
@@ -701,7 +752,7 @@ Resources:
       Name: app.example.com.
       Type: A
       AliasTarget: {DNSName: !GetAtt Alb.DNSName, HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID}
-`,layout:{Users:[40,330],AppDns:[40,80],Igw:[40,600],Vpc:[380,20],PublicA:[420,80],PublicB:[420,560],Alb:[440,330],AlbSg:[440,820],PrivateA:[820,80],PrivateB:[820,560],Web1:[860,130],Web2:[860,610],WebTargets:[860,330],Db:[1200,130],WebSg:[860,820],DbSg:[1200,820],Dashboard:[1600,330]}};
+`,layout:{Users:[40,330],AppDns:[40,80],Igw:[40,600],Vpc:[380,20],PublicA:[420,80],PublicB:[420,560],Alb:[440,330],AlbSg:[440,820],PrivateA:[820,80],PrivateB:[820,560],Web1:[860,130],Web2:[860,610],WebTargets:[860,330],Db:[1200,130],WebSg:[860,820],DbSg:[1200,820],PublicRt:[1200,560],Dashboard:[1600,330]}};
 const STATIC={id:"static",title:"Website tĩnh",tag:"Route 53 · CloudFront · S3",desc:"Tên miền → CloudFront cache ở edge → S3 bucket chứa file. 90% request trúng cache, S3 chỉ nhận phần còn lại.",
   yaml:`Description: Website tĩnh · Route 53 → CloudFront → S3
 Metadata:
@@ -733,10 +784,28 @@ Resources:
           - Id: SiteBucket
             DomainName: !GetAtt SiteBucket.RegionalDomainName
             S3OriginConfig: {OriginAccessIdentity: ""}
+            OriginAccessControlId: !GetAtt SiteOac.Id
         DefaultCacheBehavior:
           TargetOriginId: SiteBucket
           ViewerProtocolPolicy: redirect-to-https
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+  SiteOac:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig: {Name: my-site-oac, OriginAccessControlOriginType: s3, SigningBehavior: always, SigningProtocol: sigv4}
+  SitePolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal: {Service: cloudfront.amazonaws.com}
+            Action: s3:GetObject
+            Resource: !Sub "\${SiteBucket.Arn}/*"
+            Condition: {StringEquals: {"AWS:SourceArn": !Sub "arn:aws:cloudfront::\${AWS::AccountId}:distribution/\${Cdn}"}}
   SiteDns:
     Type: AWS::Route53::RecordSet
     Properties:
@@ -744,7 +813,7 @@ Resources:
       Name: www.example.com.
       Type: A
       AliasTarget: {DNSName: !GetAtt Cdn.DomainName, HostedZoneId: Z2FDTNDATAQYW2}
-`,layout:{Visitors:[40,120],SiteDns:[400,120],Cdn:[760,120],SiteBucket:[1120,120]}};
+`,layout:{Visitors:[40,120],SiteDns:[400,120],Cdn:[760,120],SiteBucket:[1120,120],SitePolicy:[1120,380]}};
 STARTER.title="Serverless API";STARTER.tag="API Gateway · Lambda · DynamoDB";STARTER.desc="Client → API Gateway → Lambda → DynamoDB, không server nào chạy khi không có request.";
 const STARTERS={web3:WEB3,static:STATIC,serverless:STARTER};
 
@@ -776,6 +845,21 @@ const ATTACH=`  IgwAttach:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties: {VpcId: !Ref Vpc, InternetGatewayId: !Ref Igw}
 `;
+/* the public route table of lab 000003: PublicA + PublicB use it; route 0.0.0.0/0 → Igw once the gateway is attached */
+const PUBLIC_RT=withRoute=>`  PublicRt:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref Vpc, Tags: [{Key: Name, Value: ASG-public-rt}]}
+${withRoute?`  PublicRtInternet:
+    Type: AWS::EC2::Route
+    DependsOn: IgwAttach
+    Properties: {RouteTableId: !Ref PublicRt, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref Igw}
+`:""}  PublicARoutes:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicA, RouteTableId: !Ref PublicRt}
+  PublicBRoutes:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicB, RouteTableId: !Ref PublicRt}
+`;
 const EC2=(id,subnet,sg,uses,extra)=>`  ${id}:
     Type: AWS::EC2::Instance
     Metadata:
@@ -804,7 +888,7 @@ Metadata:
         Type: CloudLab::Client
         Properties: {Target: !Ref PublicEc2, Port: 22, SourceIp: 198.51.100.7, RatePerSecond: 0.2, Expect: Deny}
 Resources:
-${VPC10}  PublicSg:
+${VPC10}${PUBLIC_RT(false)}  PublicSg:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Public subnet - SG
@@ -817,23 +901,25 @@ ${VPC10}  PublicSg:
       VpcId: !Ref Vpc
       SecurityGroupIngress: [{IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}]
 ${EC2("PublicEc2","PublicA","PublicSg")}${EC2("PrivateEc2","PrivateB","PrivateSg")}`,
-  layout:{Visitors:[40,80],You:[40,320],ScanBot:[40,560],Igw:[40,800],Vpc:[400,20],PublicA:[440,60],PublicB:[440,470],PrivateA:[820,60],PrivateB:[820,470],PublicEc2:[460,110],PrivateEc2:[840,520],PublicSg:[460,760],PrivateSg:[840,760]},
+  layout:{Visitors:[40,80],You:[40,320],ScanBot:[40,560],Igw:[40,800],Vpc:[400,20],PublicA:[440,60],PublicB:[440,470],PrivateA:[820,60],PrivateB:[820,470],PublicEc2:[460,110],PrivateEc2:[840,520],PublicSg:[460,760],PrivateSg:[840,760],PublicRt:[1200,760]},
   explain:{Vpc:"VPC “ASG” 10.10.0.0/16 như lab. Lab 000003 còn thêm NAT gateway mỗi AZ để EC2 private ra được Internet (ping amazon.com); CloudLab chưa mô phỏng traffic đi ra.",
-    Igw:"Internet gateway đã tạo nhưng CHƯA gắn vào VPC — nên public subnet chưa thật sự public.",PublicA:"Public subnet: MapPublicIpOnLaunch = true, cần IGW gắn vào VPC.",PrivateB:"Private subnet: không có IP public, Internet không vào thẳng được.",
+    Igw:"Internet gateway đã tạo nhưng CHƯA gắn vào VPC — nên public subnet chưa thật sự public.",PublicA:"Public subnet theo lab: tự gán IP public, dùng route table PublicRt. Chỉ public thật khi PublicRt có đường 0.0.0.0/0 → Igw.",
+    PublicRt:"Route table của PublicA và PublicB. Mới có route local (trong VPC); lab 000003 thêm 0.0.0.0/0 → internet gateway sau khi gắn gateway.",PrivateB:"Private subnet: không có IP public, Internet không vào thẳng được.",
     PublicSg:"Mở 80 cho mọi người là đúng (web). Nhưng 22 (SSH) cũng mở 0.0.0.0/0 — bot quét cổng sẽ thử đăng nhập.",PrivateSg:"Lab: SSH vào private chỉ được từ public SG (máy public làm bastion), không phải từ Internet.",
     Visitors:"Khách vào web trên PublicEc2, cổng 80.",You:"Bạn SSH từ IP 203.0.113.10 — rule SSH nên chỉ mở cho /32 này.",ScanBot:"Bot từ IP lạ thử SSH. Ta muốn bị chặn (✕ xanh).",PublicEc2:"Web server + bastion.",PrivateEc2:"App server, chỉ vào được qua bastion."},
   tasks:[
-    {t:"Khách vào được web",c:"IGW gắn VPC → public subnet có đường Internet",test:()=>{const S=simStats(600);return okOf(S,"Visitors")>0&&!errOf(S,"Visitors")}},
+    {t:"Khách vào được web",c:"IGW gắn VPC + route 0.0.0.0/0 → IGW → public subnet có đường Internet",test:()=>{const S=simStats(600);return okOf(S,"Visitors")>0&&!errOf(S,"Visitors")}},
     {t:"SSH chỉ từ IP của bạn",c:"You vào được, ScanBot bị chặn",test:()=>{const S=simStats(600);return okOf(S,"You")>0&&!errOf(S,"You")&&!okOf(S,"ScanBot")}},
     {t:"Private chỉ nhận SSH từ public SG",c:"không có 0.0.0.0/0 trên PrivateSg",test:()=>{const g=nodeOf("PrivateSg");const L=arr(g&&g.props.SecurityGroupIngress);return L.length>0&&L.every(r=>refId(r.SourceSecurityGroupId)==="PublicSg"||(r.CidrIp&&r.CidrIp!=="0.0.0.0/0"&&r.CidrIp.startsWith("10.10.")))}}],
   diagnose(n){if(!igwOf("Vpc"))return["Khách vẫn không vào được web.","Bấm ▶ Chạy và đọc lý do trên mũi tên Visitors → PublicEc2.","Internet gateway chưa gắn vào VPC: kéo khối Igw thả vào khung VPC (hoặc kéo mũi tên từ chấm bên phải Igw tới khung VPC)."][Math.min(n,2)];
+    if(!isPublicSubnet("PublicA"))return["Gateway đã gắn, nhưng khách vẫn không vào được web.","Gói tin từ Internet về PublicA đi theo route table nào?",subnetInet("PublicA").why+". Bấm PublicRt → Route: 0.0.0.0/0 → Igw."][Math.min(n,2)];
     if(arr(getP(nodeOf("PublicSg")||{props:{}},"props.SecurityGroupIngress")).some(r=>+r.FromPort===22&&r.CidrIp==="0.0.0.0/0"))return["Bot quét vẫn SSH vào được PublicEc2.","Xem rule cổng 22 của PublicSg.","Đổi nguồn của rule SSH thành 203.0.113.10/32 (IP của bạn)."][Math.min(n,2)];
     return["PrivateSg vẫn mở SSH cho Internet.","Ai nên SSH được vào máy private?","Rule 22 của PrivateSg: nguồn = SG PublicSg."][Math.min(n,2)]},
-  hints:()=>["Subnet chỉ public khi VPC có internet gateway gắn vào. Security group: mở đúng cổng cho đúng nguồn.","Kéo Igw thả vào khung VPC (hoặc kéo mũi tên Igw → khung VPC). PublicSg: rule 22 nguồn 203.0.113.10/32. PrivateSg: rule 22 nguồn SG PublicSg."],
+  hints:()=>["Subnet chỉ public khi route table của nó có 0.0.0.0/0 → internet gateway, và gateway đã gắn vào VPC. Security group: mở đúng cổng cho đúng nguồn.","Kéo Igw thả vào khung VPC. PublicRt → Route: 0.0.0.0/0 → Igw. PublicSg: rule 22 nguồn 203.0.113.10/32. PrivateSg: rule 22 nguồn SG PublicSg."],
   solve(){edit("fix vpc",()=>{if(!igwOf("Vpc"))connectRule("Igw","Vpc").apply(true);
     nodeOf("PublicSg").props.SecurityGroupIngress=[{IpProtocol:"tcp",FromPort:80,ToPort:80,CidrIp:"0.0.0.0/0"},{IpProtocol:"tcp",FromPort:22,ToPort:22,CidrIp:"203.0.113.10/32"}];
     nodeOf("PrivateSg").props.SecurityGroupIngress=[{IpProtocol:"tcp",FromPort:22,ToPort:22,SourceSecurityGroupId:{"Fn::GetAtt":["PublicSg","GroupId"]}}]})},
-  pass:"Public subnet = có IGW. Security group là tường lửa theo nguồn: Internet cho web, /32 cho SSH, và SG-tới-SG cho máy bên trong. Lab thật còn có NAT gateway để private đi ra."};
+  pass:"Public subnet = route table có 0.0.0.0/0 → internet gateway đã gắn vào VPC. Security group là tường lửa theo nguồn: Internet cho web, /32 cho SSH, và SG-tới-SG cho máy bên trong. Lab thật còn có NAT gateway để private đi ra."};
 const L_ROLE={id:"ec2role",lab:"000048",step:3,title:"EC2 dùng IAM role, không dùng access key",tag:"EC2 + IAM role",who:["L","Lan · dev"],speed:1,
   scenario:"App trên EC2 cần ghi file vào bucket uploads. Lab 000048 cho thấy dán access key vào máy là sai. Role đã có nhưng chưa gắn vào máy, và quyền thì quá rộng.",
   goal:"App ghi được vào bucket bằng instance role; role chỉ có quyền cần thiết.",
@@ -922,8 +1008,8 @@ Resources:
   solve(){edit("cloudfront",()=>{M.res.Cdn={Type:"AWS::CloudFront::Distribution",Metadata:{CloudLab:{HitRatio:0.9}},Properties:{DistributionConfig:{Enabled:true,DefaultRootObject:"index.html",Origins:[{Id:"SiteBucket",DomainName:{"Fn::GetAtt":["SiteBucket","RegionalDomainName"]},S3OriginConfig:{OriginAccessIdentity:""}}],DefaultCacheBehavior:{TargetOriginId:"SiteBucket",ViewerProtocolPolicy:"redirect-to-https",CachePolicyId:"658327ea-f89d-4fab-a63d-7e88639e58f6"}}}};M.pos.Cdn=[400,120];
     nodeOf("Visitors").props.Target={Ref:"Cdn"};delete nodeOf("Visitors").props.Action;delete nodeOf("Visitors").props.Key;removeNode("SitePolicy");nodeOf("SiteBucket").props.PublicAccessBlockConfiguration={BlockPublicAcls:true,BlockPublicPolicy:true,IgnorePublicAcls:true,RestrictPublicBuckets:true}})},
   pass:"CloudFront cache ở edge nên 90% request không chạm tới S3, và bucket quay về private. Public bucket chỉ hợp cho demo."};
-const L_RDS={id:"rds",lab:"000005",step:5,title:"RDS ở private subnet, chỉ app vào được",tag:"RDS + VPC",who:["M","Minh · mentor"],speed:1,
-  scenario:"Lab 000005: MySQL Multi-AZ, database fcaj, security group rds-sg. Bản này chạy được nhưng DB đang public, mở 3306 cho cả Internet, chỉ một AZ.",
+const L_RDS={id:"rds",lab:"000005",step:5,title:"RDS ở private subnet, chỉ app vào được",tag:"RDS + VPC",who:["M","Minh · mentor"],speed:1,deployed:false,
+  scenario:"Lab 000005: MySQL Multi-AZ, database fcaj, security group rds-sg. Template này chưa deploy. Review trước khi tạo DB: DB đang để public, mở 3306 cho cả Internet, nằm ở public subnet và chỉ một AZ. Sửa xong mới deploy, vì DB đã chạy thì không chuyển sang subnet khác được.",
   goal:"App vẫn chạy; DB không public, rds-sg chỉ cho EC2; DB subnet group 2 AZ private + Multi-AZ.",
   concepts:["DB subnet group","security group tham chiếu SG","PubliclyAccessible","Multi-AZ"],
   yaml:`Description: Lab 000005 · RDS MySQL
@@ -934,7 +1020,7 @@ Metadata:
         Type: CloudLab::Client
         Properties: {Target: !Ref AppEc2, RatePerSecond: 5}
 Resources:
-${VPC10}${ATTACH}  Ec2Sg:
+${VPC10}${ATTACH}${PUBLIC_RT(true)}  Ec2Sg:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ec2-sg
@@ -948,15 +1034,16 @@ ${VPC10}${ATTACH}  Ec2Sg:
       SecurityGroupIngress: [{IpProtocol: tcp, FromPort: 3306, ToPort: 3306, CidrIp: 0.0.0.0/0}]
 ${EC2("AppEc2","PublicA","Ec2Sg","!Ref Db")}  DbSubnets:
     Type: AWS::RDS::DBSubnetGroup
-    Properties: {DBSubnetGroupDescription: fcaj db subnets, SubnetIds: [!Ref PublicB]}
+    Properties: {DBSubnetGroupDescription: fcaj db subnets, SubnetIds: [!Ref PublicA, !Ref PublicB]}
   Db:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: fcaj
       DBName: fcaj
       Engine: mysql
-      EngineVersion: "8.0"
+      EngineVersion: "8.4"
       DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
       MultiAZ: false
@@ -965,8 +1052,8 @@ ${EC2("AppEc2","PublicA","Ec2Sg","!Ref Db")}  DbSubnets:
       ManageMasterUserPassword: true
       DBSubnetGroupName: !Ref DbSubnets
       VPCSecurityGroups: [!GetAtt RdsSg.GroupId]
-`,layout:{Users:[40,120],Igw:[40,500],Vpc:[400,20],PublicA:[440,60],PublicB:[820,60],PrivateA:[440,470],PrivateB:[820,470],AppEc2:[460,110],Db:[840,110],Ec2Sg:[460,820],RdsSg:[840,820]},
-  explain:{Db:"MySQL database fcaj. PubliclyAccessible = true và nằm ở public subnet: có địa chỉ Internet. Lab dùng db.m5.large Multi-AZ; ở đây db.t3.micro cho rẻ.",
+`,layout:{Users:[40,120],Igw:[40,500],Vpc:[400,20],PublicA:[440,60],PublicB:[820,60],PrivateA:[440,470],PrivateB:[820,470],AppEc2:[460,110],Db:[840,110],Ec2Sg:[460,820],RdsSg:[840,820],PublicRt:[1200,820]},
+  explain:{Db:"MySQL database fcaj. PubliclyAccessible = true và nằm ở public subnet: có địa chỉ Internet. Lab dùng db.m5.large Multi-AZ; ở đây db.t3.micro cho rẻ. MySQL 8.4 vì 8.0 hết hỗ trợ tiêu chuẩn từ 31/7/2026 (sau đó AWS tính thêm phí Extended Support).",
     RdsSg:"rds-sg mở 3306 cho 0.0.0.0/0 — ai cũng thử đăng nhập được. Đúng ra chỉ cho Ec2Sg.",AppEc2:"App đọc ghi DB mỗi request.",Ec2Sg:"Cổng 80 cho khách vào app.",
     PrivateA:"Nơi DB nên nằm (cùng PrivateB, 2 AZ).",Users:"Khách dùng app."},
   tasks:[
@@ -976,8 +1063,8 @@ ${EC2("AppEc2","PublicA","Ec2Sg","!Ref Db")}  DbSubnets:
   diagnose(n){const d=nodeOf("Db"),L=arr(getP(nodeOf("RdsSg")||{props:{}},"props.SecurityGroupIngress"));const S=simStats(120);
     if(errOf(S,"Users"))return["App không kết nối được database.","Xem lý do trên mũi tên AppEc2 → Db.","rds-sg phải có rule tcp/3306 với nguồn là SG Ec2Sg."][Math.min(n,2)];
     if(d.props.PubliclyAccessible===true||L.some(r=>r.CidrIp==="0.0.0.0/0"))return["Database vẫn với tới được từ Internet.","Xem tab Vấn đề.","Db: Public = Không. rds-sg: bỏ 0.0.0.0/0, thêm 3306 từ SG Ec2Sg."][Math.min(n,2)];
-    return["Database chỉ ở một AZ.","Xem DB subnet group và Multi-AZ.","Kéo Db vào PrivateA rồi nối Db → PrivateB; bật Multi-AZ."][Math.min(n,2)]},
-  hints:()=>["Database nên ở private subnet, không public, và security group chỉ nhận từ security group của app.","Db: Public = Không, Multi-AZ = Có, subnet group = PrivateA + PrivateB. rds-sg: 3306 từ SG Ec2Sg."],
+    return["Database vẫn ở public subnet hoặc chỉ một AZ.","Xem DB subnet group và Multi-AZ của Db.","Db → DB subnet group: chỉ PrivateA + PrivateB; Multi-AZ: Có. Rồi Deploy."][Math.min(n,2)]},
+  hints:()=>["Database nên ở private subnet, không public, và security group chỉ nhận từ security group của app. Sửa template trước khi deploy.","Db: Public = Không, Multi-AZ = Có, DB subnet group = PrivateA + PrivateB. rds-sg: 3306 từ SG Ec2Sg. Rồi bấm Deploy."],
   solve(){edit("fix rds",()=>{const d=nodeOf("Db");d.props.PubliclyAccessible=false;d.props.MultiAZ=true;nodeOf("DbSubnets").props.SubnetIds=[{Ref:"PrivateA"},{Ref:"PrivateB"}];
     nodeOf("RdsSg").props.SecurityGroupIngress=[{IpProtocol:"tcp",FromPort:3306,ToPort:3306,SourceSecurityGroupId:{"Fn::GetAtt":["Ec2Sg","GroupId"]}}]})},
   pass:"Ba lớp: private subnet (không có đường Internet), PubliclyAccessible = false, và rds-sg chỉ tin Ec2Sg. Multi-AZ gấp đôi giá — xem đồng hồ chi phí — đổi lại DB sống khi một AZ hỏng."};
@@ -996,7 +1083,7 @@ Metadata:
         Type: CloudLab::Monitor
         Properties: {Watch: [!Ref Alb, !Ref Web1]}
 Resources:
-${VPC10}${ATTACH}  AlbSg:
+${VPC10}${ATTACH}${PUBLIC_RT(true)}  AlbSg:
     Type: AWS::EC2::SecurityGroup
     Properties: {GroupDescription: alb-sg, VpcId: !Ref Vpc, SecurityGroupIngress: [{IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0}]}
   WebSg:
@@ -1012,7 +1099,7 @@ ${VPC10}${ATTACH}  AlbSg:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties: {LoadBalancerArn: !Ref Alb, Port: 80, Protocol: HTTP, DefaultActions: [{Type: forward, TargetGroupArn: !Ref WebTargets}]}
 ${EC2("Web1","PrivateA","WebSg")}`,
-  layout:{Users:[40,300],Dashboard:[40,560],Igw:[40,80],Vpc:[400,20],PublicA:[440,60],PublicB:[440,560],PrivateA:[820,60],PrivateB:[820,560],Alb:[460,300],WebTargets:[840,300],Web1:[840,110],AlbSg:[460,820],WebSg:[840,820]},
+  layout:{Users:[40,300],Dashboard:[40,560],Igw:[40,80],Vpc:[400,20],PublicA:[440,60],PublicB:[440,560],PrivateA:[820,60],PrivateB:[820,560],Alb:[460,300],WebTargets:[840,300],Web1:[840,110],AlbSg:[460,820],WebSg:[840,820],PublicRt:[1200,820]},
   explain:{Alb:"Chỉ ở PublicA. AWS bắt buộc ALB có ≥ 2 subnet ở 2 AZ (xem tab Vấn đề).",Web1:"Một t3.micro chịu ~40 req/s trong CloudLab. 60 req/s → quá tải, trả 5xx.",
     WebTargets:"Health check: target nào security group không cho ALB vào thì bị loại.",Users:"Cao điểm 60 request/giây.",Dashboard:"Xem request và lỗi theo thời gian.",
     WebSg:"Chỉ nhận cổng 80 từ alb-sg — đúng.",PrivateB:"AZ thứ hai, đang trống. Lab dùng Auto Scaling group trải đều 2 AZ; CloudLab dùng instance cố định."},
@@ -1048,7 +1135,8 @@ Resources:
     Properties:
       FunctionName: books
       Runtime: python3.12
-      Handler: app.handler
+      Handler: index.handler
+      Code: {ZipFile: "def handler(event, context):\\n    return {'statusCode': 200}"}
       MemorySize: 256
       Timeout: 10
       Role: !GetAtt BooksRole.Arn
@@ -1067,7 +1155,7 @@ ${ASSUME_LAMBDA}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions: [{AttributeName: id, AttributeType: S}]
       KeySchema: [{AttributeName: id, KeyType: HASH}]
-`,layout:{Frontend:[40,120],BooksApi:[400,120],BooksFn:[760,120],BooksTable:[1120,120],BooksRole:[760,380]},
+${API_INVOKE("BooksApi","BooksFn")}`,layout:{Frontend:[40,120],BooksApi:[400,120],BooksFn:[760,120],BooksTable:[1120,120],BooksRole:[760,380]},
   explain:{BooksFn:"Ghi mỗi request thành một item vào bảng trong biến TABLE_NAME.",BooksRole:"Chỉ có quyền ghi log. Thiếu dynamodb:PutItem → AccessDenied → API trả 502.",BooksTable:"On-demand: trả tiền theo mỗi lần ghi.",BooksApi:"HTTP API chuyển request cho Lambda.",Frontend:"Trang web Book Store gọi API."},
   tasks:[
     {t:"API trả 200",c:"Frontend → API → Lambda không lỗi",test:()=>{const S=simStats(120);return okOf(S,"Frontend")>0&&!errOf(S,"Frontend")}},

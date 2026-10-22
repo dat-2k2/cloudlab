@@ -6,10 +6,10 @@ const cidrIn=(a,b)=>a&&b&&a.bits>=b.bits&&a.net>=b.net&&a.net+a.size<=b.net+b.si
 const cidrOverlap=(a,b)=>a&&b&&a.net<b.net+b.size&&b.net<a.net+a.size;
 function problems(){const out=[],P=(sev,id,msg)=>out.push({sev,id,msg});if(!M)return out;
   const nodes=Object.keys({...M.res,...M.ext}).map(nodeOf).filter(Boolean);
-  for(const n of nodes){walkRefs(n.props,"",(path,to)=>{if(!rawOf(to))P("error",n.id,`${n.id}.${path} tham chiếu tới ${to}, nhưng template không có ${to}`)});const p=n.props;
+  for(const n of nodes){walkRefs(n.props,"",(path,to)=>{if(!rawOf(to)&&!/^AWS::/.test(to))P("error",n.id,`${n.id}.${path} tham chiếu tới ${to}, nhưng template không có ${to}`)});const p=n.props;
     switch(n.type){
       case"AWS::Lambda::Function":if(!refId(p.Role))P("error",n.id,`${n.id}: Lambda cần execution role. Nối function tới một IAM role`);else{const need=+(getP(n.raw,"Metadata.CloudLab.WorkMs")||300)*128/(+p.MemorySize||128);if(need>(+p.Timeout||3)*1000)P("warn",n.id,`${n.id}: code cần ~${Math.round(need)} ms nhưng Timeout chỉ ${p.Timeout||3} s → sẽ timeout. Tăng Timeout hoặc Memory`)}
-        {const outB=Object.values(getP(p,"Environment.Variables")||{}).map(refId).find(x=>x&&(nodeOf(x)||{}).type==="AWS::S3::Bucket");if(outB){const nb=nodeOf(outB);const hit=arr(getP(nb.props,"NotificationConfiguration.LambdaConfigurations")).find(c=>refId(c.Function)===n.id);
+        {const outB=Object.values(getP(p,"Environment.Variables")||{}).map(refOrName).find(x=>x&&(nodeOf(x)||{}).type==="AWS::S3::Bucket");if(outB){const nb=nodeOf(outB);const hit=arr(getP(nb.props,"NotificationConfiguration.LambdaConfigurations")).find(c=>refId(c.Function)===n.id);
           if(hit){const rules=arr(getP(hit,"Filter.S3Key.Rules")),pre=(rules.find(r=>/prefix/i.test(r.Name))||{}).Value||"",op=getP(p,"Environment.Variables.OUTPUT_PREFIX")||"";if(!pre||String(op).startsWith(pre))P("error",n.id,`${n.id} ghi vào ${outB} đúng chỗ đang kích hoạt nó → vòng lặp vô tận. Ghi ra prefix khác và lọc trigger`)}}}break;
       case"AWS::ApiGatewayV2::Api":if(p.ProtocolType!=="WEBSOCKET"&&!targetOf(p.Target))P("warn",n.id,`${n.id}: chưa có integration nên mọi request trả 404. Nối API tới một Lambda`);break;
       case"AWS::ElasticLoadBalancingV2::LoadBalancer":{const ss=subnetsOf(n),azs=new Set(ss.map(s=>(nodeOf(s)||{props:{}}).props.AvailabilityZone));
@@ -20,11 +20,14 @@ function problems(){const out=[],P=(sev,id,msg)=>out.push({sev,id,msg});if(!M)re
       case"AWS::EC2::Subnet":{const v=refId(p.VpcId),vn=nodeOf(v);if(!vn){P("error",n.id,`${n.id}: subnet phải thuộc một VPC. Nối subnet tới VPC`);break}
         const c=ip4(p.CidrBlock),vc=ip4(vn.props.CidrBlock);if(!c)P("error",n.id,`${n.id}: CIDR ${p.CidrBlock} không hợp lệ`);else if(!cidrIn(c,vc))P("error",n.id,`${n.id}: ${p.CidrBlock} nằm ngoài ${vn.props.CidrBlock} của ${v}`);
         for(const o of nodes)if(o.type==="AWS::EC2::Subnet"&&o.id<n.id&&refId(o.props.VpcId)===v&&cidrOverlap(c,ip4(o.props.CidrBlock)))P("error",n.id,`${n.id} và ${o.id} trùng dải IP. Đổi CIDR của một trong hai`);
-        if(p.MapPublicIpOnLaunch===true&&!igwOf(v))P("warn",n.id,`${n.id} đánh dấu public nhưng ${v} chưa gắn internet gateway. Nối internet gateway tới ${v}`);break}
+        if(p.MapPublicIpOnLaunch===true){const si=subnetInet(n.id);if(!si.ok)P("warn",n.id,`${n.id} tự gán IP public nhưng chưa có đường ra Internet: ${si.why}`)}break}
+      case"AWS::EC2::RouteTable":{const v=refId(p.VpcId);if(!nodeOf(v))P("error",n.id,`${n.id}: route table phải thuộc một VPC`);const r=igwRouteOf(n.id);
+        if(r){const g=refId(M.res[r].Properties.GatewayId);if(igwVpc(g)!==v)P("error",n.id,`${n.id}: route 0.0.0.0/0 → ${g}, nhưng ${g} chưa gắn vào ${v} → CloudFormation lỗi khi tạo route`)}
+        if(!rtAssocs(n.id).length)P("info",n.id,`${n.id}: chưa subnet nào dùng route table này`);break}
       case"AWS::EC2::SecurityGroup":for(const r of arr(p.SecurityGroupIngress)){if(r.CidrIp!=="0.0.0.0/0")continue;const lo=+r.FromPort,hi=+(r.ToPort??r.FromPort),has=x=>r.IpProtocol==="-1"||(x>=lo&&x<=hi);
           if([5432,3306,6379].some(has))P("error",n.id,`${n.id}: cổng database mở cho cả Internet (0.0.0.0/0). Chỉ mở cho security group của app`);else if([22,3389].some(has))P("warn",n.id,`${n.id}: SSH/RDP mở cho cả Internet. Giới hạn về IP của bạn, hoặc dùng Session Manager`);else if(r.IpProtocol==="-1")P("warn",n.id,`${n.id}: mở mọi cổng cho Internet. Chỉ mở đúng cổng app cần`)}break;
       case"AWS::RDS::DBInstance":if(p.PubliclyAccessible===true)P("warn",n.id,`${n.id}: database đang public. Nên để private, chỉ mở cho security group của app`);if(!refId(p.DBSubnetGroupName))P("info",n.id,`${n.id}: chưa chọn DB subnet group → AWS đặt vào default VPC`);if(p.MultiAZ!==true)P("info",n.id,`${n.id}: chỉ chạy ở một AZ, AZ đó hỏng là mất database. Multi-AZ an toàn hơn nhưng giá gấp đôi`);break;
-      case"AWS::S3::Bucket":{const c=p.PublicAccessBlockConfiguration||{};if(!["BlockPublicAcls","IgnorePublicAcls","BlockPublicPolicy","RestrictPublicBuckets"].every(k=>c[k]===true))P("warn",n.id,`${n.id}: Block Public Access chưa bật đủ 4 tùy chọn`);break}
+      case"AWS::S3::Bucket":{const c=p.PublicAccessBlockConfiguration||BPA_ON;if(!["BlockPublicAcls","IgnorePublicAcls","BlockPublicPolicy","RestrictPublicBuckets"].every(k=>c[k]===true))P("warn",n.id,`${n.id}: Block Public Access chưa bật đủ 4 tùy chọn`);break}
       case"AWS::S3::BucketPolicy":if(arr(getP(p,"PolicyDocument.Statement")).some(s=>s.Effect==="Allow"&&isPublicPrincipal(s.Principal)))P("warn",n.id,`${n.id}: Principal "*" cho bất kỳ ai trên Internet dùng bucket`);break;
       case"AWS::IAM::Role":if(arr(p.ManagedPolicyArns).map(resolve).includes("arn:aws:iam::aws:policy/AdministratorAccess"))P("warn",n.id,`${n.id}: AdministratorAccess quá rộng cho một workload. Chỉ cấp quyền nó thật sự cần`);break;
       case"AWS::Budgets::Budget":if(!arr(p.NotificationsWithSubscribers).some(x=>arr(x.Subscribers).length))P("warn",n.id,`${n.id}: cảnh báo chưa gửi tới đâu. Nối budget tới một SNS topic`);break;
@@ -37,4 +40,5 @@ function problems(){const out=[],P=(sev,id,msg)=>out.push({sev,id,msg});if(!M)re
     const ok=new Set(d.fields.map(f=>f.k)),bad=Object.keys(r.Properties||{}).filter(k=>!ok.has(k));if(bad.length)P("warn",id,`${id}: thuộc tính ${bad.join(", ")} không được hỗ trợ nên bị bỏ qua. ${d.label} dùng: ${[...ok].join(", ")}`)}
   if(typeof orgProblems==="function")orgProblems(P);
   if(typeof streamProblems==="function")streamProblems(P);
+  if(typeof accessProblems==="function")accessProblems(P);
   const order={error:0,warn:1,info:2};return out.sort((a,b)=>order[a.sev]-order[b.sev])}

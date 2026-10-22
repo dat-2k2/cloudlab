@@ -30,7 +30,7 @@ def("AWS::AmazonMQ::Broker",{label:"Amazon MQ (RabbitMQ)",short:"MQ",cat:"notify
   doc:"RabbitMQ do AWS vận hành: AWS lo cài đặt, vá lỗi, sao lưu cấu hình. Một node mq.m7g.medium để học (mq.t3.micro không tạo mới được nữa); cluster 3 node ở 3 AZ cho production. Tính theo broker-giờ + GB lưu message. Cổng 5671 (AMQPS).",
   defaults:id=>({BrokerName:kebab(id),EngineType:"RABBITMQ",EngineVersion:"3.13",HostInstanceType:"mq.m7g.medium",DeploymentMode:"SINGLE_INSTANCE",PubliclyAccessible:false,AutoMinorVersionUpgrade:true,
     SubnetIds:[],SecurityGroups:[],Users:[{Username:"app",Password:"{{resolve:secretsmanager:mq-app:SecretString:password}}"}]}),name:p=>p.BrokerName,
-  fields:[{k:"HostInstanceType",label:"Loại broker",type:"select",options:Object.keys(MQ_TYPES)},{k:"DeploymentMode",label:"Triển khai",type:"select",options:[["SINGLE_INSTANCE","Một node"],["CLUSTER_MULTI_AZ","Cluster 3 node (3 AZ)"]]},
+  fields:[{k:"BrokerName",label:"Tên broker",type:"text",help:"Đổi chế độ triển khai hay subnet thì AWS tạo broker mới: tên phải khác tên cũ."},{k:"HostInstanceType",label:"Loại broker",type:"select",options:Object.keys(MQ_TYPES)},{k:"DeploymentMode",label:"Triển khai",type:"select",options:[["SINGLE_INSTANCE","Một node"],["CLUSTER_MULTI_AZ","Cluster 3 node (3 AZ)"]]},
     {k:"PubliclyAccessible",label:"Public",type:"select",options:[[false,"Không"],[true,"Có (không nên)"]],bool:true},{k:"SubnetIds",label:"Subnet",type:"refs",to:["AWS::EC2::Subnet"]},{k:"SecurityGroups",label:"Security group",type:"refs",to:["AWS::EC2::SecurityGroup"],att:"GroupId"}],
   rel:{"SubnetIds.*":{kind:"contains",label:""},"SecurityGroups.*":{kind:"secured",label:"SG"}}});
 /* WebSocket API: the same CloudFormation type as the HTTP API, shown as its own block. A WebSocket API has no quick-create
@@ -57,11 +57,12 @@ const MSK_ACTIONS=["kafka-cluster:Connect","kafka-cluster:WriteData","kafka-clus
 function CONNECT_S(a,b,A,B,say){const ta=A.type,tb=B.type;
   const sub=(path,att)=>()=>{const v=arr(getP(A.props,path));if(!v.some(x=>refId(x)===b))v.push(att?GA(b,att):R(b));setP(A.props,path,v)};
   if(STREAM_SUBNETS[ta]&&tb==="AWS::EC2::Subnet")return say("đặt vào subnet",sub(STREAM_SUBNETS[ta]));
-  if(ta==="AWS::ApiGatewayV2::Api"&&A.props.ProtocolType==="WEBSOCKET"&&tb==="AWS::Lambda::Function")return say("route $default → Lambda (integration + route + stage)",grant=>{
+  if(ta==="AWS::ApiGatewayV2::Api"&&A.props.ProtocolType==="WEBSOCKET"&&tb==="AWS::Lambda::Function")return say(wsFn(a)===b?"đã có route → Lambda (kiểm tra quyền)":"route $default → Lambda (integration + route + stage)",grant=>{
+    if(wsFn(a)===b){grantInvoke(b,"api",a);const role=roleOfFn(b);if(grant&&role&&!evalRole(role,"execute-api:ManageConnections",`arn:aws:execute-api:${REGION}:${ACCT}:${physName(A)}/prod/POST/@connections/x`).allow)addStmt(role,["execute-api:ManageConnections"],{"Fn::Sub":`arn:aws:execute-api:\${AWS::Region}:\${AWS::AccountId}:\${${a}}/*`},"PushTo"+a);return}
     const ig=freeId(a+"Integration");M.res[ig]={Type:"AWS::ApiGatewayV2::Integration",Properties:{ApiId:R(a),IntegrationType:"AWS_PROXY",IntegrationUri:{"Fn::Sub":`arn:aws:apigateway:\${AWS::Region}:lambda:path/2015-03-31/functions/\${${b}.Arn}/invocations`}}};
     M.res[freeId(a+"Route")]={Type:"AWS::ApiGatewayV2::Route",Properties:{ApiId:R(a),RouteKey:"$default",Target:{"Fn::Sub":`integrations/\${${ig}}`}}};
     if(!Object.values(M.res).some(r=>r.Type==="AWS::ApiGatewayV2::Stage"&&refId(r.Properties.ApiId)===a))M.res[freeId(a+"Stage")]={Type:"AWS::ApiGatewayV2::Stage",Properties:{ApiId:R(a),StageName:"prod",AutoDeploy:true}};
-    const role=roleOfFn(b);if(grant&&role)addStmt(role,["execute-api:ManageConnections"],{"Fn::Sub":`arn:aws:execute-api:\${AWS::Region}:\${AWS::AccountId}:\${${a}}/*`},"PushTo"+a)},roleOfFn(b)?{actions:["execute-api:ManageConnections"],role:roleOfFn(b)}:null);
+    grantInvoke(b,"api",a);const role=roleOfFn(b);if(grant&&role)addStmt(role,["execute-api:ManageConnections"],{"Fn::Sub":`arn:aws:execute-api:\${AWS::Region}:\${AWS::AccountId}:\${${a}}/*`},"PushTo"+a)},roleOfFn(b)?{actions:["execute-api:ManageConnections"],role:roleOfFn(b)}:null);
   if(ta==="CloudLab::Client"&&tb==="AWS::ApiGatewayV2::Api"&&B.props.ProtocolType==="WEBSOCKET")return say("mở kết nối WebSocket",()=>{A.props.Target=R(b);A.props.Protocol="websocket";A.props.Connections=A.props.Connections||1000;A.props.MessagesPerMinute=A.props.MessagesPerMinute??12;delete A.props.RatePerSecond});
   if(ta==="AWS::EC2::Instance"&&STREAM_PORT[tb]){const asg=sgsOf(a)[0],bsg=sgsOf(b)[0],port=STREAM_PORT[tb],prof=nodeOf(refId(A.props.IamInstanceProfile)),role=prof&&refId(arr(prof.props.Roles)[0]),iam=/^AWS::MSK::/.test(tb);
     return say(`app dùng ${B.def.label} (tcp/${port})`,grant=>{addUse(A,b);if(grant&&asg&&bsg)sgRule(bsg,asg,port).apply();if(grant&&iam&&role)addStmt(role,MSK_ACTIONS,{"Fn::Sub":`arn:aws:kafka:\${AWS::Region}:\${AWS::AccountId}:*/\${${b}}/*`},"Kafka"+b)},
@@ -86,6 +87,7 @@ function wsRun(ev,dt){const id=ev.to,n=nodeOf(id),want=ev.w,src=nodeOf(ev.from),
   if(!n||!exists(id))return deny("Chưa được deploy");if(n.props.ProtocolType!=="WEBSOCKET")return deny("API này là HTTP API, không nhận WebSocket (tạo API Gateway WebSocket)");
   if(!Object.values(M.res).some(r=>r.Type==="AWS::ApiGatewayV2::Stage"&&refId(r.Properties.ApiId)===id))return deny("API chưa có stage nên chưa có URL wss:// (nối API tới Lambda để CloudLab tạo route + stage)");
   const fn=wsFn(id);if(!fn||!nodeOf(fn))return deny("Chưa có route: kết nối mở được nhưng mọi message trả lỗi (nối API tới một Lambda)");
+  const pm=canInvoke(fn,PRINCIPAL.api,id);if(!pm.ok)return deny("Route $default không gọi được Lambda: "+pm.why);
   c.open=want;c.rej=0;flow(ev.from,id,"calls",want);RT.wsConn=RT.wsConn||{};RT.wsConn[id]=(RT.wsConn[id]||0)+want;
   /* connections last at most 2 h: each reconnect is a $connect message */
   const reco=want*dt/7200,mpm=+(src.props.MessagesPerMinute||0),push_=want*mpm/60*dt;bump(ev.from,"reconnect",reco);

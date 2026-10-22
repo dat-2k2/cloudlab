@@ -27,10 +27,11 @@ Yêu cầu:
 ### Định dạng template CloudLab đọc được
 
 - CloudFormation YAML chuẩn: khóa Resources, cú pháp ngắn !Ref, !GetAtt, !Sub, !Join, !Select, !Split, !ImportValue. Mũi tên trên sơ đồ được suy ra từ các tham chiếu này.
-- Vùng mô phỏng: ap-southeast-2. Không mô phỏng route table, NAT gateway và traffic đi ra; public subnet = MapPublicIpOnLaunch: true và VPC có internet gateway gắn vào.
+- Vùng mô phỏng: ap-southeast-2. Public subnet = subnet gắn route table có route 0.0.0.0/0 → internet gateway đã gắn vào VPC (AWS::EC2::RouteTable, AWS::EC2::Route, AWS::EC2::SubnetRouteTableAssociation); EC2 cần thêm MapPublicIpOnLaunch: true để có IP public. Không mô phỏng NAT gateway và traffic đi ra.
+- Quyền giữa các dịch vụ như AWS thật: API Gateway, S3, SNS, EventBridge gọi Lambda cần AWS::Lambda::Permission; AWS Budgets gửi vào SNS cần AWS::SNS::TopicPolicy; CloudFront đọc bucket private qua AWS::CloudFront::OriginAccessControl và bucket policy cho cloudfront.amazonaws.com với điều kiện AWS:SourceArn.
 - Phần chỉ dành cho mô phỏng nằm trong Metadata.CloudLab và được bỏ khi xuất ra AWS.
 
-Loại tài nguyên AWS được hỗ trợ: AWS::ApiGatewayV2::Api, AWS::Lambda::Function, AWS::IAM::Role, AWS::S3::Bucket, AWS::S3::BucketPolicy, AWS::DynamoDB::Table, AWS::SNS::Topic, AWS::SQS::Queue, AWS::Lambda::EventSourceMapping, AWS::Events::Rule, AWS::Logs::LogGroup, AWS::CloudWatch::Alarm, AWS::Budgets::Budget, AWS::EC2::VPC, AWS::EC2::Subnet, AWS::EC2::InternetGateway, AWS::EC2::VPCGatewayAttachment, AWS::EC2::SecurityGroup, AWS::EC2::Instance, AWS::IAM::InstanceProfile, AWS::ElasticLoadBalancingV2::LoadBalancer, AWS::ElasticLoadBalancingV2::TargetGroup, AWS::ElasticLoadBalancingV2::Listener, AWS::CloudFront::Distribution, AWS::Route53::RecordSet, AWS::RDS::DBInstance, AWS::RDS::DBSubnetGroup, AWS::ElastiCache::CacheCluster, AWS::Organizations::Organization, AWS::Organizations::OrganizationalUnit, AWS::Organizations::Account, AWS::Organizations::Policy, AWS::ControlTower::LandingZone, AWS::ControlTower::EnabledBaseline, AWS::ControlTower::EnabledControl, AWS::MSK::Cluster, AWS::MSK::ServerlessCluster, AWS::ElastiCache::ServerlessCache, AWS::AmazonMQ::Broker, AWS::ApiGatewayV2::Api#ws, AWS::ApiGatewayV2::Integration, AWS::ApiGatewayV2::Route, AWS::ApiGatewayV2::Stage.
+Loại tài nguyên AWS được hỗ trợ: AWS::ApiGatewayV2::Api, AWS::Lambda::Function, AWS::IAM::Role, AWS::S3::Bucket, AWS::S3::BucketPolicy, AWS::DynamoDB::Table, AWS::SNS::Topic, AWS::SQS::Queue, AWS::Lambda::EventSourceMapping, AWS::Events::Rule, AWS::Logs::LogGroup, AWS::CloudWatch::Alarm, AWS::Budgets::Budget, AWS::EC2::VPC, AWS::EC2::Subnet, AWS::EC2::InternetGateway, AWS::EC2::RouteTable, AWS::EC2::Route, AWS::EC2::SubnetRouteTableAssociation, AWS::EC2::VPCGatewayAttachment, AWS::EC2::SecurityGroup, AWS::EC2::Instance, AWS::IAM::InstanceProfile, AWS::ElasticLoadBalancingV2::LoadBalancer, AWS::ElasticLoadBalancingV2::TargetGroup, AWS::ElasticLoadBalancingV2::Listener, AWS::CloudFront::Distribution, AWS::Route53::RecordSet, AWS::RDS::DBInstance, AWS::RDS::DBSubnetGroup, AWS::ElastiCache::CacheCluster, AWS::Organizations::Organization, AWS::Organizations::OrganizationalUnit, AWS::Organizations::Account, AWS::Organizations::Policy, AWS::ControlTower::LandingZone, AWS::ControlTower::EnabledBaseline, AWS::ControlTower::EnabledControl, AWS::Lambda::Permission, AWS::SNS::TopicPolicy, AWS::CloudFront::OriginAccessControl, AWS::MSK::Cluster, AWS::MSK::ServerlessCluster, AWS::ElastiCache::ServerlessCache, AWS::AmazonMQ::Broker, AWS::ApiGatewayV2::Api#ws, AWS::ApiGatewayV2::Integration, AWS::ApiGatewayV2::Route, AWS::ApiGatewayV2::Stage.
 
 Nguồn tải và người nhận bên ngoài AWS (đặt trong Metadata.CloudLab.External ở cấp template, mỗi mục có Type và Properties):
 - CloudLab::Client (Client / người dùng): Target, Protocol, RatePerSecond, Connections, MessagesPerMinute, Action, Key, Port, SourceIp, As, Expect
@@ -78,7 +79,8 @@ Resources:
     Properties:
       FunctionName: orders
       Runtime: python3.12
-      Handler: app.handler
+      Handler: index.handler
+      Code: {ZipFile: "def handler(event, context):\n    return {'statusCode': 200}"}
       MemorySize: 256
       Timeout: 10
       Role: !GetAtt OrdersRole.Arn
@@ -112,6 +114,13 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions: [{AttributeName: pk, AttributeType: S}]
       KeySchema: [{AttributeName: pk, KeyType: HASH}]
+  OrdersApiInvokeOrdersFn:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt OrdersFn.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${OrdersApi}/*"
 ```
 
 ## Bài 0: Cảnh báo tiền trước khi tiêu tiền
@@ -187,14 +196,15 @@ Nhóm: Phase 1 · Explore · Chủ đề: VPC + Security group · Theo FCAJ work
 - Câu hỏi thảo luận: Hệ thống nào của đơn vị bạn cần tiếp xúc Internet, hệ thống nào tuyệt đối không?
 
 **Nhiệm vụ:**
-1. Khách vào được web (IGW gắn VPC → public subnet có đường Internet)
+1. Khách vào được web (IGW gắn VPC + route 0.0.0.0/0 → IGW → public subnet có đường Internet)
 2. SSH chỉ từ IP của bạn (You vào được, ScanBot bị chặn)
 3. Private chỉ nhận SSH từ public SG (không có 0.0.0.0/0 trên PrivateSg)
 
 **Các khối trong template:**
 - Vpc: VPC “ASG” 10.10.0.0/16 như lab. Lab 000003 còn thêm NAT gateway mỗi AZ để EC2 private ra được Internet (ping amazon.com); CloudLab chưa mô phỏng traffic đi ra.
 - Igw: Internet gateway đã tạo nhưng CHƯA gắn vào VPC — nên public subnet chưa thật sự public.
-- PublicA: Public subnet: MapPublicIpOnLaunch = true, cần IGW gắn vào VPC.
+- PublicA: Public subnet theo lab: tự gán IP public, dùng route table PublicRt. Chỉ public thật khi PublicRt có đường 0.0.0.0/0 → Igw.
+- PublicRt: Route table của PublicA và PublicB. Mới có route local (trong VPC); lab 000003 thêm 0.0.0.0/0 → internet gateway sau khi gắn gateway.
 - PrivateB: Private subnet: không có IP public, Internet không vào thẳng được.
 - PublicSg: Mở 80 cho mọi người là đúng (web). Nhưng 22 (SSH) cũng mở 0.0.0.0/0 — bot quét cổng sẽ thử đăng nhập.
 - PrivateSg: Lab: SSH vào private chỉ được từ public SG (máy public làm bastion), không phải từ Internet.
@@ -206,9 +216,9 @@ Nhóm: Phase 1 · Explore · Chủ đề: VPC + Security group · Theo FCAJ work
 
 **Khái niệm:** VPC CIDR, public vs private subnet, Internet gateway, security group, bastion, NAT gateway (lab)
 
-**Gợi ý:** Subnet chỉ public khi VPC có internet gateway gắn vào. Security group: mở đúng cổng cho đúng nguồn. Kéo Igw thả vào khung VPC (hoặc kéo mũi tên Igw → khung VPC). PublicSg: rule 22 nguồn 203.0.113.10/32. PrivateSg: rule 22 nguồn SG PublicSg.
+**Gợi ý:** Subnet chỉ public khi route table của nó có 0.0.0.0/0 → internet gateway, và gateway đã gắn vào VPC. Security group: mở đúng cổng cho đúng nguồn. Kéo Igw thả vào khung VPC. PublicRt → Route: 0.0.0.0/0 → Igw. PublicSg: rule 22 nguồn 203.0.113.10/32. PrivateSg: rule 22 nguồn SG PublicSg.
 
-**Sau khi đạt:** Public subnet = có IGW. Security group là tường lửa theo nguồn: Internet cho web, /32 cho SSH, và SG-tới-SG cho máy bên trong. Lab thật còn có NAT gateway để private đi ra.
+**Sau khi đạt:** Public subnet = route table có 0.0.0.0/0 → internet gateway đã gắn vào VPC. Security group là tường lửa theo nguồn: Internet cho web, /32 cho SSH, và SG-tới-SG cho máy bên trong. Lab thật còn có NAT gateway để private đi ra.
 
 ## Bài 3: EC2 dùng IAM role, không dùng access key
 
@@ -275,7 +285,7 @@ Nhóm: Phase 1 · Explore · Chủ đề: RDS + VPC · Theo FCAJ workshop 000005
 
 **Mục tiêu:** App vẫn chạy; DB không public, rds-sg chỉ cho EC2; DB subnet group 2 AZ private + Multi-AZ.
 
-**Tình huống:** App tiết kiệm online của Ngân hàng An Phát lưu sổ tiết kiệm trong MySQL (theo lab 000005). Hệ thống chạy được, nhưng database đang có địa chỉ Internet, mở cổng 3306 cho cả thế giới, và chỉ nằm ở một trung tâm dữ liệu (một AZ).
+**Tình huống:** App tiết kiệm online của Ngân hàng An Phát sẽ lưu sổ tiết kiệm trong MySQL (theo lab 000005). Template chưa deploy, và bản review phát hiện: database sẽ có địa chỉ Internet, mở cổng 3306 cho cả thế giới, nằm ở vùng public và chỉ ở một trung tâm dữ liệu (một AZ). Sửa xong mới tạo, vì database đã chạy thì không chuyển vùng mạng được.
 
 **Trong ngân hàng:** Sổ sách là thứ quý nhất của ngân hàng. Nó phải nằm sâu trong khu nghiệp vụ, chỉ ứng dụng được phép mới chạm tới, và phải có bản sao ở tòa nhà khác để một sự cố không làm mất dữ liệu hay ngừng giao dịch.
 - Quy định: Thông tư 09/2020/TT-NHNN, Điều 22 “Sao lưu dự phòng” và Điều 50 “Xây dựng hệ thống dự phòng thảm họa”. (https://caselaw.vn/van-ban-phap-luat/373213-thong-tu-so-09-2020-tt-nhnn-ngay-21-10-2020-cua-thong-doc-ngan-hang-nha-nuoc-viet-nam-quy-dinh-ve-an-toan-he-thong-thong-tin-trong-hoat-dong-ngan-hang)
@@ -296,7 +306,7 @@ Nhóm: Phase 1 · Explore · Chủ đề: RDS + VPC · Theo FCAJ workshop 000005
 
 **Khái niệm:** DB subnet group, security group tham chiếu SG, PubliclyAccessible, Multi-AZ
 
-**Gợi ý:** Database nên ở private subnet, không public, và security group chỉ nhận từ security group của app. Db: Public = Không, Multi-AZ = Có, subnet group = PrivateA + PrivateB. rds-sg: 3306 từ SG Ec2Sg.
+**Gợi ý:** Database nên ở private subnet, không public, và security group chỉ nhận từ security group của app. Sửa template trước khi deploy. Db: Public = Không, Multi-AZ = Có, DB subnet group = PrivateA + PrivateB. rds-sg: 3306 từ SG Ec2Sg. Rồi bấm Deploy.
 
 **Sau khi đạt:** Ba lớp: private subnet (không có đường Internet), PubliclyAccessible = false, và rds-sg chỉ tin Ec2Sg. Multi-AZ gấp đôi giá — xem đồng hồ chi phí — đổi lại DB sống khi một AZ hỏng.
 
@@ -789,6 +799,12 @@ Một dải IP con của VPC, nằm trong đúng một Availability Zone. Public
 Cổng chính của chi nhánh ra đường lớn (Internet). Không gắn cổng thì sảnh cũng không đón được khách.
 
 Cửa ra vào Internet của VPC. Gắn vào VPC (VPCGatewayAttachment) thì các public subnet mới nhận và gửi được traffic Internet. Miễn phí.
+
+### Route table (AWS::EC2::RouteTable)
+
+Bảng chỉ đường dán ở mỗi tầng: đi tới đâu thì ra cửa nào. Tầng nào có dòng “mọi nơi bên ngoài → cổng chính” thì khách từ đường lớn mới tìm được tới; tầng không có dòng đó là khu nội bộ.
+
+Bảng chỉ đường của subnet: gói tin tới địa chỉ nào thì đi qua cửa nào. Subnet chỉ là public khi route table của nó có route 0.0.0.0/0 → internet gateway. Mỗi subnet gắn đúng một route table; chưa gắn thì dùng main route table của VPC, chỉ có route local. Miễn phí.
 
 ### Gateway attachment (AWS::EC2::VPCGatewayAttachment)
 

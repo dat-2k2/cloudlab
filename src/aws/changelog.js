@@ -2,8 +2,13 @@
 /* "Có gì mới": the app's features and updates grouped by big feature (from the repo history on GitHub,
    dat-2k2/cloudlab), newest first inside each group. CHANGELOG_VERSION changes whenever entries are added: the
    top-bar button shows a dot until the viewer opens the dialog (seen flag in localStorage cloudlab:news). */
-const CHANGELOG_VERSION="2026-10-22a";
+const CHANGELOG_VERSION="2026-10-22b";
 const CHANGELOG=[
+  {id:"guide",icon:"✓",title:"Hướng dẫn từng bước, đáp án đúng như AWS thật",sum:"Nút Làm hộ thành Hướng dẫn từng bước: mỗi bước nói làm gì, bấm vào đâu, vì sao, và tự đánh dấu khi bạn làm xong. Đáp án của cả 16 bài AWS chạy được trên AWS thật.",items:[
+    ["22/10","Hướng dẫn từng bước: chỉ khối cần sửa trên canvas, ghi rõ từng cú bấm, giải thích vì sao. Bạn tự làm thì bước tự tick; kẹt thì bấm “Làm hộ bước này”. Có bước làm hộ thì bài tính là đã xem, chưa tính là đạt."],
+    ["22/10","Route table: subnet chỉ public khi route table của nó có 0.0.0.0/0 → internet gateway, như AWS. Bài VPC thêm bước route; nút “Cho ra Internet” trên subnet."],
+    ["22/10","Quyền giữa các dịch vụ: API Gateway, S3, SNS, EventBridge gọi Lambda cần AWS::Lambda::Permission; AWS Budgets gửi vào SNS cần topic policy; CloudFront đọc bucket private qua Origin Access Control và bucket policy có AWS:SourceArn. Nối bằng mũi tên thì CloudLab thêm giúp."],
+    ["22/10","Bài RDS sửa template trước khi deploy (DB đã chạy thì không đổi subnet được); bài MQ/MSK đổi tên broker khi phải tạo mới; bucket không khai Block Public Access thì mặc định bật cả 4, như S3 từ 2023."]]},
   {id:"gcp",icon:"G",title:"Google Cloud, messaging và giá",sum:"Trang mới cho Google Cloud viết bằng Terraform, thêm Kafka, Redis, RabbitMQ, WebSocket cho cả AWS lẫn Google Cloud, và giá niêm yết trên từng khối.",items:[
     ["22/10","Trang mới cloudlab/gcp: viết Terraform (provider google) hoặc kéo thả; Cloud Run, Memorystore (Redis, Valkey), Managed Kafka, RabbitMQ / Redis / Kafka tự cài trên VM, WebSocket trên Cloud Run, Pub/Sub, budget. 7 bài, xoay quanh việc học bằng $300 credit dùng thử mà không đốt hết."],
     ["22/10","Credit dùng thử dưới đồng hồ chi phí: còn bao nhiêu, đủ bao nhiêu ngày theo mức tiêu hiện tại; hết credit hoặc hết 90 ngày thì tài nguyên dừng, như tài khoản thật. Budget mặc định trừ credit nên không báo: bài 1 dạy cách sửa."],

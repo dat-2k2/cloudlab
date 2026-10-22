@@ -44,7 +44,7 @@ const BANK_CTX={
       rule:{t:"Thông tư 50/2024/TT-NHNN, Điều 19: dữ liệu khách hàng phải được bảo mật; phải kiểm soát truy cập vào thiết bị, phương tiện lưu trữ để chống rò rỉ.",url:SRC.tt50},
       q:"Nếu một file nội bộ lỡ được tải nhầm vào kho của trang công khai, đơn vị bạn phát hiện bằng cách nào và sau bao lâu?"}},
   rds:{who:["M","Minh · Trưởng nhóm hạ tầng"],
-    scenario:`App tiết kiệm online của ${BANK} lưu sổ tiết kiệm trong MySQL (theo lab 000005). Hệ thống chạy được, nhưng database đang có địa chỉ Internet, mở cổng 3306 cho cả thế giới, và chỉ nằm ở một trung tâm dữ liệu (một AZ).`,
+    scenario:`App tiết kiệm online của ${BANK} sẽ lưu sổ tiết kiệm trong MySQL (theo lab 000005). Template chưa deploy, và bản review phát hiện: database sẽ có địa chỉ Internet, mở cổng 3306 cho cả thế giới, nằm ở vùng public và chỉ ở một trung tâm dữ liệu (một AZ). Sửa xong mới tạo, vì database đã chạy thì không chuyển vùng mạng được.`,
     explain:{Db:"Sổ tiết kiệm của khách: số dư, kỳ hạn, lãi suất. Lab dùng db.m5.large Multi-AZ; ở đây dùng db.t3.micro cho rẻ.",AppEc2:"Ứng dụng tiết kiệm online, mỗi request đọc hoặc ghi sổ.",Users:"Khách mở và tất toán sổ tiết kiệm qua app."},
     bank:{why:"Sổ sách là thứ quý nhất của ngân hàng. Nó phải nằm sâu trong khu nghiệp vụ, chỉ ứng dụng được phép mới chạm tới, và phải có bản sao ở tòa nhà khác để một sự cố không làm mất dữ liệu hay ngừng giao dịch.",
       rule:{t:"Thông tư 09/2020/TT-NHNN, Điều 22 “Sao lưu dự phòng” và Điều 50 “Xây dựng hệ thống dự phòng thảm họa”.",url:SRC.tt09},

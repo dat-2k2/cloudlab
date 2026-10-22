@@ -53,7 +53,7 @@ def("AWS::ApiGatewayV2::Api",{label:"API Gateway (HTTP API)",short:"API",cat:"no
   rel:{Target:{kind:"invokes",label:(p,path,to)=>(nodeOf(to)||{}).type==="AWS::Lambda::Function"?"invoke":"HTTP"}}});
 def("AWS::Lambda::Function",{label:"Lambda function",short:"λ",cat:"comp",
   doc:"Đoạn code chạy khi có sự kiện, không cần quản lý server. Chạy bằng quyền của execution role. Tính tiền theo số lần gọi và GB-giây (memory × thời gian).",
-  defaults:id=>({FunctionName:kebab(id),Runtime:"python3.12",Handler:"app.handler",MemorySize:128,Timeout:3,Role:null,Environment:{Variables:{}}}),
+  defaults:id=>({FunctionName:kebab(id),Runtime:"python3.12",Handler:"index.handler",Code:{ZipFile:"def handler(event, context):\n    return {'statusCode': 200}"},MemorySize:128,Timeout:3,Role:null,Environment:{Variables:{}}}),
   meta:{WorkMs:300},name:p=>p.FunctionName,
   fields:[{k:"FunctionName",label:"Tên function",type:"text"},{k:"Runtime",label:"Runtime",type:"select",options:RUNTIMES},
     {k:"MemorySize",label:"Memory (MB)",type:"select",options:[128,256,512,1024,2048],num:true,help:"Thêm memory thì thêm CPU, chạy nhanh hơn."},

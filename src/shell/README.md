@@ -53,7 +53,15 @@ keeps its own sandbox, progress and tour flag. The AWS page has no meta and keep
 **Lessons and the rest**
 
 - `LESSONS` (see `src/aws/lessons.js` for the shape: `id, step, phase, title, tag, who, scenario, goal, concepts,
-  yaml, layout, explain, tasks:[{t, c, test}], hints(), diagnose(i), solve(), pass, bank?`), `STARTER`, `STARTERS`
+  yaml, layout, explain, tasks:[{t, c, test}], hints(), diagnose(i), solve(), pass, bank?, deployed?, steps?`),
+  `STARTER`, `STARTERS`. `deployed:false` opens the lesson with the template not yet deployed (a review before
+  creating things that cannot change later).
+- `steps`: the answer as a guide ("Hướng dẫn từng bước"), `[{t, at, how, why, done, run, raw}]`: `t` what to do;
+  `at` the block (id or function), highlighted on the canvas; `how` the clicks in UI words; `why` why it fixes it (and how
+  it is done on the real cloud when that differs); `done()` true once the template / runtime shows it, so a step ticks
+  itself when the learner does it; `run()` the same change through the UI's own code paths, for "Làm hộ bước này";
+  `raw` runs outside `edit()` (not a template edit). A step CloudLab did makes the lesson "seen", not passed.
+  `solveSteps(L)` runs all remaining steps (set `L.solve` to it). Without `steps`, the guide is one step: `solve()`.
 - `problems()` → `[{sev: "error"|"warn"|"info", id, msg}]`
 - `EXPORTS`: tab → `{label, file, edit?, gen?, note?, aria?}` (the editable tab is the pack's own YAML)
 
