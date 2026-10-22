@@ -62,6 +62,9 @@ keeps its own sandbox, progress and tour flag. The AWS page has no meta and keep
   itself when the learner does it; `run()` the same change through the UI's own code paths, for "Làm hộ bước này";
   `raw` runs outside `edit()` (not a template edit). A step CloudLab did makes the lesson "seen", not passed.
   `solveSteps(L)` runs all remaining steps (set `L.solve` to it). Without `steps`, the guide is one step: `solve()`.
+- `steps[i].demo`: what "Làm hộ" plays on screen (`src/shell/demo.js`): `[[verb, ...args]]` with verbs `select`, `field`,
+  `button`, `bar`, `connect`, `drop`, `add`, `apply`; args may be functions. A pointer does the clicks, then `run()` makes
+  the change. Without `demo`: select `at`, then apply.
 - `problems()` → `[{sev: "error"|"warn"|"info", id, msg}]`
 - `EXPORTS`: tab → `{label, file, edit?, gen?, note?, aria?}` (the editable tab is the pack's own YAML)
 

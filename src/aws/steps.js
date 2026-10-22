@@ -240,4 +240,37 @@ mqmsk:[
     why:"App ghi nhật ký vào cluster mới trước, rồi mới xóa cluster cũ, để không mất bản ghi nào. Phí cluster-giờ của Serverless dừng khi xóa.",
     done:()=>!allNodes().some(n=>n.type==="AWS::MSK::ServerlessCluster")&&arr(getP(nodeOf("OrderApp").raw,"Metadata.CloudLab.Uses")).some(u=>(nodeOf(refId(u))||{}).type==="AWS::MSK::Cluster"),
     run(){const k=allNodes().find(n=>n.type==="AWS::MSK::Cluster");addUse(nodeOf("OrderApp"),k.id);if(nodeOf("Audit")){M.pos[k.id]=M.pos.Audit.slice();removeNode("Audit")}}}]};
-for(const L of LESSONS){const S=STEPS[L.id];if(!S)continue;L.steps=S;L.solve=function(){solveSteps(this)}}
+/* what "Làm hộ" plays on screen for each step (shell/demo.js): the same clicks the "how" lines describe */
+const web2=()=>(allNodes().find(n=>n.type==="AWS::EC2::Instance"&&n.id!=="Web1"&&subnetsOf(n)[0]==="PrivateB")||{}).id;
+const kafka=()=>(allNodes().find(n=>n.type==="AWS::MSK::Cluster")||{}).id;
+const SCP_OFF=ou=>["button","orgAct",`detach:DenyConfigChanges|${ou}`];
+const DEMOS={
+  guardrails:[[["select","MonthlyBudget"],["field","NotificationsWithSubscribers","Tick 80% và 100%, gửi tới BillingAlerts"]],[["select","MyInbox"],["button","confirmMail"]]],
+  iam:[[["select","ReadOnlyRole"],["field","Policies","lab-guardrail: Deny chỉ s3:PutObject, s3:DeleteObject"]]],
+  vpc:[[["drop","Igw","Vpc"]],[["select","PublicRt"],["field","#routes","Route: 0.0.0.0/0 → Igw"]],
+    [["select","PublicSg"],["field","SecurityGroupIngress","Cổng 22: nguồn 203.0.113.10/32"]],[["select","PrivateSg"],["field","SecurityGroupIngress","Cổng 22: nguồn SG PublicSg"]]],
+  ec2role:[[["connect","AppEc2","AppRole"]],[["select","AppRole"],["field","Policies","Allow s3:PutObject trên ${UploadsBucket.Arn}/*"]]],
+  s3cf:[[["add","AWS::CloudFront::Distribution",...LP(400,120)]],[["connect",cdnId,"SiteBucket"]],
+    [["select","SitePolicy"],["field","PolicyDocument.Statement","Bỏ PublicRead, thêm statement cho cloudfront.amazonaws.com"]],[["connect","Visitors",cdnId]],
+    [["select","SiteBucket"],["field","PublicAccessBlockConfiguration","Tick cả 4 ô Block Public Access"]]],
+  rds:[[["select","Db"],["field","PubliclyAccessible","Public: Không"]],[["select","RdsSg"],["field","SecurityGroupIngress","Cổng 3306: nguồn SG Ec2Sg"]],
+    [["select","Db"],["field","#subnets","DB subnet group: PrivateA + PrivateB"]],[["select","Db"],["field","MultiAZ","Multi-AZ: Có"]],[["bar","deploy"]]],
+  alb:[[["connect","Alb","PublicB"]],[["add","AWS::EC2::Instance",...LP(860,610)],["apply"],["select",web2],["field","SecurityGroupIds","Security group: WebSg"]],[["connect","Alb",web2]]],
+  lambda:[[["select","ExtractRole"],["field","ManagedPolicyArns","Tick AWSLambdaBasicExecutionRole"]],[["select","ExtractFn"],["field","MemorySize","Memory 256 MB"],["field","Timeout","Timeout 10 giây"]]],
+  events:[[["select","ImagesBucket"],["field","NotificationConfiguration.LambdaConfigurations","prefix incoming/, suffix .jpg"]],
+    [["select","ExtractFn"],["field","Environment.Variables","OUTPUT_PREFIX = processed/"]],[["select","ImagesBucket"],["button","cleanJunk"]]],
+  apiddb:[[["connect","BooksRole","BooksTable"]]],
+  stack:[[["select","ImagesBucket"],["field","@@DeletionPolicy","DeletionPolicy: Delete"]],[["select","ImagesBucket"],["button","askEmpty"]],[["bar","askDelete"]],
+    [["select","ScratchBucket"],["button","askEmpty"]],[["select","ScratchBucket"],["button","askDelNode"]]],
+  "lz-prep":[[["select","Org"],["field","FeatureSet","All features"]],[["select","Legacy"],SCP_OFF("Legacy")],[["select","AcquiredStartup"],["button","orgAct","role:AcquiredStartup"]],
+    [["select","LegacyBilling"],["button","orgAct","recorder:LegacyBilling"]],[["select","AppProd"],["button","orgAct","recorder:AppProd"]]],
+  "lz-enroll":[[["connect","LandingZone","Audit"]],[["select","AppProd"],["button","orgAct","recorder:AppProd"]],[["select","Workloads"],["button","orgAct","register:Workloads"]],
+    [["select","Legacy"],SCP_OFF("Legacy")],[["select","Legacy"],["button","orgAct","register:Legacy"]]],
+  "lz-contract":[[["select","LandingZone"],["button","orgAct","repair:LandingZone"]],[["select","AcquiredStartup"],["button","orgAct","trail:AcquiredStartup"]],
+    [["select","AppProd"],["button","orgAct","trail:AppProd"]],[["connect","LandingZone","Workloads"]]],
+  wsapi:[[["connect","RateSocket","RateFn"]],[["select","Customers"],["field","MessagesPerMinute","1 tin mỗi phút"]]],
+  mqmsk:[[["connect","OrderApp","Orders"]],[["select","BrokerSg"],["field","SecurityGroupIngress","+ Rule: cổng 9098, nguồn SG AppSg"]],
+    [["select","Orders"],["field","BrokerName","Tên mới: orders-test"],["field","HostInstanceType","mq.m7g.medium"],["field","DeploymentMode","Một node"],["field","SubnetIds","Chỉ PrivateA"]],
+    [["add","AWS::MSK::Cluster",...LP(790,670)],["apply"],["select",kafka],["field","BrokerNodeGroupInfo.InstanceType","kafka.t3.small × 2"],["field","BrokerNodeGroupInfo.ClientSubnets","PrivateA + PrivateB"]],
+    [["connect","OrderApp",kafka],["select","Audit"],["button","askDelNode"]]]};
+for(const L of LESSONS){const S=STEPS[L.id];if(!S)continue;S.forEach((s,i)=>{const d=(DEMOS[L.id]||[])[i];if(d)s.demo=d});L.steps=S;L.solve=function(){solveSteps(this)}}

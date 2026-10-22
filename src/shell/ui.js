@@ -94,7 +94,7 @@ function renderLesson(){const el=document.getElementById("lesson"),L=L_();
   if(UI.hints)h+=hs.slice(0,UI.hints).map((x,i)=>`<div class="callout warn"><b>Gợi ý ${i+1}/${hs.length}</b>${esc(x)}</div>`).join("");
   if(UI.walk)h+=walkHtml(L);
   if(R&&R.ok&&!R.skipped){const nx=UI.lesson+1<LESSONS.length;h+=`<div class="lacts">${nx?`<button class="primary" data-lesson="${UI.lesson+1}">Bài tiếp: ${esc(LESSONS[UI.lesson+1].tag)} →</button>`:`<button class="primary" data-act="openSandbox">Ra sandbox tự do →</button>`}</div>`}
-  else h+=`<div class="lacts"><button class="primary" data-act="check">Kiểm tra</button><button data-act="hint" ${UI.hints>=hs.length?"disabled":""}>Gợi ý ${UI.hints}/${hs.length}</button>${UI.walk?"":`<button class="ghost" data-act="askSkip">Hướng dẫn từng bước</button>`}<button class="ghost" data-act="askReset" title="Bắt đầu lại bài này từ đầu">Từ đầu</button></div>`;
+  else h+=`<div class="lacts"><button class="primary" data-act="check">Kiểm tra</button><button data-act="hint" ${UI.hints>=hs.length?"disabled":""}>Gợi ý ${UI.hints}/${hs.length}</button>${UI.walk?"":`<button class="ghost" data-act="askSkip">Làm hộ</button>`}<button class="ghost" data-act="askReset" title="Bắt đầu lại bài này từ đầu">Từ đầu</button></div>`;
   h+=`</section><section class="ltier why" aria-label="Bối cảnh"><span class="lab">Bối cảnh</span>
   <div class="scn2"><span class="av" aria-hidden="true">${L.who[0]}</span><div><p>“${esc(L.scenario)}”</p><small class="muted">${esc(L.who[1])}</small></div></div>
   ${L.bank?`<div class="callout ctx bank"><b>Trong ngân hàng</b>${L.bank.why?`<p>${esc(L.bank.why)}</p>`:""}${(L.bank.cases||[]).length?`<ul>${L.bank.cases.map(c=>`<li>${esc(c.t)}${c.url?` <a href="${esc(c.url)}" target="_blank" rel="noopener">nguồn ↗</a>`:""}</li>`).join("")}</ul>`:""}${L.bank.rule?`<p class="rule">${esc(L.bank.rule.t)}${L.bank.rule.url?` <a href="${esc(L.bank.rule.url)}" target="_blank" rel="noopener">nguồn ↗</a>`:""}</p>`:""}${L.bank.q?`<p class="q"><b>Câu hỏi thảo luận:</b> ${esc(L.bank.q)}</p>`:""}</div>`:""}
@@ -201,7 +201,7 @@ let TIMER=null;
 function simPlay(on){RT.running=!!on;if(on){if(!stackUp()&&Object.keys(M.res).length&&RT.stack.status!=="DELETE_COMPLETE")deploy();if(!TIMER)TIMER=setInterval(()=>{if(document.hidden)return;step(SPEEDS[UI.speed][1]*0.25);onSimTick()},250)}
   else if(TIMER){clearInterval(TIMER);TIMER=null}renderSim();gRefresh()}
 /* ---------------- modes ---------------- */
-function resetUi(){if(TIMER){clearInterval(TIMER);TIMER=null}if(RT)RT.running=false;UI.sel=null;UI.result=null;UI.walk=null;UI.hints=0;UI.attempt=0;UI.dirty=false;UI.gmenu=null;UI.gdrag=null;UI.tour=-1;UI.mailOpen=null;if(UI.g){UI.g.zoom=null;UI.g.trace=false}UNDO=[];REDO=[]}
+function resetUi(){if(typeof demoHalt==="function")demoHalt();if(TIMER){clearInterval(TIMER);TIMER=null}if(RT)RT.running=false;UI.sel=null;UI.result=null;UI.walk=null;UI.hints=0;UI.attempt=0;UI.dirty=false;UI.gmenu=null;UI.gdrag=null;UI.tour=-1;UI.mailOpen=null;if(UI.g){UI.g.zoom=null;UI.g.trace=false}UNDO=[];REDO=[]}
 function startLesson(i,quiet){const L=LESSONS[i];resetUi();UI.mode="lesson";UI.picker=null;UI.lesson=i;UI.speed=L.speed??2;
   M=loadTemplate(L.yaml,L.layout,"lab-"+L.id,L.manual);RT=freshRuntime();if(L.deployed!==false){QUIET++;deploy();QUIET--;RT.stack.status="CREATE_COMPLETE";syncRuntime()}
   store.set("mode",{mode:"lesson",i});if(!quiet)log("Bài học","lesson","setup",`Bài ${L.step}: ${L.title} · ${L.deployed===false?"template chưa deploy":TX("lessonReady",M.name)}`,"")}
@@ -234,19 +234,19 @@ function walkScore(){const L=L_();return L.tasks.map(t=>{try{return!!t.test()}ca
 function walkSync(){const L=L_(),W=UI.walk;if(!L||!W)return;const S=stepsOf(L);let moved=false;
   while(W.i<S.length&&stepDone(S[W.i])){W.by[W.i]=W.by[W.i]||"you";log("Bài học","lesson",`bước ${W.i+1}/${S.length} xong`,S[W.i].t,"ok");W.i++;moved=true}
   if(moved)W.res=walkScore()}
-function walkStep(){const L=L_(),W=UI.walk;if(!L||!W)return;const S=stepsOf(L),k=W.i,s=S[k];if(!s)return;W.by[k]="cl";W.helped++;
-  /* advance first: the edit re-renders, and the render's walkSync must not count this step as the learner's */
-  W.i++;log("Bài học","lesson",`làm hộ bước ${k+1}/${S.length}`,s.t,"warn");if(s.raw)s.run();else edit(s.t,()=>s.run());
-  /* the drawer stays as it was: opening it would cover the guide; the next step's block is highlighted instead */
-  walkSync();W.res=walkScore()}
-function walkHtml(L){const W=UI.walk,S=stepsOf(L),i=Math.min(W.i,S.length),cur=S[i];
-  const li=(s,k)=>{if(k<i)return`<li class="done"><span class="wn" aria-hidden="true">✓</span><div><b>${esc(s.t)}</b><small>${W.by[k]==="cl"?"CloudLab làm hộ":"Bạn đã làm"}</small></div></li>`;
+/* CloudLab does step k: bookkeeping first (the edit re-renders, and the render's walkSync must not count this step as
+   the learner's), then the change through the step's own code path */
+function walkApply(k){const L=L_(),W=UI.walk;if(!L||!W)return;const S=stepsOf(L),s=S[k];if(!s||k<W.i)return;W.by[k]="cl";W.helped++;W.i=k+1;
+  log("Bài học","lesson",`làm hộ bước ${k+1}/${S.length}`,s.t,"warn");if(s.raw)s.run();else edit(s.t,()=>s.run());walkSync();W.res=walkScore()}
+/* the same step at once, no animation (tests, WebMCP, reduced effort) */
+function walkStep(){const W=UI.walk;if(W)walkApply(W.i)}
+function walkHtml(L){const W=UI.walk,S=stepsOf(L),i=Math.min(W.i,S.length),play=typeof DEMO!=="undefined"&&DEMO.on;
+  const li=(s,k)=>{if(k<i)return`<li class="done"><span class="wn" aria-hidden="true">✓</span><div><b>${esc(s.t)}</b><small>${W.by[k]==="cl"?"CloudLab đã làm":"Bạn đã làm"}</small></div></li>`;
     if(k>i)return`<li><span class="wn" aria-hidden="true">${k+1}</span><div><b>${esc(s.t)}</b></div></li>`;
-    const how=arr(s.how);return`<li class="cur"><span class="wn" aria-hidden="true">${k+1}</span><div><b>${esc(s.t)}</b>
-      ${how.length?`<ol class="how">${how.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}${s.why?`<p class="why"><span>Vì sao:</span> ${esc(s.why)}</p>`:""}
-      <div class="acts">${atOf(s)?`<button class="sm" data-act="walkShow" data-arg="${esc(atOf(s))}">Chỉ khối ${esc(atOf(s))}</button>`:""}${s.done?"":`<button class="sm" data-act="walkMine">Tôi đã làm xong</button>`}<button class="sm ghost" data-act="walkStep">Làm hộ bước này</button></div></div></li>`};
-  return`<div class="walk" aria-live="polite"><div class="walk-h"><b>${i<S.length?`Hướng dẫn · bước ${i+1}/${S.length}`:`Xong ${S.length}/${S.length} bước`}</b><button class="sm ghost" data-act="walkStop">${i<S.length?"Ẩn hướng dẫn":"Đóng"}</button></div>
-    ${i===0&&!W.by.length?`<p class="walk-note">Làm theo từng bước. Bước tự đánh dấu ✓ khi CloudLab thấy bạn đã làm. Kẹt ở bước nào thì bấm “Làm hộ bước này”.</p>`:""}
+    const how=arr(s.how);return`<li class="cur"><span class="wn" aria-hidden="true">${k+1}</span><div><b>${esc(s.t)}</b>${play?`<small class="playing">Đang làm trên canvas…</small>`:""}
+      ${s.why?`<p class="why"><span>Vì sao:</span> ${esc(s.why)}</p>`:""}${how.length?`<details class="how-d"><summary>Tự làm bằng tay</summary><ol class="how">${how.map(x=>`<li>${esc(x)}</li>`).join("")}</ol></details>`:""}
+      ${play?"":`<div class="acts"><button class="sm primary" data-act="walkPlay">▶ Làm hộ từ bước này</button><button class="sm" data-act="walkOne">Làm 1 bước</button>${atOf(s)?`<button class="sm ghost" data-act="walkShow" data-arg="${esc(atOf(s))}">Chỉ khối ${esc(atOf(s))}</button>`:""}${s.done?"":`<button class="sm ghost" data-act="walkMine">Tôi đã làm xong</button>`}</div>`}</div></li>`};
+  return`<div class="walk" aria-live="polite"><div class="walk-h"><b>${i<S.length?`Làm hộ · bước ${i+1}/${S.length}`:`Xong ${S.length}/${S.length} bước`}</b><button class="sm ghost" data-act="walkStop">${i<S.length?(play?"Dừng":"Ẩn"):"Đóng"}</button></div>
     <ol class="walk-steps">${S.map(li).join("")}</ol>${i>=S.length?`<p class="walk-note">${W.helped?`CloudLab làm hộ ${W.helped} bước, nên bài được tính là đã xem. Bấm Kiểm tra để xem kết quả; muốn tự làm lại thì bấm Từ đầu.`:"Bạn đã tự làm hết các bước. Bấm Kiểm tra để chấm bài."}</p>`:""}</div>`}
 /* ---------------- events ---------------- */
 document.addEventListener("click",e=>{
@@ -277,10 +277,10 @@ document.addEventListener("click",e=>{
     askDelNode(){const n=nodeOf(arg);if(!n)return;if(DOMAIN.beforeDelete&&DOMAIN.beforeDelete(n)===false){UI.modal=null;return}
       const refs=edges().filter(e=>e.to===arg||e.from===arg).length;confirmModal(`Xóa ${arg}?`,`${esc(n.def.label)} sẽ bị bỏ khỏi ${n.scope==="manual"?esc(TX("manualWhere")):esc(TX("modelWhere"))}${refs?`, cùng ${refs} mũi tên nối với nó`:""}.`,n.scope==="manual"?TX("deleteManual"):"Xóa khối",()=>{edit("xóa "+arg,()=>removeNode(arg));if(DOMAIN.afterDelete)DOMAIN.afterDelete(n);UI.sel=null},true)},
     check(){check()},hint(){UI.hints=Math.min(UI.hints+1,L_().hints().length);log("Bài học","lesson","hint",`mở gợi ý ${UI.hints}`,"")},
-    askSkip(){UI.result=null;UI.walk={i:0,res:null,by:[],helped:0};log("Bài học","lesson","guide",`Mở hướng dẫn ${stepsOf(L_()).length} bước`,"")},
-    walkStep(){walkStep()},
+    askSkip(){UI.result=null;UI.walk={i:0,res:null,by:[],helped:0};log("Bài học","lesson","làm hộ",`${stepsOf(L_()).length} bước, làm trên canvas`,"");if(typeof demoPlay==="function")setTimeout(()=>demoPlay(true),50)},
+    walkStep(){walkStep()},walkPlay(){if(typeof demoPlay==="function")setTimeout(()=>demoPlay(true),0);else walkStep()},walkOne(){if(typeof demoPlay==="function")setTimeout(()=>demoPlay(false),0);else walkStep()},
     walkMine(){const W=UI.walk,S=stepsOf(L_());if(!W||W.i>=S.length)return;W.by[W.i]="you";W.i++;walkSync();W.res=walkScore()},
-    walkStop(){UI.walk=null},
+    walkStop(){if(typeof DEMO!=="undefined"&&DEMO.on){demoStop();return}UI.walk=null},
     walkShow(){UI.sel={node:arg};UI.selRet=null},
     askReset(){confirmModal("Bắt đầu lại bài này?","Template và dữ liệu mô phỏng quay về như lúc mở bài. Event log giữ nguyên.","Bắt đầu lại",()=>startLesson(UI.lesson),true)},
     openSandbox(){if(UI.mode!=="sandbox")startSandbox()},
