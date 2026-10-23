@@ -84,21 +84,21 @@ function renderLog(){const el=document.getElementById("log");if(!el)return;el.hi
 function renderLesson(){const el=document.getElementById("lesson"),L=L_();
   if(!L){setHtml(el,lessonBar()+`${TX("sandboxIntro")}
     <div class="sect"><span class="lab">Bắt đầu từ</span><div class="acts">${Object.entries(STARTERS).map(([k,t])=>`<button class="sm" data-act="loadTpl" data-arg="${k}">${esc(t.title)}</button>`).join("")}<button class="sm" data-act="askClear">Canvas trống</button><button class="sm" data-act="importYaml">Dán template…</button></div>${LESSONS.map((l,i)=>`<button class="tplrow" data-act="copyLesson" data-arg="${i}"><b>${esc(l.tag)}</b><small>${esc(l.title)}</small></button>`).join("")}<p class="note">Mở template của một bài vào sandbox (không chấm điểm).</p></div>`);return}
-  walkSync();const R=UI.result||(UI.walk&&UI.walk.res?{res:UI.walk.res,walk:true}:null),hs=L.hints(),passed=R?R.res.filter(Boolean).length:0,nT=L.tasks.length;
+  walkSync();const R=UI.walk?null:UI.result,hs=L.hints(),passed=R?R.res.filter(Boolean).length:0,nT=L.tasks.length;
   /* three tiers: 1 what to do (goal, tasks, actions) · 2 why it matters (scenario, banking context) · 3 reference, collapsed */
   const lab=DOMAIN.lessonRef?DOMAIN.lessonRef(L):"";
-  let h=lessonBar()+`<section class="ltier main" aria-label="Việc cần làm"><div><span class="cap eyebrow">${esc(L.phase||TX("phaseDefault"))} · Bài ${L.step}</span><h1>${esc(L.title)}</h1><p class="goal">${esc(L.goal)}</p></div>
-  <div class="sect"><div class="th"><span class="lab">Nhiệm vụ</span><span class="cnt">${passed}/${nT}</span><span class="pbar"><i style="width:${passed/nT*100}%"></i></span></div>${L.tasks.map((t,i)=>{const c=R?(R.res[i]?"pass":R.walk?"":"fail"):"";return`<div class="task ${c}"><span class="tm2">${R&&(R.res[i]||!R.walk)?(R.res[i]?"✓":"✕"):i+1}</span><div><b>${esc(t.t)}</b>${R&&R.res[i]?`<small>${esc(t.c)}</small>`:""}</div></div>`}).join("")}
-  ${R&&!R.walk&&UI.dirty?`<span class="chip warn dirty">Đã sửa · bấm Kiểm tra lại</span>`:""}</div>`;
-  if(R&&!R.walk)h+=`<div class="callout ${R.ok?"ok":R.skipped?"ctx":""}"><b>${R.ok?"Đạt":R.skipped?"Đã làm hộ":`Chưa đạt · lần ${UI.attempt}`}</b>${esc(R.msg)}</div>`;
+  const scn=`<section class="ltier why top" aria-label="Bối cảnh"><span class="lab">Bối cảnh</span><div class="scn2"><span class="av" aria-hidden="true">${L.who[0]}</span><div><p>“${esc(L.scenario)}”</p><small class="muted">${esc(L.who[1])}</small></div></div></section>`;
+  let h=lessonBar()+scn+`<section class="ltier main" aria-label="Việc cần làm"><div><span class="cap eyebrow">${esc(L.phase||TX("phaseDefault"))} · Bài ${L.step}</span><h1>${esc(L.title)}</h1><p class="goal">${esc(L.goal)}</p></div>
+  ${UI.walk?walkList(L):`<div class="sect"><div class="th"><span class="lab">Nhiệm vụ</span><span class="cnt">${passed}/${nT}</span><span class="pbar"><i style="width:${passed/nT*100}%"></i></span></div>${L.tasks.map((t,i)=>{const c=R?(R.res[i]?"pass":"fail"):"";return`<div class="task ${c}"><span class="tm2">${R?(R.res[i]?"✓":"✕"):i+1}</span><div><b>${esc(t.t)}</b>${R&&R.res[i]?`<small>${esc(t.c)}</small>`:""}</div></div>`}).join("")}`}
+  ${R&&UI.dirty?`<span class="chip warn dirty">Đã sửa · bấm Kiểm tra lại</span>`:""}</div>`;
+  if(R)h+=`<div class="callout ${R.ok?"ok":R.skipped?"ctx":""}"><b>${R.ok?"Đạt":R.skipped?"Đã làm hộ":`Chưa đạt · lần ${UI.attempt}`}</b>${esc(R.msg)}</div>`;
   if(UI.hints)h+=hs.slice(0,UI.hints).map((x,i)=>`<div class="callout warn"><b>Gợi ý ${i+1}/${hs.length}</b>${esc(x)}</div>`).join("");
-  if(UI.walk)h+=walkHtml(L);
-  if(R&&R.ok&&!R.skipped){const nx=UI.lesson+1<LESSONS.length;h+=`<div class="lacts">${nx?`<button class="primary" data-lesson="${UI.lesson+1}">Bài tiếp: ${esc(LESSONS[UI.lesson+1].tag)} →</button>`:`<button class="primary" data-act="openSandbox">Ra sandbox tự do →</button>`}</div>`}
+  if(UI.hintFx&&!UI.walk&&typeof hintStepOf==="function"){const hs_=hintStepOf(L);h+=hs_?`<div class="callout ctx hintnext"><b>Bước tiếp theo · ${hs_.k+1}/${hs_.n}</b>${esc(hs_.s.t)}<span class="note">Khối cần sửa đang sáng trên canvas, con trỏ chỉ chỗ bấm.</span><button class="sm ghost" data-act="hintOff">Tắt chỉ dẫn</button></div>`:""}
+  const play=typeof DEMO!=="undefined"&&DEMO.on;
+  if(UI.walk)h+=play?"":`<div class="lacts"><button class="primary" data-act="walkPlay">▶ Làm hộ tiếp</button><button data-act="walkOne">Làm 1 bước</button><button class="ghost" data-act="walkStop">Thôi, tự làm</button></div>`;
+  else if(R&&R.ok&&!R.skipped){const nx=UI.lesson+1<LESSONS.length;h+=`<div class="lacts">${nx?`<button class="primary" data-lesson="${UI.lesson+1}">Bài tiếp: ${esc(LESSONS[UI.lesson+1].tag)} →</button>`:`<button class="primary" data-act="openSandbox">Ra sandbox tự do →</button>`}</div>`}
   else h+=`<div class="lacts"><button class="primary" data-act="check">Kiểm tra</button><button data-act="hint" ${UI.hints>=hs.length?"disabled":""}>Gợi ý ${UI.hints}/${hs.length}</button>${UI.walk?"":`<button class="ghost" data-act="askSkip">Làm hộ</button>`}<button class="ghost" data-act="askReset" title="Bắt đầu lại bài này từ đầu">Từ đầu</button></div>`;
-  h+=`</section><section class="ltier why" aria-label="Bối cảnh"><span class="lab">Bối cảnh</span>
-  <div class="scn2"><span class="av" aria-hidden="true">${L.who[0]}</span><div><p>“${esc(L.scenario)}”</p><small class="muted">${esc(L.who[1])}</small></div></div>
-  ${L.bank?`<div class="callout ctx bank"><b>Trong ngân hàng</b>${L.bank.why?`<p>${esc(L.bank.why)}</p>`:""}${(L.bank.cases||[]).length?`<ul>${L.bank.cases.map(c=>`<li>${esc(c.t)}${c.url?` <a href="${esc(c.url)}" target="_blank" rel="noopener">nguồn ↗</a>`:""}</li>`).join("")}</ul>`:""}${L.bank.rule?`<p class="rule">${esc(L.bank.rule.t)}${L.bank.rule.url?` <a href="${esc(L.bank.rule.url)}" target="_blank" rel="noopener">nguồn ↗</a>`:""}</p>`:""}${L.bank.q?`<p class="q"><b>Câu hỏi thảo luận:</b> ${esc(L.bank.q)}</p>`:""}</div>`:""}
-  </section>
+  h+=`</section>${L.bank?`<section class="ltier why" aria-label="Trong ngân hàng"><div class="callout ctx bank"><b>Trong ngân hàng</b>${L.bank.why?`<p>${esc(L.bank.why)}</p>`:""}${(L.bank.cases||[]).length?`<ul>${L.bank.cases.map(c=>`<li>${esc(c.t)}${c.url?` <a href="${esc(c.url)}" target="_blank" rel="noopener">nguồn ↗</a>`:""}</li>`).join("")}</ul>`:""}${L.bank.rule?`<p class="rule">${esc(L.bank.rule.t)}${L.bank.rule.url?` <a href="${esc(L.bank.rule.url)}" target="_blank" rel="noopener">nguồn ↗</a>`:""}</p>`:""}${L.bank.q?`<p class="q"><b>Câu hỏi thảo luận:</b> ${esc(L.bank.q)}</p>`:""}</div></section>`:""}
   <section class="ltier ref" aria-label="Tham khảo"><span class="lab">Tham khảo</span>
   <details class="more"><summary>Trong template này (${Object.keys(L.explain||{}).filter(id=>nodeOf(id)).length} khối)</summary><div class="comps">${Object.keys(L.explain||{}).filter(id=>nodeOf(id)).map(id=>{const n=nodeOf(id);return`<button class="comp${UI.sel&&UI.sel.node===id?" on":""}" data-act="selNode" data-arg="${id}" title="${esc(L.explain[id])}">${icHtml(n.def)}${esc(id)}</button>`}).join("")}</div><button class="link" data-act="tour">${UI.tour>=0?"Dừng giới thiệu":"Giới thiệu từng khối →"}</button></details>
   <details class="more"><summary>Khái niệm (${L.concepts.length})</summary><div class="tags">${L.concepts.map(c=>`<span class="tag">${esc(c)}</span>`).join("")}</div></details>`+(L.reading?`<details class="more reading"><summary>Đọc thêm: ${esc(L.reading.title)}</summary><div class="reading-body">${L.reading.html}</div></details>`:"")+
@@ -153,11 +153,15 @@ function renderDrawer(){const el=document.getElementById("drawer");if(!el)return
       body:`<p>${esc((DOMAIN.relDoc||{})[e.kind]||"Khối này tham chiếu tới khối kia.")}</p>`+kvl([["Khai báo ở",`<span class="mono">${esc(e.owner)}.${esc(e.path)}</span>`],["Thành công",num(f.ok)],["Lỗi / bị chặn",num(f.err)]])+(v.why?`<div class="callout"><b>Lý do</b>${esc(v.why)}</div>`:""),
       foot:`<button class="sm" data-act="selNode" data-arg="${e.from}">${esc(e.from)}</button><button class="sm" data-act="selNode" data-arg="${e.to}">${esc(e.to)}</button><button class="sm danger" data-act="delEdge" data-arg="${esc(e.id)}">Xóa mũi tên</button>`}}}
   if(!c){if(DRAWER_KEY){DRAWER_KEY=null;UI.sel=null;el.hidden=true;el.innerHTML="";KIT.layer.close(el)}return}
-  const ae=document.activeElement,inside=ae&&el.contains(ae)?selOf(ae):null;
+  /* re-rendering the same block's drawer keeps the scroll position and the focused control (a ticked checkbox inside a
+     fieldset has no selector of its own: find it again by its position) */
+  const ae=document.activeElement,inside=ae&&el.contains(ae)?selOf(ae):null,ctl=()=>[...el.querySelectorAll("input,select,textarea,button")];
+  const same=DRAWER_KEY===c.key,body0=el.querySelector(".drawer-body"),top0=same&&body0?body0.scrollTop:0,idx=same&&ae&&el.contains(ae)?ctl().indexOf(ae):-1;
   el.dataset.cat=c.cat;el.setAttribute("aria-labelledby","dt");
   el.innerHTML=`<div class="drawer-grab" aria-hidden="true"></div><div class="drawer-head"><div class="drawer-eyebrow">${c.def?icHtml(c.def):`<span class="side-ic" style="--cat:var(--c-${c.cat})" aria-hidden="true">${esc(c.icon)}</span>`}<span class="grow">${esc(c.eyebrow)}</span><button class="modal-x" data-act="closeDrawer" aria-label="Đóng">✕</button></div><h2 class="drawer-title" id="dt" tabindex="-1">${esc(c.title)}</h2>${c.status?`<div class="drawer-status">${c.status}</div>`:""}</div><div class="drawer-body">${c.body}</div>${c.foot?`<div class="drawer-foot">${c.foot}</div>`:""}`;
   if(!DRAWER_KEY){el.hidden=false;KIT.layer.open(el,{modal:KIT.isNarrow(),returnFocus:UI.selRet,onClose:()=>{UI.sel=null;render()},initialFocus:"#dt"})}
-  else if(inside){const x=el.querySelector(inside);if(x)try{x.focus({preventScroll:true})}catch(_){}}else if(DRAWER_KEY!==c.key){const t=document.getElementById("dt");if(t)t.focus({preventScroll:true})}
+  else if(inside||idx>=0){const x=(inside&&el.querySelector(inside))||(idx>=0&&ctl()[idx]);if(x)try{x.focus({preventScroll:true})}catch(_){}}else if(DRAWER_KEY!==c.key){const t=document.getElementById("dt");if(t)t.focus({preventScroll:true})}
+  if(same){const b=el.querySelector(".drawer-body");if(b)b.scrollTop=top0}
   DRAWER_KEY=c.key}
 function refreshRt(){const rt=document.getElementById("rt");if(!rt||!UI.sel||!UI.sel.node)return;const ae=document.activeElement;if(ae&&rt.contains(ae)&&ae.tagName==="INPUT")return;setHtml(rt,rtHtml(UI.sel.node))}
 /* ---------------- modal ---------------- */
@@ -186,7 +190,7 @@ function renderAll(){syncHash();const ae=document.activeElement,keep=ae&&ae!==do
   renderSide();renderTop();renderBar();renderCanvas();renderCode();renderSim();renderLog();renderLesson();renderDrawer();renderModal();
   const now=document.activeElement;if(keep&&(!now||now===document.body)){const n=document.querySelector(keep);if(n)try{n.focus({preventScroll:true})}catch(_){}}
   if(UI.gfocus){const f=document.querySelector(UI.gfocus);UI.gfocus=null;if(f)try{f.focus({preventScroll:true})}catch(_){}}
-  keepVisible();if(window.Kit&&Kit.shellSync)Kit.shellSync()}
+  keepVisible();if(typeof hintFx==="function")hintFx();if(window.Kit&&Kit.shellSync)Kit.shellSync()}
 let SEEN=null;
 function keepVisible(){const id=UI.sel&&UI.sel.node;if(!id||id===SEEN||KIT.isNarrow()){if(!id)SEEN=null;return}SEEN=id;
   const el=document.querySelector(`.gnode[data-gid="${id}"]`),dw=document.getElementById("drawer"),gx=document.querySelector(".gx");if(!el||!dw||dw.hidden||!gx||!el.getBoundingClientRect)return;
@@ -201,7 +205,7 @@ let TIMER=null;
 function simPlay(on){RT.running=!!on;if(on){if(!stackUp()&&Object.keys(M.res).length&&RT.stack.status!=="DELETE_COMPLETE")deploy();if(!TIMER)TIMER=setInterval(()=>{if(document.hidden)return;step(SPEEDS[UI.speed][1]*0.25);onSimTick()},250)}
   else if(TIMER){clearInterval(TIMER);TIMER=null}renderSim();gRefresh()}
 /* ---------------- modes ---------------- */
-function resetUi(){if(typeof demoHalt==="function")demoHalt();if(TIMER){clearInterval(TIMER);TIMER=null}if(RT)RT.running=false;UI.sel=null;UI.result=null;UI.walk=null;UI.hints=0;UI.attempt=0;UI.dirty=false;UI.gmenu=null;UI.gdrag=null;UI.tour=-1;UI.mailOpen=null;if(UI.g){UI.g.zoom=null;UI.g.trace=false}UNDO=[];REDO=[]}
+function resetUi(){if(typeof demoHalt==="function")demoHalt();if(TIMER){clearInterval(TIMER);TIMER=null}if(RT)RT.running=false;UI.sel=null;UI.result=null;UI.walk=null;UI.hints=0;UI.hintFx=false;UI.helped=0;UI.attempt=0;UI.dirty=false;UI.gmenu=null;UI.gdrag=null;UI.tour=-1;UI.mailOpen=null;if(UI.g){UI.g.zoom=null;UI.g.trace=false}UNDO=[];REDO=[]}
 function startLesson(i,quiet){const L=LESSONS[i];resetUi();UI.mode="lesson";UI.picker=null;UI.lesson=i;UI.speed=L.speed??2;
   M=loadTemplate(L.yaml,L.layout,"lab-"+L.id,L.manual);RT=freshRuntime();if(L.deployed!==false){QUIET++;deploy();QUIET--;RT.stack.status="CREATE_COMPLETE";syncRuntime()}
   store.set("mode",{mode:"lesson",i});if(!quiet)log("Bài học","lesson","setup",`Bài ${L.step}: ${L.title} · ${L.deployed===false?"template chưa deploy":TX("lessonReady",M.name)}`,"")}
@@ -212,7 +216,8 @@ function startSandbox(m){resetUi();UI.mode="sandbox";UI.picker=libPref()==="clos
 function check(){const L=L_();if(!L)return;UI.attempt++;UI.dirty=false;const res=L.tasks.map(t=>{try{return!!t.test()}catch(e){console.error(e);return false}}),ok=res.every(Boolean);
   const dg=k=>{try{return L.diagnose?L.diagnose(k):""}catch(e){console.error(e);return""}};const cause=res.join()+"|"+dg(0);UI.ladder=cause===UI.lastCause?(UI.ladder||0)+1:0;UI.lastCause=cause;
   UI.result={ok,res,msg:ok?L.pass:dg(UI.ladder)};log("Bài học","lesson","check",ok?`Đạt ${res.length}/${res.length}`:`Chưa đạt · lần ${UI.attempt} · ${res.filter(Boolean).length}/${res.length}`,ok?"ok":"bad");
-  if(ok&&UI.walk&&UI.walk.helped){UI.result.skipped=true;UI.result.ok=false;UI.result.msg=`Cả ${res.length} nhiệm vụ đạt, nhưng CloudLab đã làm hộ ${UI.walk.helped} bước nên bài tính là đã xem. Bấm Từ đầu để tự làm lại. ${L.pass}`;log("Bài học","lesson","check","đạt với hướng dẫn (có bước làm hộ)","warn");return}
+  /* any step CloudLab did since the lesson opened: seen, not passed (until Từ đầu) */
+  if(ok&&UI.helped){UI.result.skipped=true;UI.result.ok=false;UI.result.msg=`Cả ${res.length} nhiệm vụ đạt, nhưng CloudLab đã làm hộ ${UI.helped} bước nên bài tính là đã xem. Bấm Từ đầu để tự làm lại. ${L.pass}`;log("Bài học","lesson","check","đạt với hướng dẫn (có bước làm hộ)","warn");return}
   if(ok){DONE.add(L.id);store.set("done",[...DONE])}}
 /* ---------------- guided answer: "Hướng dẫn từng bước" ----------------
    A lesson lists L.steps: [{t, at, how, why, done, run, raw}]
@@ -233,21 +238,21 @@ function walkScore(){const L=L_();return L.tasks.map(t=>{try{return!!t.test()}ca
 /* tick every step the learner has already done, in order; re-score the tasks when something moved */
 function walkSync(){const L=L_(),W=UI.walk;if(!L||!W)return;const S=stepsOf(L);let moved=false;
   while(W.i<S.length&&stepDone(S[W.i])){W.by[W.i]=W.by[W.i]||"you";log("Bài học","lesson",`bước ${W.i+1}/${S.length} xong`,S[W.i].t,"ok");W.i++;moved=true}
-  if(moved)W.res=walkScore()}
+  if(moved)W.res=walkScore();if(W.i>=S.length&&!(typeof DEMO!=="undefined"&&DEMO.on))setTimeout(()=>{if(UI.walk&&UI.walk===W){walkFinish();render()}},0)}
 /* CloudLab does step k: bookkeeping first (the edit re-renders, and the render's walkSync must not count this step as
    the learner's), then the change through the step's own code path */
-function walkApply(k){const L=L_(),W=UI.walk;if(!L||!W)return;const S=stepsOf(L),s=S[k];if(!s||k<W.i)return;W.by[k]="cl";W.helped++;W.i=k+1;
+function walkApply(k){const L=L_(),W=UI.walk;if(!L||!W)return;const S=stepsOf(L),s=S[k];if(!s||k<W.i)return;W.by[k]="cl";W.helped++;UI.helped=(UI.helped||0)+1;W.i=k+1;
   log("Bài học","lesson",`làm hộ bước ${k+1}/${S.length}`,s.t,"warn");if(s.raw)s.run();else edit(s.t,()=>s.run());walkSync();W.res=walkScore()}
 /* the same step at once, no animation (tests, WebMCP, reduced effort) */
-function walkStep(){const W=UI.walk;if(W)walkApply(W.i)}
-function walkHtml(L){const W=UI.walk,S=stepsOf(L),i=Math.min(W.i,S.length),play=typeof DEMO!=="undefined"&&DEMO.on;
-  const li=(s,k)=>{if(k<i)return`<li class="done"><span class="wn" aria-hidden="true">✓</span><div><b>${esc(s.t)}</b><small>${W.by[k]==="cl"?"CloudLab đã làm":"Bạn đã làm"}</small></div></li>`;
-    if(k>i)return`<li><span class="wn" aria-hidden="true">${k+1}</span><div><b>${esc(s.t)}</b></div></li>`;
-    const how=arr(s.how);return`<li class="cur"><span class="wn" aria-hidden="true">${k+1}</span><div><b>${esc(s.t)}</b>${play?`<small class="playing">Đang làm trên canvas…</small>`:""}
-      ${s.why?`<p class="why"><span>Vì sao:</span> ${esc(s.why)}</p>`:""}${how.length?`<details class="how-d"><summary>Tự làm bằng tay</summary><ol class="how">${how.map(x=>`<li>${esc(x)}</li>`).join("")}</ol></details>`:""}
-      ${play?"":`<div class="acts"><button class="sm primary" data-act="walkPlay">▶ Làm hộ từ bước này</button><button class="sm" data-act="walkOne">Làm 1 bước</button>${atOf(s)?`<button class="sm ghost" data-act="walkShow" data-arg="${esc(atOf(s))}">Chỉ khối ${esc(atOf(s))}</button>`:""}${s.done?"":`<button class="sm ghost" data-act="walkMine">Tôi đã làm xong</button>`}</div>`}</div></li>`};
-  return`<div class="walk" aria-live="polite"><div class="walk-h"><b>${i<S.length?`Làm hộ · bước ${i+1}/${S.length}`:`Xong ${S.length}/${S.length} bước`}</b><button class="sm ghost" data-act="walkStop">${i<S.length?(play?"Dừng":"Ẩn"):"Đóng"}</button></div>
-    <ol class="walk-steps">${S.map(li).join("")}</ol>${i>=S.length?`<p class="walk-note">${W.helped?`CloudLab làm hộ ${W.helped} bước, nên bài được tính là đã xem. Bấm Kiểm tra để xem kết quả; muốn tự làm lại thì bấm Từ đầu.`:"Bạn đã tự làm hết các bước. Bấm Kiểm tra để chấm bài."}</p>`:""}</div>`}
+function walkStep(){const W=UI.walk;if(W){walkApply(W.i);walkFinish()}}
+/* the steps in the same checklist as the tasks (Nhiệm vụ), while "Làm hộ" is on */
+function walkList(L){const W=UI.walk,S=stepsOf(L),i=Math.min(W.i,S.length),play=typeof DEMO!=="undefined"&&DEMO.on;
+  return`<div class="sect"><div class="th"><span class="lab">Làm hộ</span><span class="cnt">${i}/${S.length}</span><span class="pbar"><i style="width:${i/S.length*100}%"></i></span>${play?`<button class="sm demo-ctl" data-act="walkStop" title="Dừng (Esc) · Space để tạm dừng">Dừng</button>`:""}</div>${S.map((s,k)=>{
+    if(k<i)return`<div class="task pass"><span class="tm2">✓</span><div><b>${esc(s.t)}</b><small>${W.by[k]==="cl"?"CloudLab đã làm":"Bạn đã làm"}</small></div></div>`;
+    if(k>i)return`<div class="task"><span class="tm2">${k+1}</span><div><b>${esc(s.t)}</b></div></div>`;
+    const how=arr(s.how);return`<div class="task cur"><span class="tm2">${k+1}</span><div><b>${esc(s.t)}</b>${play?`<small class="playing">Đang làm trên canvas…</small>`:""}${s.why?`<small>${esc(s.why)}</small>`:""}${how.length&&!play?`<details class="how-d"><summary>Tự làm bằng tay</summary><ol class="how">${how.map(x=>`<li>${esc(x)}</li>`).join("")}</ol></details>`:""}</div></div>`}).join("")}</div>`}
+/* every step done (by CloudLab or the learner): close the list and grade, so the same checklist shows the tasks */
+function walkFinish(){const L=L_(),W=UI.walk;if(!L||!W||W.i<stepsOf(L).length)return;check();UI.walk=null}
 /* ---------------- events ---------------- */
 document.addEventListener("click",e=>{
   const t=e.target.closest("[data-act],[data-lesson],[data-log],[data-node],[data-edge],[data-ptype]");if(!t||t.closest("[inert]"))return;
@@ -276,10 +281,10 @@ document.addEventListener("click",e=>{
     delEdge(){const e=edges().find(x=>x.id===arg);if(e){edit("xóa mũi tên",()=>removeEdge(e));log("CloudLab","editor","disconnect",`${e.from} → ${e.to}`,"warn")}UI.sel=null},
     askDelNode(){const n=nodeOf(arg);if(!n)return;if(DOMAIN.beforeDelete&&DOMAIN.beforeDelete(n)===false){UI.modal=null;return}
       const refs=edges().filter(e=>e.to===arg||e.from===arg).length;confirmModal(`Xóa ${arg}?`,`${esc(n.def.label)} sẽ bị bỏ khỏi ${n.scope==="manual"?esc(TX("manualWhere")):esc(TX("modelWhere"))}${refs?`, cùng ${refs} mũi tên nối với nó`:""}.`,n.scope==="manual"?TX("deleteManual"):"Xóa khối",()=>{edit("xóa "+arg,()=>removeNode(arg));if(DOMAIN.afterDelete)DOMAIN.afterDelete(n);UI.sel=null},true)},
-    check(){check()},hint(){UI.hints=Math.min(UI.hints+1,L_().hints().length);log("Bài học","lesson","hint",`mở gợi ý ${UI.hints}`,"")},
+    check(){check()},hint(){UI.hints=Math.min(UI.hints+1,L_().hints().length);const first=!UI.hintFx;UI.hintFx=!!L_().steps;log("Bài học","lesson","hint",`mở gợi ý ${UI.hints}`,"");if(first&&UI.hintFx)setTimeout(()=>{if(typeof hintReveal==="function"){hintReveal();hintFx()}},0)},hintOff(){UI.hintFx=false},
     askSkip(){UI.result=null;UI.walk={i:0,res:null,by:[],helped:0};log("Bài học","lesson","làm hộ",`${stepsOf(L_()).length} bước, làm trên canvas`,"");if(typeof demoPlay==="function")setTimeout(()=>demoPlay(true),50)},
     walkStep(){walkStep()},walkPlay(){if(typeof demoPlay==="function")setTimeout(()=>demoPlay(true),0);else walkStep()},walkOne(){if(typeof demoPlay==="function")setTimeout(()=>demoPlay(false),0);else walkStep()},
-    walkMine(){const W=UI.walk,S=stepsOf(L_());if(!W||W.i>=S.length)return;W.by[W.i]="you";W.i++;walkSync();W.res=walkScore()},
+    walkMine(){const W=UI.walk,S=stepsOf(L_());if(!W||W.i>=S.length)return;W.by[W.i]="you";W.i++;walkSync();W.res=walkScore();walkFinish()},
     walkStop(){if(typeof DEMO!=="undefined"&&DEMO.on){demoStop();return}UI.walk=null},
     walkShow(){UI.sel={node:arg};UI.selRet=null},
     askReset(){confirmModal("Bắt đầu lại bài này?","Template và dữ liệu mô phỏng quay về như lúc mở bài. Event log giữ nguyên.","Bắt đầu lại",()=>startLesson(UI.lesson),true)},

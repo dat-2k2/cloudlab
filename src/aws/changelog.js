@@ -2,11 +2,12 @@
 /* "Có gì mới": the app's features and updates grouped by big feature (from the repo history on GitHub,
    dat-2k2/cloudlab), newest first inside each group. CHANGELOG_VERSION changes whenever entries are added: the
    top-bar button shows a dot until the viewer opens the dialog (seen flag in localStorage cloudlab:news). */
-const CHANGELOG_VERSION="2026-10-23a";
+const CHANGELOG_VERSION="2026-10-23b";
 const CHANGELOG=[
   {id:"guide",icon:"✓",title:"Hướng dẫn từng bước, đáp án đúng như AWS thật",sum:"Nút Làm hộ thành Hướng dẫn từng bước: mỗi bước nói làm gì, bấm vào đâu, vì sao, và tự đánh dấu khi bạn làm xong. Đáp án của cả 16 bài AWS chạy được trên AWS thật. Khối trên canvas nhỏ gọn, có biểu tượng AWS và hình theo loại.",items:[
     ["22/10","Khối nhỏ gọn kiểu AWS Infrastructure Composer: biểu tượng AWS chính thức, loại, tên và một nhãn trạng thái; số liệu chuyển vào khung chi tiết và chú thích khi rê chuột. Hình khối theo loại: chữ nhật (chạy code), trụ (lưu dữ liệu), ống (hàng đợi), lục giác (cửa vào), cắt góc (quyền, quy tắc), viên thuốc (bên ngoài). Nút Chú giải trên canvas."],
-    ["23/10","Làm hộ bằng hoạt hình: con trỏ tự bấm vào khối, mở khung chi tiết, sửa đúng ô, kéo mũi tên, thả khối vào khung VPC, lấy thành phần từ thư viện. Thanh dưới màn hình có Dừng tạm, Làm nhanh, Dừng. Muốn tự làm thì mở “Tự làm bằng tay” ở từng bước."],
+    ["23/10","Gợi ý chỉ chỗ cần làm tiếp: canvas chuyển sang Trace, chỉ sáng khối của bước kế tiếp, con trỏ chỉ đúng khối, ô hoặc nút cần bấm và đi theo khi bạn làm. Làm hộ chạy ở chế độ Trace, khóa mọi nút khác trong lúc chạy; danh sách bước hiện ngay trong ô Nhiệm vụ. Bối cảnh lên đầu bảng bài học. Khung chi tiết không còn nhảy lên đầu khi tick ô."],
+    ["23/10","Làm hộ bằng hoạt hình: con trỏ tự bấm vào khối, mở khung chi tiết, sửa đúng ô, kéo mũi tên, thả khối vào khung VPC, lấy thành phần từ thư viện. Esc để dừng, Space để tạm dừng. Muốn tự làm thì mở “Tự làm bằng tay” ở từng bước."],
     ["22/10","Hướng dẫn từng bước: chỉ khối cần sửa trên canvas, giải thích vì sao. Bạn tự làm thì bước tự tick. Có bước làm hộ thì bài tính là đã xem, chưa tính là đạt."],
     ["22/10","Route table: subnet chỉ public khi route table của nó có 0.0.0.0/0 → internet gateway, như AWS. Bài VPC thêm bước route; nút “Cho ra Internet” trên subnet."],
     ["22/10","Quyền giữa các dịch vụ: API Gateway, S3, SNS, EventBridge gọi Lambda cần AWS::Lambda::Permission; AWS Budgets gửi vào SNS cần topic policy; CloudFront đọc bucket private qua Origin Access Control và bucket policy có AWS:SourceArn. Nối bằng mũi tên thì CloudLab thêm giúp."],

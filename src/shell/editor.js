@@ -85,7 +85,8 @@ function gParts(L){const G=gs(),sel=UI.sel||{},drag=UI.gdrag;
   const valid=drag?Object.fromEntries([...L.nodes,...L.boxes].map(n=>[n.id,n.id!==drag.from&&connectRule(drag.from,n.id)])):null;
   /* edge bundling per side so several edges into one side don't overlap */
   const sideUse={};const plan=L.edges.map(e=>{const A=L.by[e.from],B=L.by[e.to],[sa,sb]=sidesFor(A,B);const ka=e.from+sa,kb2=e.to+sb;(sideUse[ka]=sideUse[ka]||[]).push(e.id);(sideUse[kb2]=sideUse[kb2]||[]).push(e.id);return{e,A,B,sa,sb,ka,kb:kb2}});
-  const trace=G.trace?new Set(L.edges.filter(e=>{const f=RT.flow[e.id];return f&&(f.tk||f.tke)}).flatMap(e=>[e.from,e.to])):null;
+  const hf=typeof hintFocus==="function"?hintFocus():null;
+  const trace=typeof DEMO!=="undefined"&&DEMO.on?DEMO.focus:hf||(G.trace?new Set(L.edges.filter(e=>{const f=RT.flow[e.id];return f&&(f.tk||f.tke)}).flatMap(e=>[e.from,e.to])):null);
   let svg=`<svg class="gedges" width="${L.W}" height="${L.H}"><defs>${G_MARKERS}</defs>`,chips="";
   for(const{e,A,B,sa,sb,ka,kb}of plan){const v=edgeView(e),ia=sideUse[ka].indexOf(e.id),ib=sideUse[kb].indexOf(e.id);
     const p1=gAnchor(A,sa,ia,sideUse[ka].length),p2=gAnchor(B,sb,ib,sideUse[kb].length),c=gCurve(p1,sa,p2,sb),isSel=sel.edge===e.id,dim=trace&&!(trace.has(e.from)&&trace.has(e.to))?" dim":"";
@@ -155,8 +156,8 @@ function canvasHtml(){return canvasJoin(canvasParts())}
 /* code that changes canvas DOM directly (pan/zoom, drag highlights) calls this so the next render rewrites it */
 function gDirty(){const c=document.getElementById("canvas");if(c)c.__cv=null}
 function gRefresh(){const w=document.getElementById("gworld");if(!w){const c=document.getElementById("canvas");if(c&&!UI.code||UI.split)renderCanvas();return}
-  const L=layoutModel();GLAST=L;GWH=[L.W,L.H];gSetStyle(w,gWorldStyle(L.W,L.H,GCUR.pan,GCUR.z));gPatchWorld(w,gParts(L))}
-function gApply(){const w=document.getElementById("gworld");if(w)gSetStyle(w,gWorldStyle(GWH[0],GWH[1],GCUR.pan,GCUR.z));const zl=document.querySelector(".gx-tools .gz");if(zl){const t=Math.round(GCUR.z*100)+"%";if(zl.textContent!==t){zl.textContent=t;gDirty()}}}
+  const L=layoutModel();GLAST=L;GWH=[L.W,L.H];gSetStyle(w,gWorldStyle(L.W,L.H,GCUR.pan,GCUR.z));gPatchWorld(w,gParts(L));if(UI.hintFx&&typeof hintFx==="function")hintFx()}
+function gApply(){const w=document.getElementById("gworld");if(w)gSetStyle(w,gWorldStyle(GWH[0],GWH[1],GCUR.pan,GCUR.z));if(UI.hintFx&&typeof hintPos==="function")hintPos();const zl=document.querySelector(".gx-tools .gz");if(zl){const t=Math.round(GCUR.z*100)+"%";if(zl.textContent!==t){zl.textContent=t;gDirty()}}}
 function gFreeze(){const G=gs();G.zoom=GCUR.z;G.pan=[...GCUR.pan]}
 function gZoomAt(nz,cx,cy){const G=gs();nz=Math.max(.3,Math.min(2,nz));const z=GCUR.z,p=GCUR.pan;if(cx===undefined){const gx=document.querySelector(".gx");cx=gx?gx.clientWidth/2:300;cy=gx?gx.clientHeight/2:200}
   const wx=(cx-p[0])/z,wy=(cy-p[1])/z;G.zoom=nz;G.pan=[cx-wx*nz,cy-wy*nz];GCUR={z:nz,pan:G.pan};gApply()}
