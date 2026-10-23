@@ -842,3 +842,4 @@ body.demoing .lesson .ltier:not(.main){opacity:.55}
 @keyframes hbob{50%{transform:translate(3px,4px)}}
 .callout.hintnext .note{display:block;margin-top:4px;color:var(--subtle);font-size:12.5px}.callout.hintnext .sm{margin-top:8px}
 @media (prefers-reduced-motion:reduce){.hcur svg,.hint-hl{animation:none}}
+.hcur[hidden],.dcur[hidden],.dline[hidden],.dghost[hidden]{display:none!important}
