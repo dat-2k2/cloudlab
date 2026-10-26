@@ -107,6 +107,9 @@ function publish(ev){const id=ev.to,t=nodeOf(id),w=ev.w,d=ev.data||{};
 /* an HTTP request arriving at a node: API Gateway, Route 53 alias, CloudFront, load balancer or EC2 directly */
 function request(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,kind=ev.kind||"calls",inet=!!(ev.data&&ev.data.internet);
   const fail=msg=>{if(ev.from)flow(ev.from,id,kind,w,msg);bump(id,"err",w);nrt(id).lastErr=msg;return{ok:false,err:msg}};
+  /* turned away before reaching the app (no route, no public IP, security group): the block did its job, the target
+     itself did not fail. Counted as "denied", not as an error of the target. */
+  const deny=msg=>{if(ev.from)flow(ev.from,id,kind,w,msg);bump(id,"denied",w);nrt(id).lastDeny=msg;return{ok:false,err:msg}};
   if(!n||!exists(id))return fail("Chưa được deploy (bấm Deploy để tạo stack)");
   switch(n.type){
     case"AWS::ApiGatewayV2::Api":{bump(id,"req",w);charge(id,w*PRICE.apiReq,"request");if(ev.from)flow(ev.from,id,kind,w);const fn=targetOf(n.props.Target),tn=nodeOf(fn);
@@ -122,7 +125,7 @@ function request(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,kind=ev.kind||"calls"
       if(on&&on.type==="AWS::S3::Bucket"){const cr=cfReads(id,oid,"index.html");if(!cr.ok){flow(id,oid,"origin",miss,"403 AccessDenied: "+cr.why);bump(id,"err",miss);nrt(id).lastErr=cr.why;return{ok:false,err:"CloudFront trả 403 cho request trượt cache: "+cr.why,errW:miss}}
         const r=s3Op({to:oid,from:id,kind:"origin",w:miss,at:ev.at,data:{action:"s3:GetObject",key:"index.html",who:{admin:true}}});return r.ok?{ok:true}:{ok:false,err:r.err,errW:miss}}
       return request({...ev,to:oid,from:id,kind:"origin",w:miss,data:{internet:true}},T1)}
-    case"AWS::ElasticLoadBalancingV2::LoadBalancer":{if(inet){const rr=reachFromInternet(id);if(!rr.ok)return fail(rr.why);const sg=sgAllows(id,80,{internet:true});if(!sg.ok)return fail(sg.why)}
+    case"AWS::ElasticLoadBalancingV2::LoadBalancer":{if(inet){const rr=reachFromInternet(id);if(!rr.ok)return deny(rr.why);const sg=sgAllows(id,80,{internet:true});if(!sg.ok)return deny(sg.why)}
       bump(id,"req",w);if(ev.from)flow(ev.from,id,kind,w);charge(id,w*20/1048576*PRICE.dtoGB,"truyền ra");
       const ts=targetsOf(id);if(!ts.length)return fail("503: load balancer chưa có target (nối load balancer tới EC2)");
       const ok=[];for(const t of ts){let why=null;if(!exists(t.id))why="Target chưa được deploy";else{const s=sgAllows(t.id,t.port,{node:id});if(!s.ok)why="Health check fail: "+s.why}
@@ -130,7 +133,7 @@ function request(ev,T1){const id=ev.to,n=nodeOf(id),w=ev.w,kind=ev.kind||"calls"
       nrt(id).healthy=[ok.length,ts.length];if(!ok.length)return fail("503: không target nào qua health check (security group của target phải cho load balancer vào)");
       let errs=0;const share=w/ok.length;for(const t of ok){flow(id,t.tg,"listens",share);flow(t.tg,t.id,"forwards",share);const r=appRun(t.id,share,T1);errs+=r.errW||0}
       if(errs>0){bump(id,"err",errs);return{ok:errs<w,err:"Target trả lỗi 5xx",errW:errs}}return{ok:true}}
-    case"AWS::EC2::Instance":{const port=(ev.data&&ev.data.port)||appPort(n);if(inet){const rr=reachFromInternet(id);if(!rr.ok)return fail(rr.why);const s=sgAllows(id,port,{internet:true,ip:ev.data&&ev.data.ip});if(!s.ok)return fail(s.why)}if(ev.from)flow(ev.from,id,kind,w);
+    case"AWS::EC2::Instance":{const port=(ev.data&&ev.data.port)||appPort(n);if(inet){const rr=reachFromInternet(id);if(!rr.ok)return deny(rr.why);const s=sgAllows(id,port,{internet:true,ip:ev.data&&ev.data.ip});if(!s.ok)return deny(s.why)}if(ev.from)flow(ev.from,id,kind,w);
       if(port!==appPort(n)){bump(id,"conn",w);return{ok:true}}const r=appRun(id,w,T1);return r.ok?{ok:true}:{ok:false,err:r.err,errW:r.errW}}}
   return fail(`${n.def.label} không nhận HTTP request`)}
 /* the app on an EC2 instance: capacity by instance type, then whatever it uses */
