@@ -2,10 +2,11 @@
 /* "Có gì mới": the app's features and updates grouped by big feature (from the repo history on GitHub,
    dat-2k2/cloudlab), newest first inside each group. CHANGELOG_VERSION changes whenever entries are added: the
    top-bar button shows a dot until the viewer opens the dialog (seen flag in localStorage cloudlab:news). */
-const CHANGELOG_VERSION="2026-10-23b";
+const CHANGELOG_VERSION="2026-10-26";
 const CHANGELOG=[
   {id:"guide",icon:"✓",title:"Hướng dẫn từng bước, đáp án đúng như AWS thật",sum:"Nút Làm hộ thành Hướng dẫn từng bước: mỗi bước nói làm gì, bấm vào đâu, vì sao, và tự đánh dấu khi bạn làm xong. Đáp án của cả 16 bài AWS chạy được trên AWS thật. Khối trên canvas nhỏ gọn, có biểu tượng AWS và hình theo loại.",items:[
     ["22/10","Khối nhỏ gọn kiểu AWS Infrastructure Composer: biểu tượng AWS chính thức, loại, tên và một nhãn trạng thái; số liệu chuyển vào khung chi tiết và chú thích khi rê chuột. Hình khối theo loại: chữ nhật (chạy code), trụ (lưu dữ liệu), ống (hàng đợi), lục giác (cửa vào), cắt góc (quyền, quy tắc), viên thuốc (bên ngoài). Nút Chú giải trên canvas."],
+    ["26/10","Mạng vẽ theo đường đi thật: internet gateway là cửa trên tường VPC, request từ Internet đi qua cửa này rồi mới tới EC2 hay load balancer. Route table thành thẻ ở đáy mỗi subnet (“PublicRt · 0.0.0.0/0 → Igw” hay “chỉ local”), nét đứt nối thẻ tới cửa: nhìn là biết subnet nào public và vì sao."],
     ["23/10","Gợi ý chỉ chỗ cần làm tiếp: canvas chuyển sang Trace, chỉ sáng khối của bước kế tiếp, con trỏ chỉ đúng khối, ô hoặc nút cần bấm và đi theo khi bạn làm. Làm hộ chạy ở chế độ Trace, khóa mọi nút khác trong lúc chạy; danh sách bước hiện ngay trong ô Nhiệm vụ. Bối cảnh lên đầu bảng bài học. Khung chi tiết không còn nhảy lên đầu khi tick ô."],
     ["23/10","Làm hộ bằng hoạt hình: con trỏ tự bấm vào khối, mở khung chi tiết, sửa đúng ô, kéo mũi tên, thả khối vào khung VPC, lấy thành phần từ thư viện. Esc để dừng, Space để tạm dừng. Muốn tự làm thì mở “Tự làm bằng tay” ở từng bước."],
     ["22/10","Hướng dẫn từng bước: chỉ khối cần sửa trên canvas, giải thích vì sao. Bạn tự làm thì bước tự tick. Có bước làm hộ thì bài tính là đã xem, chưa tính là đạt."],
@@ -34,6 +35,7 @@ const CHANGELOG=[
     ["20/10","Editor tự do kiểu draw.io với mẫu: web 3 tầng, website tĩnh, serverless."],
     ["18/10","Sơ đồ tài nguyên: khối có trạng thái, mũi tên theo loại quan hệ, kéo để nối, Trace, chế độ danh sách."]]},
   {id:"sim",icon:"▶",title:"Mô phỏng và chi phí",sum:"Bấm Chạy để thấy hệ thống hoạt động: request đi đâu, bị chặn ở đâu, tốn bao nhiêu tiền.",items:[
+    ["26/10","Request bị chặn trước khi tới app (không có route, không có IP public, security group) không còn làm máy đích báo LỖI: máy ghi “bị chặn”, và báo “Không nhận được request” khi mọi request đều bị chặn."],
     ["20/10","Mô phỏng security group theo cổng, IP nguồn và SG nguồn; subnet public/private; health check; sức chịu tải từng loại máy (quá tải trả 5xx)."],
     ["20/10","Bảng Vấn đề kiểm tra cấu hình như một người soát hồ sơ: cổng database mở ra Internet, load balancer một AZ, bucket public…"],
     ["20/10","Đồng hồ chi phí cộng dồn theo giá tham khảo: giờ chạy máy, load balancer, IPv4 public, request, dung lượng."],

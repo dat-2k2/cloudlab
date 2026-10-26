@@ -81,7 +81,11 @@ the re-render).
 
 Optional hooks: `view(n, rows, cx)` · `rt(n, {r, m, p})` (runtime panel HTML) · `nodeActs(n)` (buttons) ·
 `edgeState(e, flow, st, from)` · `parentOf(n)` (container id) · `dropHint`, `onDrop`, `dragHint`, `onDragEnd`
-(placement in containers) · `beforeDelete(n)` (return `false` to stop) · `afterDelete(n)` · `onChange(el)` ·
+(placement in containers) · `layout({nodes, boxes, by})` (after boxes are sized: set `n.door` and a position to
+seat a block on a box edge, `n.docked` to fold it into a box so it is not drawn as a block and its edges are hidden;
+return `{plates, lines}`: plates `{node, box, x, y, text, icon, cls, title}` are buttons on a box edge that select
+`node`, lines `{a, sa, b, sb, ids, cls, title}` are dashed paths between two points) · `edgeVia(e)` (a block id the
+edge is drawn through) · `legendExtra()` (more legend HTML) · `beforeDelete(n)` (return `false` to stop) · `afterDelete(n)` · `onChange(el)` ·
 `redeploy(label, cli)` (an edit while deployed) · `runtime()` (extra `RT` fields) · `onNewMonth()` ·
 `manualStatus(n)` · `lessonRef(L)` · `eli5(type)` · `fmt(value)` · `idValue(n)` (what the name field shows; `renameNode` may return `{ok, id}` with the new id) · `relDoc` · `keepNull` · `api` (added to
 `window.CloudLab`).

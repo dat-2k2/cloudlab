@@ -843,3 +843,27 @@ body.demoing .lesson .ltier:not(.main){opacity:.55}
 .callout.hintnext .note{display:block;margin-top:4px;color:var(--subtle);font-size:12.5px}.callout.hintnext .sm{margin-top:8px}
 @media (prefers-reduced-motion:reduce){.hcur svg,.hint-hl{animation:none}}
 .hcur[hidden],.dcur[hidden],.dline[hidden],.dghost[hidden]{display:none!important}
+/* routing drawn on the VPC: the internet gateway as a door on the VPC wall, route tables as plates on subnet edges */
+.gnode.cmp.door{overflow:visible}
+.gnode.cmp.door .gn{all:unset;box-sizing:border-box;position:absolute;inset:0;display:grid;place-items:center;border-radius:12px;background:var(--surface);border:1.5px solid var(--c-infra);box-shadow:0 0 0 4px var(--bg);cursor:pointer}
+.gnode.cmp.door .gn .side-ic{width:34px;height:34px}
+.gnode.cmp.door .gn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.gnode.cmp.door.sel .gn{border-color:var(--accent);box-shadow:0 0 0 4px var(--bg),0 0 0 6px var(--accent-soft)}
+.gnode.cmp.door.dim{opacity:.32}
+.gdoor-n{position:absolute;top:calc(100% + 3px);left:50%;transform:translateX(-50%);font:600 11px/14px var(--font-body);color:var(--c-infra);white-space:nowrap;pointer-events:none;background:var(--bg);padding:0 4px;border-radius:4px}
+.gnode.cmp.door .gp{top:17px}
+.gplate{all:unset;box-sizing:border-box;position:absolute;z-index:3;transform:translateY(-50%);display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px 0 3px;border-radius:999px;border:1px solid var(--line-strong);background:var(--surface);font:500 10.5px/14px var(--font-mono);color:var(--subtle);white-space:nowrap;cursor:pointer}
+.gplate .side-ic{width:14px;height:14px;border-radius:3px;font-size:7px}
+.gplate.pub{border-color:color-mix(in srgb,var(--ok) 60%,var(--line));color:var(--ok)}
+.gplate.warn{border-color:var(--warn);color:var(--warn);background:var(--warn-soft)}
+.gplate:hover{border-color:var(--accent);color:var(--accent)}
+.gplate:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gplate.sel{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.gplate.walk{outline:2px dashed var(--accent);outline-offset:3px;animation:walkpulse 1.6s ease-in-out infinite}
+.gplate.dim{opacity:.32}
+.gline{fill:none;stroke:var(--line-strong);stroke-width:1.4;stroke-dasharray:4 4}
+.gline.pub{stroke:color-mix(in srgb,var(--ok) 70%,var(--line))}
+.gline.warn{stroke:var(--warn)}
+.gline.dim{opacity:.25}
+.glegend .lg-door{fill:var(--surface);stroke:var(--c-infra);stroke-width:1.5}.glegend .lg-wall{stroke:var(--c-infra);stroke-width:1;stroke-dasharray:3 2}.glegend .lg-plate{fill:var(--surface);stroke:color-mix(in srgb,var(--ok) 60%,var(--line))}
+.glegend ul+b{margin-top:10px}.glegend li>svg{flex:none}

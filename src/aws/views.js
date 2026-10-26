@@ -193,16 +193,41 @@ DOMAIN.edgeState=(e,f,st,from)=>{const looping=id=>RT.n[id]&&RT.n[id].series.sli
 /* ---------------- boxes: VPC wraps its subnets, a subnet wraps what is placed in it, an OU wraps its accounts ---------------- */
 Object.assign(T["AWS::EC2::VPC"],{box:{pad:24,head:34,size:[400,260]},boxLabel:b=>{const g=igwOf(b.id);return`${b.id} · ${b.props.CidrBlock||""} · ${g?"gắn "+refId(g.props.InternetGatewayId):"chưa gắn internet gateway"}`},boxEmpty:"Kéo EC2 / RDS / internet gateway vào đây"});
 Object.assign(T["AWS::EC2::Subnet"],{box:{pad:22,head:30,size:[260,110]},boxExtra:b=>({pub:isPublicSubnet(b.id)}),boxClass:b=>b.pub?" pub":" priv",
-  boxLabel:b=>`${b.id} · ${b.pub?"public":"private"} · ${String(b.props.AvailabilityZone||"").replace(/^.*-(\d[a-z])$/,"$1")} · ${b.props.CidrBlock||""}${rtOfSubnet(b.id)?" · "+rtOfSubnet(b.id):""}`,boxEmpty:"Kéo EC2 / RDS vào đây"});
+  boxLabel:b=>`${b.id} · ${b.pub?"public":"private"} · ${String(b.props.AvailabilityZone||"").replace(/^.*-(\d[a-z])$/,"$1")} · ${b.props.CidrBlock||""}`,boxEmpty:"Kéo EC2 / RDS vào đây"});
 Object.assign(T["AWS::Organizations::OrganizationalUnit"],{box:{pad:22,head:34,size:[320,190]},boxExtra:b=>({reg:typeof ouRegistered==="function"&&ouRegistered(b.id)}),boxClass:b=>b.reg?" reg":"",
   boxLabel:b=>`OU · ${b.props.Name||b.id} · ${b.reg?"đã register":"chưa register"}`,boxEmpty:"Kéo account vào đây"});
 DOMAIN.parentOf=n=>{const c=n.def.container;if(c==="subnet")return refId(n.props.VpcId);if(c)return null;
-  if(n.type==="AWS::EC2::InternetGateway"){if(IGW_LOOSE)return null;const v=igwVpc(n.id);return v&&nodeOf(v)?v:null}
+  if(n.type==="AWS::EC2::InternetGateway")return null;
   if(n.type==="AWS::Organizations::Account")return refId(arr(n.props.ParentIds)[0]);
   /* a resource in several subnets (ALB, Multi-AZ RDS, MSK) is drawn in the subnet nearest to where it was put */
   const ss=subnetsOf(n).filter(s=>nodeOf(s));if(ss.length===1)return ss[0];
   if(ss.length>1){const p=M.pos[n.id]||[0,0],d=s=>{const q=M.pos[s];if(!q)return 1e12;const dx=p[0]-q[0],dy=p[1]-q[1];return(dx<0||dy<0?1e6:0)+dx*dx+dy*dy};return ss.slice().sort((a,b)=>d(a)-d(b))[0]}
   const v=vpcOf(n);return v&&nodeOf(v)?v:null};
+
+/* where the routing is drawn. AWS diagrams put the internet gateway on the VPC's edge and list each subnet's route
+   table next to the subnet; the VPC console's resource map links subnet → route table → gateway the same way. So:
+   an attached gateway is a door on the VPC's left wall (the side the clients are on), a request from the Internet is
+   drawn through it, and each subnet carries its route table as a plate on its lower edge, with the 0.0.0.0/0 route
+   drawn from the plate to the door. A route table that no subnet uses stays a block of its own. */
+const DOOR=48;
+DOMAIN.layout=({nodes,boxes,by})=>{const plates=[],lines=[],dragging=id=>typeof GD!=="undefined"&&GD&&GD.kind==="node"&&GD.id===id&&GD.moved;
+  for(const n of nodes)if(n.type==="AWS::EC2::InternetGateway"){const v=igwVpc(n.id),b=v&&by[v];if(!b||!b.box)continue;n.door=true;n.w=n.h=DOOR;if(dragging(n.id))continue;
+    const pubs=boxes.filter(s=>s.box==="subnet"&&refId(s.props.VpcId)===v&&(subnetInet(s.id).igw===n.id)),y0=pubs.length?Math.min(...pubs.map(s=>s.y)):b.y+40,y1=pubs.length?Math.max(...pubs.map(s=>s.y+s.h)):b.y+b.h-20;
+    /* level with what the Internet reaches through it (a straight way in), else midway along the public subnets */
+    const tg=[...new Set(edges().filter(e=>!e.hidden&&DOMAIN.edgeVia(e)===n.id).map(e=>e.to))].map(t=>by[t]).filter(Boolean),cy=tg.length?tg.reduce((a,t)=>a+t.y+GHEAD/2,0)/tg.length:(y0+y1)/2;
+    n.x=Math.round(b.x-DOOR/2);n.y=Math.round(Math.max(b.y+40,Math.min(b.y+b.h-DOOR-8,cy-DOOR/2)));M.pos[n.id]=[n.x,n.y];
+    n.doorTip=pubs.length?`Cửa Internet của ${v}. Public subnet: ${pubs.map(s=>s.id).join(", ")}`:`Gắn vào ${v}, nhưng chưa route table nào trỏ 0.0.0.0/0 tới đây: chưa subnet nào public`}
+  /* top to bottom, so a route table used by several subnets is found first on the top one */
+  for(const s of boxes.filter(b=>b.box==="subnet").sort((a,b)=>a.y-b.y||a.x-b.x)){const rt=rtOfSubnet(s.id),R=rt&&by[rt],r=rt&&igwRouteOf(rt),g=r&&refId(M.res[r].Properties.GatewayId),G=g&&by[g],ok=isPublicSubnet(s.id);
+    const text=!rt?"main · chỉ local":`${rt} · ${g?"0.0.0.0/0 → "+g:"chỉ local"}`,w=Math.round(text.length*6.3+34),x=s.x+12,y=s.y+s.h-10;
+    plates.push({node:R?rt:s.id,box:s.id,x,y,w,text,icon:T["AWS::EC2::RouteTable"],cls:ok?"pub":g?"warn":"priv",
+      title:!rt?`${s.id} chưa gắn route table nào nên dùng main route table của VPC: chỉ có route local, không ra được Internet. Bấm để chọn route table.`:`Route table ${rt} của ${s.id}: ${g?(ok?`0.0.0.0/0 → ${g}, nên ${s.id} là public subnet`:subnetInet(s.id).why):"chỉ có route local, nên "+s.id+" là private subnet"}. Bấm để sửa route.`});
+    if(R&&!R.docked){R.docked=true;Object.assign(R,{x,y:y-9,w,h:18})}
+    if(G&&(!G.docked)){const a=[x,y],d=G.door&&!dragging(g);lines.push({a,sa:"l",b:d?[G.x+G.w,G.y+G.h/2]:[G.x+G.w/2,G.y],sb:d?"r":"t",ids:[rt,g,s.id],cls:ok?"pub":"warn",title:`${rt}: 0.0.0.0/0 → ${g}`})}}
+  return{plates,lines}};
+/* traffic from outside the VPC (a client, Route 53, CloudFront) to something inside it comes in through the gateway */
+DOMAIN.legendExtra=()=>`<b>Mạng</b><ul><li><svg width="38" height="18" aria-hidden="true"><rect x="12" y="1" width="16" height="16" rx="4" class="lg-door"/><line x1="20" y1="0" x2="20" y2="18" class="lg-wall"/></svg><span>Cửa trên tường VPC: internet gateway</span></li><li><svg width="38" height="18" aria-hidden="true"><rect x="1" y="3" width="36" height="12" rx="6" class="lg-plate"/></svg><span>Thẻ ở đáy subnet: route table của nó</span></li><li><svg width="38" height="18" aria-hidden="true"><path d="M2 9 H36" class="gline pub"/></svg><span>Route 0.0.0.0/0 tới cửa: subnet public</span></li></ul>`;
+DOMAIN.edgeVia=e=>{const f=nodeOf(e.from);if(!f||(REL[e.kind]||{}).style!=="flow"||(!f.ext&&vpcOf(f)))return null;const v=vpcOf(nodeOf(e.to)),a=v&&igwOf(v);return a?refId(a.props.InternetGatewayId):null};
 
 /* ---------------- inspector: runtime panel and buttons ---------------- */
 DOMAIN.rt=(n,{r,m,p})=>{const id=n.id;let h=typeof orgRt==="function"?orgRt(n):"";

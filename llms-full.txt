@@ -216,7 +216,7 @@ Nhóm: Phase 1 · Explore · Chủ đề: VPC + Security group · Theo FCAJ work
 
 **Khái niệm:** VPC CIDR, public vs private subnet, Internet gateway, security group, bastion, NAT gateway (lab)
 
-**Gợi ý:** Subnet chỉ public khi route table của nó có 0.0.0.0/0 → internet gateway, và gateway đã gắn vào VPC. Security group: mở đúng cổng cho đúng nguồn. Kéo Igw thả vào khung VPC. PublicRt → Route: 0.0.0.0/0 → Igw. PublicSg: rule 22 nguồn 203.0.113.10/32. PrivateSg: rule 22 nguồn SG PublicSg.
+**Gợi ý:** Subnet chỉ public khi route table của nó có 0.0.0.0/0 → internet gateway, và gateway đã gắn vào VPC. Security group: mở đúng cổng cho đúng nguồn. Kéo Igw thả vào khung VPC. Thẻ PublicRt (đáy subnet PublicA) → Route: 0.0.0.0/0 → Igw. PublicSg: rule 22 nguồn 203.0.113.10/32. PrivateSg: rule 22 nguồn SG PublicSg.
 
 **Sau khi đạt:** Public subnet = route table có 0.0.0.0/0 → internet gateway đã gắn vào VPC. Security group là tường lửa theo nguồn: Internet cho web, /32 cho SSH, và SG-tới-SG cho máy bên trong. Lab thật còn có NAT gateway để private đi ra.
 

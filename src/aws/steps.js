@@ -28,11 +28,11 @@ iam:[
     run(){const p=nodeOf("ReadOnlyRole").props.Policies.find(x=>x.PolicyName==="lab-guardrail");p.PolicyDocument.Statement[0].Action=["s3:PutObject","s3:DeleteObject"]}}],
 vpc:[
   {t:"Gắn internet gateway Igw vào VPC",at:"Igw",
-    how:["Kéo khối Igw thả vào trong khung VPC.","(Hoặc kéo mũi tên từ chấm bên phải Igw tới khung VPC.)","Nhãn khung VPC đổi thành “internet gateway Igw”."],
+    how:["Kéo khối Igw thả vào trong khung VPC.","(Hoặc kéo mũi tên từ chấm bên phải Igw tới khung VPC.)","Igw nằm lên cạnh trái khung VPC: cửa ra vào Internet. Mũi tên từ client giờ đi qua cửa này."],
     why:"Internet gateway chỉ dùng được khi đã gắn vào VPC (AWS::EC2::VPCGatewayAttachment). Chưa gắn thì không route nào trỏ tới nó được.",
     done:()=>!!igwOf("Vpc"),run(){connectRule("Igw","Vpc").apply(true)}},
   {t:"Thêm route 0.0.0.0/0 → Igw vào PublicRt",at:"PublicRt",
-    how:["Bấm PublicRt (route table nằm trong khung VPC).","Cấu hình → Route: chọn “0.0.0.0/0 → Igw”.","(Hoặc kéo mũi tên từ chấm bên phải PublicRt tới Igw.)"],
+    how:["Bấm thẻ PublicRt ở đáy subnet PublicA (route table của subnet này).","Cấu hình → Route: chọn “0.0.0.0/0 → Igw”.","Thẻ PublicRt chuyển xanh, có nét đứt nối tới cửa Igw: PublicA và PublicB thành public."],
     why:"Subnet chỉ public khi route table của nó có đường 0.0.0.0/0 tới internet gateway. PublicA và PublicB đã gắn PublicRt, nhưng bảng mới có route local. CloudLab thêm DependsOn: IgwAttach để CloudFormation gắn gateway trước rồi mới tạo route.",
     done:()=>!!igwRouteOf("PublicRt")&&isPublicSubnet("PublicA"),run(){addIgwRoute("PublicRt","Igw")}},
   {t:"PublicSg: SSH chỉ từ IP của bạn",at:"PublicSg",

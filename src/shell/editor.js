@@ -62,13 +62,16 @@ function layoutModel(){const all=allNodes(),cont=all.filter(n=>n.def.container);
     const b={...c,...bbox(kids,bx.pad??22,bx.head??30,bx.size||[300,170],c.id),members:kids.flatMap(k=>k.box?[k.id,...k.members]:[k.id]),box:c.def.container,depth:depth(c.id)};
     if(c.def.boxExtra)Object.assign(b,c.def.boxExtra(b));by[c.id]=b}
   const boxes=inner.map(c=>by[c.id]).reverse();
-  const es=edges().filter(e=>!e.hidden&&by[e.from]&&by[e.to]);const ext=[...nodes,...boxes];
+  /* DOMAIN.layout({nodes,boxes,by}) may seat a node on a box edge (n.door) or fold it into a box (n.docked: not drawn
+     as a block; its edges are not drawn either) and returns {plates, lines} drawn with the boxes */
+  const decor=(DOMAIN.layout&&DOMAIN.layout({nodes,boxes,by}))||{plates:[],lines:[]},shown=nodes.filter(n=>!n.docked);
+  const es=edges().filter(e=>!e.hidden&&by[e.from]&&by[e.to]&&!by[e.from].docked&&!by[e.to].docked);const ext=[...shown,...boxes];
   const minX=Math.min(20,...ext.map(n=>n.x)),minY=Math.min(20,...ext.map(n=>n.y));
   if(minX<20||minY<20){const dx=20-minX,dy=20-minY;for(const k of Object.keys(M.pos))M.pos[k]=[M.pos[k][0]+dx,M.pos[k][1]+dy];return layoutModel()}
-  const W_=Math.max(800,...ext.map(n=>n.x+n.w))+60,H_=Math.max(420,...ext.map(n=>n.y+n.h))+60;return{nodes,boxes,by,edges:es,W:W_,H:H_}}
+  const W_=Math.max(800,...ext.map(n=>n.x+n.w))+60,H_=Math.max(420,...ext.map(n=>n.y+n.h))+60;return{nodes:shown,boxes,by,edges:es,decor,W:W_,H:H_}}
 function sidesFor(A,B){const ax=A.x+A.w/2,ay=A.y+A.h/2,bx=B.x+B.w/2,by=B.y+B.h/2,dx=bx-ax,dy=by-ay;
   if(Math.abs(dx)>=Math.abs(dy)*0.9||Math.abs(dx)>A.w*0.9)return dx>=0?["r","l"]:["l","r"];return dy>=0?["b","t"]:["t","b"]}
-function gAnchor(n,s,i,cnt){const off=cnt>1?(i-(cnt-1)/2)*14:0;return s==="r"?[n.x+n.w,n.y+GHEAD/2+off]:s==="l"?[n.x,n.y+GHEAD/2+off]:s==="b"?[n.x+n.w/2+off*2,n.y+n.h]:[n.x+n.w/2+off*2,n.y]}
+function gAnchor(n,s,i,cnt){const off=cnt>1?(i-(cnt-1)/2)*14:0,my=n.door?n.y+n.h/2:n.y+GHEAD/2;return s==="r"?[n.x+n.w,my+off]:s==="l"?[n.x,my+off]:s==="b"?[n.x+n.w/2+off*2,n.y+n.h]:[n.x+n.w/2+off*2,n.y]}
 const GDIR={r:[1,0],l:[-1,0],b:[0,1],t:[0,-1]};
 function gCurve(p1,s1,p2,s2){const k=Math.max(40,Math.hypot(p2[0]-p1[0],p2[1]-p1[1])*.4),a=GDIR[s1],b=s2?GDIR[s2]:[-a[0],-a[1]];
   const c1=[p1[0]+a[0]*k,p1[1]+a[1]*k],c2=[p2[0]+b[0]*k,p2[1]+b[1]*k],r=v=>Math.round(v*10)/10;
@@ -84,15 +87,25 @@ function gParts(L){const G=gs(),sel=UI.sel||{},drag=UI.gdrag;
   /* a connection can end on a block or on a box (VPC, subnet, namespace…) */
   const valid=drag?Object.fromEntries([...L.nodes,...L.boxes].map(n=>[n.id,n.id!==drag.from&&connectRule(drag.from,n.id)])):null;
   /* edge bundling per side so several edges into one side don't overlap */
-  const sideUse={};const plan=L.edges.map(e=>{const A=L.by[e.from],B=L.by[e.to],[sa,sb]=sidesFor(A,B);const ka=e.from+sa,kb2=e.to+sb;(sideUse[ka]=sideUse[ka]||[]).push(e.id);(sideUse[kb2]=sideUse[kb2]||[]).push(e.id);return{e,A,B,sa,sb,ka,kb:kb2}});
+  /* DOMAIN.edgeVia(e) names a block the edge is drawn through (a request from the Internet passes the VPC's gateway) */
+  const viaOf=e=>{const v=DOMAIN.edgeVia&&DOMAIN.edgeVia(e,L),V=v&&L.by[v];return V&&!V.docked&&v!==e.from&&v!==e.to?V:null};
+  /* edges drawn through the same block to the same target share one slot at both ends: they are one path there */
+  const sideUse={},slot=(k,x)=>{const a=sideUse[k]=sideUse[k]||[];if(!a.includes(x))a.push(x)};const plan=L.edges.map(e=>{const V=viaOf(e),A=V||L.by[e.from],B=L.by[e.to],[sa,sb]=sidesFor(A,B),ka=A.id+sa,kb2=e.to+sb,sk=V?"via>"+V.id+">"+e.to:e.id;slot(ka,sk);slot(kb2,sk);return{e,A,B,sa,sb,ka,kb:kb2,V,sk}});
   const hf=typeof hintFocus==="function"?hintFocus():null;
   const trace=typeof DEMO!=="undefined"&&DEMO.on?DEMO.focus:hf||(G.trace?new Set(L.edges.filter(e=>{const f=RT.flow[e.id];return f&&(f.tk||f.tke)}).flatMap(e=>[e.from,e.to])):null);
   let svg=`<svg class="gedges" width="${L.W}" height="${L.H}"><defs>${G_MARKERS}</defs>`,chips="";
-  for(const{e,A,B,sa,sb,ka,kb}of plan){const v=edgeView(e),ia=sideUse[ka].indexOf(e.id),ib=sideUse[kb].indexOf(e.id);
+  for(const{e,A,B,sa,sb,ka,kb,V,sk}of plan){const v=edgeView(e),ia=sideUse[ka].indexOf(sk),ib=sideUse[kb].indexOf(sk);let lab=null;
     const p1=gAnchor(A,sa,ia,sideUse[ka].length),p2=gAnchor(B,sb,ib,sideUse[kb].length),c=gCurve(p1,sa,p2,sb),isSel=sel.edge===e.id,dim=trace&&!(trace.has(e.from)&&trace.has(e.to))?" dim":"";
+    /* through a block: source → the block's near side, straight through it, then on from the far side */
+    if(V){const S=L.by[e.from],[s0,s1]=V.door?(S.x+S.w/2<V.x+V.w/2?["r","l"]:["l","r"]):sidesFor(S,V),q0=gAnchor(S,s0,0,1),q1=V.door?[V.x+V.w/2+GDIR[s1][0]*V.w/2,V.y+V.h/2+GDIR[s1][1]*V.h/2]:gAnchor(V,s1,0,1),c0=gCurve(q0,s0,q1,s1);c.d=c0.d+" L"+c.d.slice(1);lab=c0.at(.5)}
     const st=isSel?"sel":v.st;
     svg+=`<path d="${c.d}" class="ge s-${v.st} k-${v.style}${v.st==="ok"&&RT.running?" run":""}${isSel?" is-sel":""}${dim}" marker-end="url(#ga-${st})"/><path d="${c.d}" class="ge-hit" data-edge="${esc(e.id)}"><title>${esc(e.from+" → "+e.to+": "+(v.why||e.label||e.kind))}</title></path>`;
-    if(v.label&&(v.st!=="idle"||v.style==="flow"||isSel)){const rev=L.edges.some(x=>x.from===e.to&&x.to===e.from),q=c.at(rev?.3:.5);chips+=`<span class="gchip s-${v.st}${isSel?" is-sel":""}${dim}" style="left:${q[0]}px;top:${q[1]}px">${esc(v.label)}</span>`}}
+    if(v.label&&(v.st!=="idle"||v.style==="flow"||isSel)){const rev=L.edges.some(x=>x.from===e.to&&x.to===e.from),q=lab||c.at(rev?.3:.5);chips+=`<span class="gchip s-${v.st}${isSel?" is-sel":""}${dim}" style="left:${q[0]}px;top:${q[1]}px">${esc(v.label)}</span>`}}
+  /* domain decor: plates sit on a box edge and open a block's drawer; lines join a plate to a block */
+  const D=L.decor||{plates:[],lines:[]};
+  for(const l of D.lines){const c=gCurve(l.a,l.sa,l.b,l.sb),dim=trace&&!l.ids.some(i=>trace.has(i))?" dim":"";svg+=`<path d="${c.d}" class="gline ${l.cls||""}${dim}"><title>${esc(l.title||"")}</title></path>`}
+  for(const t of D.plates){const dim=trace&&!trace.has(t.node)&&!trace.has(t.box)?" dim":"";
+    chips+=`<button class="gplate ${t.cls||""}${sel.node===t.node?" sel":""}${walkAt()===t.node?" walk":""}${dim}" data-node="${esc(t.node)}" style="left:${t.x}px;top:${t.y}px" title="${esc(t.title||"")}" aria-label="${esc(t.title||t.text)}">${t.icon?icHtml(t.icon):""}<span>${esc(t.text)}</span></button>`}
   if(drag&&drag.at){const A=L.by[drag.from],over=drag.over&&valid[drag.over]?L.by[drag.over]:null,p1=gAnchor(A,"r",0,1),p2=over?gAnchor(over,"l",0,1):drag.at,c=gCurve(p1,"r",p2,over?"l":null);
     svg+=`<path d="${c.d}" class="ge s-drag" marker-end="url(#ga-drag)"/>`;if(over){const q=c.at(.5);chips+=`<span class="gchip s-drag" style="left:${q[0]}px;top:${q[1]}px">thả để nối · ${esc(valid[drag.over].label)}</span>`}}
   const boxes=[];for(const b of L.boxes){const d=b.def,label=d.boxLabel?d.boxLabel(b):`${d.label} · ${b.id}`;
@@ -100,6 +113,9 @@ function gParts(L){const G=gs(),sel=UI.sel||{},drag=UI.gdrag;
       b:`><button class="gbox-h" data-node="${b.id}" aria-label="${esc(label)}">${icHtml(DOMAIN.boxIconDef?DOMAIN.boxIconDef(b):d)}${esc(label)}</button>${b.members.length?"":`<span class="gbox-empty">${esc(d.boxEmpty||"")}</span>`}</div>`})}
   const nodes=[];for(const n of L.nodes){const v=n.v,isSel=sel.node===n.id,vt=valid?(n.id===drag.from?"":valid[n.id]?" valid":" invalid"):"",dim=trace&&!trace.has(n.id)?" dim":"";
     const desc=`${n.id}, ${n.def.label}${v.st?", "+v.st[1]:""}`;
+    if(CMP&&n.door){nodes.push({id:n.id,a:`<div class="gnode cmp door c-${n.def.cat}${isSel?" sel":""}${walkAt()===n.id?" walk":""}${v.st?" st-"+(v.st[0]||"none"):""}${vt}${dim}" data-gid="${n.id}"`,st:`left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px`,
+      b:`><button class="gn" data-node="${n.id}" aria-label="${esc(desc)}" aria-controls="drawer" aria-expanded="${isSel}" title="${esc(n.id+" · "+n.def.label+(n.doorTip?"\n"+n.doorTip:""))}">${icHtml(n.def)}</button><span class="gdoor-n" aria-hidden="true">${esc(n.id)}</span>`+
+      `<span class="gp in" aria-hidden="true"></span><button class="gp out" data-act="gMenu" data-arg="${n.id}" data-gconnect="${n.id}" aria-label="Nối ${esc(n.id)} tới…" title="Kéo tới khối khác để nối, hoặc bấm để chọn từ danh sách"></button></div>`});continue}
     if(CMP){const k=kindOf(n),keep=n.def.keepRows&&v.rows.length,tip=v.rows.filter(r=>!r[3]).map(r=>`${r[0]}: ${r[1]}`).join("\n");
       const rowsK=keep?`<span class="gm">${v.rows.map(r=>r[3]?`<span class="gr"><span>${esc(r[0])}</span>${spark(r[3],"inv")||spark(r[3],"req")}</span>`:`<span class="gr"><span>${esc(r[0])}</span><span class="v ${r[2]}">${esc(r[1])}</span></span>`).join("")}</span>`:"";
       nodes.push({id:n.id,a:`<div class="gnode cmp k-${k} c-${n.def.cat}${v.ghost?" ghost":""}${n.scope==="manual"?" manual":""}${isSel?" sel":""}${walkAt()===n.id?" walk":""}${v.st?" st-"+(v.st[0]||"none"):""}${vt}${dim}" data-gid="${n.id}"`,st:`left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px`,
@@ -150,7 +166,7 @@ function canvasParts(){const L=layoutModel(),G=gs();GLAST=L;const view=G.view||(
   GWH=[L.W,L.H];const ws=gWorldStyle(L.W,L.H,pan,z);
   return{pre:tools+`<div class="gx-row">`+pickerHtml()+`<div class="gx${UI.gdrag?" connecting":""}" data-gx>`,ws,world:gParts(L),
     post:`</div>${empty}${CMP&&UI.legend&&view==="graph"?legendHtml():""}${UI.gnote?`<div class="gx-note callout ${UI.gnote.kind==="info"?"ctx":"warn"}" role="status"><span>${esc(UI.gnote.text)}</span><button class="sm ghost" data-act="gNoteClose" aria-label="Đóng">×</button></div>`:""}${gMenuHtml(L,false)}</div></div>`}}
-function legendHtml(){return`<div class="glegend" id="glegend" role="note" aria-label="Chú giải hình khối"><b>Hình khối</b><ul>${Object.entries(SHAPE_KINDS).map(([k,t])=>`<li>${shapeSvg(k,38,18)}<span>${esc(t)}</span></li>`).join("")}</ul><small>${esc(TX("iconCredit")||"")}</small></div>`}
+function legendHtml(){return`<div class="glegend" id="glegend" role="note" aria-label="Chú giải hình khối"><b>Hình khối</b><ul>${Object.entries(SHAPE_KINDS).map(([k,t])=>`<li>${shapeSvg(k,38,18)}<span>${esc(t)}</span></li>`).join("")}</ul>${DOMAIN.legendExtra?DOMAIN.legendExtra():""}<small>${esc(TX("iconCredit")||"")}</small></div>`}
 const canvasJoin=c=>c.rows?c.lpre+c.rows.map(r=>r.h).join("")+c.lpost:c.pre+`<div class="gx-world" id="gworld" style="${c.ws}">`+gJoin(c.world)+c.post;
 function canvasHtml(){return canvasJoin(canvasParts())}
 /* code that changes canvas DOM directly (pan/zoom, drag highlights) calls this so the next render rewrites it */
