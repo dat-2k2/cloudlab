@@ -2,10 +2,11 @@
 /* "Có gì mới": the app's features and updates grouped by big feature (from the repo history on GitHub,
    dat-2k2/cloudlab), newest first inside each group. CHANGELOG_VERSION changes whenever entries are added: the
    top-bar button shows a dot until the viewer opens the dialog (seen flag in localStorage cloudlab:news). */
-const CHANGELOG_VERSION="2026-10-26";
+const CHANGELOG_VERSION="2026-10-26b";
 const CHANGELOG=[
   {id:"guide",icon:"✓",title:"Hướng dẫn từng bước, đáp án đúng như AWS thật",sum:"Nút Làm hộ thành Hướng dẫn từng bước: mỗi bước nói làm gì, bấm vào đâu, vì sao, và tự đánh dấu khi bạn làm xong. Đáp án của cả 16 bài AWS chạy được trên AWS thật. Khối trên canvas nhỏ gọn, có biểu tượng AWS và hình theo loại.",items:[
     ["22/10","Khối nhỏ gọn kiểu AWS Infrastructure Composer: biểu tượng AWS chính thức, loại, tên và một nhãn trạng thái; số liệu chuyển vào khung chi tiết và chú thích khi rê chuột. Hình khối theo loại: chữ nhật (chạy code), trụ (lưu dữ liệu), ống (hàng đợi), lục giác (cửa vào), cắt góc (quyền, quy tắc), viên thuốc (bên ngoài). Nút Chú giải trên canvas."],
+    ["26/10","Thoát chế độ gợi ý dễ hơn: nút “Gợi ý · Tắt ✕” ngay trên thanh công cụ canvas (thay chỗ nút Trace), hoặc phím Esc. Chế độ gợi ý tự tắt khi xong mọi bước, và bật lại được dù đã xem hết gợi ý. Ô cần sửa trong khung chi tiết tự cuộn vào tầm nhìn; con trỏ chỉ vào nhãn ô, lời nhắc nằm bên trái để không che ô nhập."],
     ["26/10","Mạng vẽ theo đường đi thật: internet gateway là cửa trên tường VPC, request từ Internet đi qua cửa này rồi mới tới EC2 hay load balancer. Route table thành thẻ ở đáy mỗi subnet (“PublicRt · 0.0.0.0/0 → Igw” hay “chỉ local”), nét đứt nối thẻ tới cửa: nhìn là biết subnet nào public và vì sao."],
     ["23/10","Gợi ý chỉ chỗ cần làm tiếp: canvas chuyển sang Trace, chỉ sáng khối của bước kế tiếp, con trỏ chỉ đúng khối, ô hoặc nút cần bấm và đi theo khi bạn làm. Làm hộ chạy ở chế độ Trace, khóa mọi nút khác trong lúc chạy; danh sách bước hiện ngay trong ô Nhiệm vụ. Bối cảnh lên đầu bảng bài học. Khung chi tiết không còn nhảy lên đầu khi tick ô."],
     ["23/10","Làm hộ bằng hoạt hình: con trỏ tự bấm vào khối, mở khung chi tiết, sửa đúng ô, kéo mũi tên, thả khối vào khung VPC, lấy thành phần từ thư viện. Esc để dừng, Space để tạm dừng. Muốn tự làm thì mở “Tự làm bằng tay” ở từng bước."],

@@ -97,7 +97,7 @@ function demoHalt(){if(!DEMO.on)return;DEMO.tok++;DEMO.on=false;DEMO.paused=fals
    sits on the thing to press now: the block, then (drawer open) the field or button, the out-port for an arrow, the
    library for a new block. It follows the learner: open the block and it moves to the field; finish the step and it
    moves to the next one. Nothing is changed for them. */
-const HINT={el:null,also:[],say:""};
+const HINT={el:null,also:[],say:"",key:null};
 function hintStepOf(L){if(!L||!L.steps)return null;const S=stepsOf(L);for(let k=0;k<S.length;k++)if(!stepDone(S[k]))return{s:S[k],k,n:S.length};return null}
 const gestures=s=>s.demo||(atOf(s)?[["select",s.at]]:[]);
 /* the blocks of the step (for Trace), without touching the DOM: used while the canvas is built */
@@ -115,14 +115,23 @@ function hintTarget(s){let el=null,also=[],say="";
     if(v==="apply")break}
   return{el,also,say}}
 function hintClear(){document.querySelectorAll(".hint-hl").forEach(e=>e.classList.remove("hint-hl"));const p=document.getElementById("hcur");if(p)p.hidden=true}
-function hintFx(){hintClear();if(!UI.hintFx||(typeof DEMO!=="undefined"&&DEMO.on)||UI.mode!=="lesson")return;const h=hintStepOf(L_());if(!h)return;
+function hintFx(){hintClear();if(!UI.hintFx||(typeof DEMO!=="undefined"&&DEMO.on)||UI.mode!=="lesson")return;const h=hintStepOf(L_());
+  /* every step done: the hint mode ends by itself (the canvas leaves Trace) */
+  if(!h){UI.hintFx=false;setTimeout(()=>{if(!UI.hintFx&&typeof render==="function")render()},0);return}
   const t=hintTarget(h.s);HINT.el=t.el;HINT.also=t.also;HINT.say=`Bước ${h.k+1}/${h.n} · ${h.s.t}${t.say?" — "+t.say:""}`;
-  for(const e of [t.el,...t.also])if(e)(e.closest(".fld")||e).classList.add("hint-hl");hintPos()}
+  for(const e of [t.el,...t.also])if(e)(e.closest(".fld")||e).classList.add("hint-hl");
+  /* a field below the fold of the drawer: scroll it into view once, when it becomes the target */
+  const key=h.k+"|"+(t.say||"");if(t.el&&key!==HINT.key&&t.el.closest("#drawer")){const f=t.el.closest(".fld")||t.el;try{f.scrollIntoView({block:"center",behavior:"instant"})}catch(_){f.scrollIntoView()}}HINT.key=key;
+  hintPos()}
+/* Esc leaves the hint mode when nothing else is open to close */
+addEventListener("keydown",e=>{if(e.key!=="Escape"||!UI||!UI.hintFx||(typeof DEMO!=="undefined"&&DEMO.on))return;const tag=(e.target.tagName||"").toLowerCase();if(tag==="input"||tag==="textarea"||tag==="select")return;
+  if(UI.sel||UI.picker||UI.modal||UI.gmenu)return;e.stopPropagation();UI.hintFx=false;hintClear();render()},true);
 function hintPos(){const p=dEl("hcur",`<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M4 2l15 11-6.5 1.2L16 21l-3 1.4-3.4-6.7L4 20z"/></svg><span></span>`,"hcur");
-  const el=HINT.el;if(!UI.hintFx||!el||!el.isConnected){p.hidden=true;return}const r=el.getBoundingClientRect();
+  const el=HINT.el;if(!UI.hintFx||!el||!el.isConnected){p.hidden=true;return}let r=el.getBoundingClientRect();
   if(!r.width||r.bottom<0||r.top>innerHeight||r.right<0||r.left>innerWidth){p.hidden=true;return}
-  p.hidden=false;const x=Math.min(r.left+r.width/2,innerWidth-40),y=r.top+r.height/2;p.style.transform=`translate(${x}px,${y}px)`;p.querySelector("span").textContent=HINT.say;
-  p.classList.toggle("left",x>innerWidth-300)}
+  /* a field in the drawer: point at its label from the left so the caption sits over the canvas, not over the inputs */
+  const inD=!!el.closest("#drawer");if(inD){const q=(el.closest(".fld")||el).getBoundingClientRect();if(q.width)r=q}p.hidden=false;const x=inD?r.left+8:Math.min(r.left+r.width/2,innerWidth-40),y=inD?r.top+12:r.top+r.height/2;p.style.transform=`translate(${x}px,${y}px)`;p.querySelector("span").textContent=HINT.say;
+  p.classList.toggle("left",inD||x>innerWidth-300)}
 addEventListener("scroll",()=>{if(UI&&UI.hintFx)hintPos()},true);addEventListener("resize",()=>{if(UI&&UI.hintFx)hintPos()});
 /* bring the hinted block into view once, when the hint is first asked for */
 function hintReveal(){const h=hintStepOf(L_());if(!h)return;const f=[...(hintFocus()||[])][0];if(!f||typeof GLAST==="undefined"||!GLAST||!GLAST.by[f])return;
